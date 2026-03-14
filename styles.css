@@ -86,6 +86,18 @@
   color: var(--text-normal);
 }
 
+/* Save button */
+.ca-save-btn {
+  transition: opacity 0.2s, color 0.2s;
+}
+.ca-save-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.ca-save-btn:not(:disabled):hover {
+  color: var(--text-normal);
+}
+
 /* Thread */
 .ca-thread {
   flex: 1;

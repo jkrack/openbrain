@@ -5,8 +5,16 @@ import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
 import { transcribeBlob, transcribeSegments } from "./stt";
 import { RecordingStatus } from "./view";
-import { App, Component, MarkdownRenderer } from "obsidian";
+import { App, Component, MarkdownRenderer, Notice } from "obsidian";
 import { ChildProcess } from "child_process";
+import {
+  ChatMeta,
+  saveChat,
+  loadChat,
+  generateChatTitle,
+  generateChatFilename,
+  listRecentChats,
+} from "./chatHistory";
 
 interface PanelProps {
   settings: OpenBrainSettings;
@@ -16,6 +24,8 @@ interface PanelProps {
   skills: Skill[];
   registerToggleRecording?: (fn: () => void) => void;
   onStatusChange?: (status: RecordingStatus) => void;
+  loadChatRequest?: { path: string; nonce: number };
+  onChatPathChange?: (path: string | null) => void;
 }
 
 function generateId() {
@@ -80,7 +90,7 @@ function CopyButton({ content }: { content: string }) {
   );
 }
 
-export function OpenBrainPanel({ settings, app, initialPrompt, component, skills, registerToggleRecording, onStatusChange }: PanelProps) {
+export function OpenBrainPanel({ settings, app, initialPrompt, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange }: PanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(initialPrompt || "");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -93,6 +103,14 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [activeSkillId, setActiveSkillId] = useState<string | null>(null);
   const [showSkillMenu, setShowSkillMenu] = useState(false);
+  const [chatFilePath, setChatFilePath] = useState<string | null>(null);
+  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const justLoadedRef = useRef(false);
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
+  const activeSkillIdRef = useRef(activeSkillId);
+  activeSkillIdRef.current = activeSkillId;
 
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -168,6 +186,129 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       duration: recorder.duration,
     });
   }, [recorder.state, recorder.duration, isStreaming, onStatusChange]);
+
+  // --- Chat history helpers ---
+
+  function buildMeta(): ChatMeta {
+    const now = new Date().toISOString();
+    const firstMsg = messages[0];
+    const currentSkillId = activeSkillIdRef.current;
+    return {
+      type: "openbrain-chat",
+      formatVersion: 1,
+      created: firstMsg ? firstMsg.timestamp.toISOString() : now,
+      updated: now,
+      skill: currentSkillId
+        ? skills.find((s) => s.id === currentSkillId)?.name ?? "General"
+        : "General",
+      sessionId: sessionIdRef.current ?? "",
+      messageCount: messages.length,
+      hasAudio: messages.some((m) => m.isAudio),
+      title: generateChatTitle(messages),
+      tags: ["openbrain/chat"],
+    };
+  }
+
+  // Debounced auto-save
+  useEffect(() => {
+    if (messages.length === 0 || isStreaming) return;
+    if (justLoadedRef.current) {
+      justLoadedRef.current = false;
+      return;
+    }
+
+    if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
+
+    debouncedSaveRef.current = setTimeout(async () => {
+      const meta = buildMeta();
+      const folder = settings.chatFolder || "OpenBrain/chats";
+      const path = chatFilePath ?? `${folder}/${generateChatFilename()}`;
+      await saveChat(app, path, messages, meta);
+      if (!chatFilePath) {
+        setChatFilePath(path);
+        onChatPathChange?.(path);
+      }
+    }, 500);
+
+    return () => {
+      if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
+    };
+  }, [messages, isStreaming]);
+
+  // Load chat on mount from loadChatRequest
+  useEffect(() => {
+    if (!loadChatRequest) return;
+
+    (async () => {
+      const chatFile = await loadChat(app, loadChatRequest.path);
+      if (chatFile) {
+        justLoadedRef.current = true;
+        setMessages(chatFile.messages);
+        setChatFilePath(chatFile.path);
+        setSessionId(chatFile.frontmatter.sessionId || undefined);
+        const matchSkill = skills.find(
+          (s) => s.name === chatFile.frontmatter.skill
+        );
+        setActiveSkillId(matchSkill?.id ?? null);
+        onChatPathChange?.(chatFile.path);
+      } else {
+        new Notice("Could not load chat file.");
+      }
+    })();
+  }, [loadChatRequest?.nonce]);
+
+  // Manual save handler
+  const handleManualSave = async () => {
+    if (messages.length === 0) return;
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+      debouncedSaveRef.current = null;
+    }
+    const meta = buildMeta();
+    const folder = settings.chatFolder || "OpenBrain/chats";
+    const path = chatFilePath ?? `${folder}/${generateChatFilename()}`;
+    await saveChat(app, path, messages, meta);
+    if (!chatFilePath) {
+      setChatFilePath(path);
+      onChatPathChange?.(path);
+    }
+    setShowSaveConfirm(true);
+    setTimeout(() => setShowSaveConfirm(false), 1500);
+  };
+
+  // Recent chat context injection helper
+  async function getRecentChatContext(): Promise<string> {
+    if (!settings.includeRecentChats) return "";
+
+    const folder = settings.chatFolder || "OpenBrain/chats";
+    const recentMetas = listRecentChats(app, folder, 3);
+    if (recentMetas.length === 0) return "";
+
+    const summaries: string[] = [];
+    const files = app.vault.getMarkdownFiles().filter(
+      (f) => f.path.startsWith(folder + "/") && f.path.endsWith(".md")
+    );
+
+    for (const meta of recentMetas) {
+      for (const file of files) {
+        const cache = app.metadataCache.getFileCache(file);
+        if (cache?.frontmatter?.session_id === meta.sessionId && meta.sessionId) {
+          const chatFile = await loadChat(app, file.path);
+          if (chatFile) {
+            const lastMsgs = chatFile.messages.slice(-4);
+            const preview = lastMsgs
+              .map((m) => `${m.role}: ${m.content.slice(0, 200)}`)
+              .join("\n");
+            summaries.push(`**${meta.title}** (${meta.skill}, ${meta.updated}):\n${preview}`);
+          }
+          break;
+        }
+      }
+    }
+
+    if (summaries.length === 0) return "";
+    return "\n\n--- Recent conversation context ---\n" + summaries.join("\n\n");
+  }
 
   const appendAssistantChunk = useCallback((id: string, chunk: string) => {
     responseRef.current += chunk;
@@ -411,10 +552,19 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           onDone: audioDone,
         });
       } else {
+        // Inject recent chat context for new conversations
+        let recentContext = "";
+        if (!chatFilePath && messages.length === 0) {
+          recentContext = await getRecentChatContext();
+        }
+        const enrichedNoteContext = noteContext
+          ? noteContext + recentContext
+          : recentContext || undefined;
+
         const proc = streamClaudeCode(settings, {
           ...callbacks,
           prompt: userText,
-          noteContext,
+          noteContext: enrichedNoteContext,
           noteFilePath,
           systemPrompt: effectiveSystemPrompt,
           sessionId,
@@ -469,8 +619,18 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     }
   };
 
-  const clearConversation = () => {
+  const clearConversation = async () => {
+    // Cancel pending debounced save
+    if (debouncedSaveRef.current) {
+      clearTimeout(debouncedSaveRef.current);
+      debouncedSaveRef.current = null;
+    }
+    // Save before clearing if there's content
+    if (messages.length > 0 && chatFilePath) {
+      await saveChat(app, chatFilePath, messages, buildMeta());
+    }
     setMessages([]);
+    setChatFilePath(null);
     setSessionId(undefined);
     abortRef.current = true;
     if (procRef.current) {
@@ -478,13 +638,24 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       procRef.current = null;
     }
     setIsStreaming(false);
+    onChatPathChange?.(null);
   };
 
-  const selectSkill = (skillId: string | null) => {
+  const selectSkill = async (skillId: string | null) => {
+    // Save current chat before switching skills
+    if (messages.length > 0 && chatFilePath) {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+      await saveChat(app, chatFilePath, messages, buildMeta());
+    }
     setActiveSkillId(skillId);
     setShowSkillMenu(false);
     setSessionId(undefined);
     setMessages([]);
+    setChatFilePath(null);
+    onChatPathChange?.(null);
   };
 
   const isRecording = recorder.state === "recording";
@@ -557,6 +728,14 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             title="Allow shell commands"
           >
             cli
+          </button>
+          <button
+            className="ca-icon-btn ca-save-btn"
+            onClick={handleManualSave}
+            title="Save chat"
+            disabled={messages.length === 0}
+          >
+            {showSaveConfirm ? "✓" : "💾"}
           </button>
           <button className="ca-icon-btn" onClick={clearConversation} title="Clear conversation">
             ↺

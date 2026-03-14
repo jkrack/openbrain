@@ -2,6 +2,7 @@ import { Plugin, TFile, WorkspaceLeaf } from "obsidian";
 import { OpenBrainView, OPEN_BRAIN_VIEW_TYPE, RecordingStatus } from "./view";
 import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./settings";
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
+import { initChatFolder } from "./chatHistory";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -16,9 +17,15 @@ export default class OpenBrainPlugin extends Plugin {
       OPEN_BRAIN_VIEW_TYPE,
       (leaf) => {
         const view = new OpenBrainView(leaf, this.settings, this.skills);
+        view.plugin = this;
         view.onStatusChange = (status) => this.updateStatusBar(status);
         return view;
       }
+    );
+
+    // Initialize chat folder and Base file
+    initChatFolder(this.app, this.settings.chatFolder).catch((e) =>
+      console.error("OpenBrain: failed to init chat folder", e)
     );
 
     this.addRibbonIcon("brain", "OpenBrain", () => {
@@ -58,6 +65,46 @@ export default class OpenBrainPlugin extends Plugin {
         } else {
           // Open the panel first, then toggle
           this.activateView();
+        }
+      },
+    });
+
+    this.addCommand({
+      id: "open-chat-history",
+      name: "Open chat history",
+      callback: () => {
+        const basePath = `${this.settings.chatFolder}/Chat History.base`;
+        this.app.workspace.openLinkText(basePath, "");
+      },
+    });
+
+    this.addCommand({
+      id: "resume-chat-in-openbrain",
+      name: "Resume chat in OpenBrain",
+      checkCallback: (checking) => {
+        const file = this.app.workspace.getActiveFile();
+        if (!file) return false;
+        const meta = this.app.metadataCache.getFileCache(file)?.frontmatter;
+        if (meta?.type !== "openbrain-chat") return false;
+        if (checking) return true;
+
+        const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
+        if (leaves.length > 0) {
+          const view = leaves[0].view;
+          if (view instanceof OpenBrainView) {
+            view.loadChatFromPath(file.path);
+            this.app.workspace.revealLeaf(leaves[0]);
+          }
+        } else {
+          this.activateView().then(() => {
+            const newLeaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
+            if (newLeaves.length > 0) {
+              const view = newLeaves[0].view;
+              if (view instanceof OpenBrainView) {
+                view.loadChatFromPath(file.path);
+              }
+            }
+          });
         }
       },
     });

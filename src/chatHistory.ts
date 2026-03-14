@@ -199,7 +199,10 @@ export async function loadChat(app: App, path: string): Promise<ChatFile | null>
   try {
     const content = await app.vault.read(file);
     const result = parseChat(content, path);
-    if ("error" in result) return null;
+    if ("error" in result) {
+      console.warn("OpenBrain: failed to parse chat file:", result.error);
+      return null;
+    }
     return result;
   } catch {
     return null;
@@ -245,8 +248,7 @@ export function listRecentChats(app: App, folder: string, limit = 10): ChatMeta[
 
 // ── 8. initChatFolder ───────────────────────────────────────────────────
 
-const DATAVIEW_BASE = `---
-filters: 'type == "openbrain-chat"'
+const BASE_CONTENT = `filters: 'type == "openbrain-chat"'
 properties:
   title:
     displayName: Title
@@ -267,7 +269,6 @@ views:
       - skill
       - message_count
       - has_audio
----
 `;
 
 export async function initChatFolder(app: App, folder: string): Promise<void> {
@@ -276,9 +277,9 @@ export async function initChatFolder(app: App, folder: string): Promise<void> {
     await app.vault.createFolder(folder);
   }
 
-  // Create base file if missing (never overwrite)
-  const basePath = `${folder}/.base`;
+  // Create Base file if missing (never overwrite)
+  const basePath = `${folder}/Chat History.base`;
   if (!app.vault.getAbstractFileByPath(basePath)) {
-    await app.vault.create(basePath, DATAVIEW_BASE);
+    await app.vault.create(basePath, BASE_CONTENT);
   }
 }
