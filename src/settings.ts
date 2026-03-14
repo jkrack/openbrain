@@ -15,6 +15,9 @@ export interface OpenBrainSettings {
   useLocalStt: boolean;
   sttHomePath: string;
   audioDeviceId: string;
+  chatFolder: string;
+  lastChatPath: string;
+  includeRecentChats: boolean;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -31,6 +34,9 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   useLocalStt: false,
   sttHomePath: "",
   audioDeviceId: "",
+  chatFolder: "OpenBrain/chats",
+  lastChatPath: "",
+  includeRecentChats: false,
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -208,6 +214,44 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     // Populate mic dropdown asynchronously
     this.populateMicDropdown(micSetting);
+
+    // ── Chat History ──
+    containerEl.createEl("h3", { text: "Chat History" });
+
+    new Setting(containerEl)
+      .setName("Chat folder")
+      .setDesc("Vault folder where chat files are saved")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/chats")
+          .setValue(this.plugin.settings.chatFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.chatFolder = value || "OpenBrain/chats";
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Include recent chats as context")
+      .setDesc("Inject recent chat summaries into new conversations")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.includeRecentChats)
+          .onChange(async (value) => {
+            this.plugin.settings.includeRecentChats = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Open chat history")
+      .setDesc("View all past chats in an Obsidian Base")
+      .addButton((btn) =>
+        btn.setButtonText("Open").onClick(() => {
+          const basePath = `${this.plugin.settings.chatFolder}/Chat History.base`;
+          this.app.workspace.openLinkText(basePath, "");
+        })
+      );
   }
 
   private async renderSttStatus(el: HTMLElement) {
