@@ -1,0 +1,348 @@
+import { App, Notice, TFile, TFolder, parseYaml, moment } from "obsidian";
+import { OpenBrainSettings } from "./settings";
+import { streamClaudeCode } from "./claude";
+
+export interface PostAction {
+  type: "create_note" | "append_to_daily" | "replace_in_daily";
+  path?: string;
+  section?: string;
+  content?: string;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  input: "audio" | "text" | "auto";
+  audioMode: "transcribe_only" | "transcribe_and_analyze";
+  tools: { write?: boolean; cli?: boolean };
+  autoPrompt?: string;
+  trigger?: string;
+  postActions: PostAction[];
+  systemPrompt: string;
+  filePath: string;
+}
+
+/**
+ * Parse a skill markdown file into a Skill object.
+ * Format: YAML frontmatter between --- delimiters, then markdown body.
+ */
+export function parseSkillFile(content: string, filePath: string): Skill | null {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) return null;
+
+  const frontmatter = parseYaml(match[1]);
+  if (!frontmatter || !frontmatter.name) return null;
+
+  const body = match[2].trim();
+
+  const postActions: PostAction[] = [];
+  if (Array.isArray(frontmatter.post_actions)) {
+    for (const action of frontmatter.post_actions) {
+      if (action.create_note) {
+        postActions.push({
+          type: "create_note",
+          path: action.create_note.path || action.create_note,
+          content: action.create_note.content,
+        });
+      } else if (action.append_to_daily) {
+        postActions.push({
+          type: "append_to_daily",
+          section: action.append_to_daily.section,
+          content: action.append_to_daily.content,
+        });
+      } else if (action.replace_in_daily) {
+        postActions.push({
+          type: "replace_in_daily",
+          section: action.replace_in_daily.section,
+          content: action.replace_in_daily.content,
+        });
+      }
+    }
+  }
+
+  const id = filePath.replace(/\.md$/, "").replace(/[^a-zA-Z0-9]/g, "-");
+
+  return {
+    id,
+    name: frontmatter.name,
+    description: frontmatter.description || "",
+    input: frontmatter.input || "auto",
+    audioMode: frontmatter.audio_mode || "transcribe_and_analyze",
+    tools: frontmatter.tools || {},
+    autoPrompt: frontmatter.auto_prompt,
+    trigger: frontmatter.trigger,
+    postActions,
+    systemPrompt: body,
+    filePath,
+  };
+}
+
+/**
+ * Scan a vault folder for skill markdown files and parse them.
+ */
+export async function loadSkills(app: App, folderPath: string): Promise<Skill[]> {
+  const skills: Skill[] = [];
+  const folder = app.vault.getAbstractFileByPath(folderPath);
+  if (!(folder instanceof TFolder)) return skills;
+
+  for (const child of folder.children) {
+    if (child instanceof TFile && child.extension === "md") {
+      const content = await app.vault.read(child);
+      const skill = parseSkillFile(content, child.path);
+      if (skill) skills.push(skill);
+    }
+  }
+
+  return skills;
+}
+
+/**
+ * Substitute template variables in a string.
+ */
+function substituteVars(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] || "");
+}
+
+/**
+ * Extract a title from Claude's response.
+ * Looks for first markdown heading, falls back to first non-empty line.
+ */
+function extractTitle(response: string): string {
+  const headingMatch = response.match(/^#{1,6}\s+(.+)/m);
+  if (headingMatch) return headingMatch[1].replace(/[/:*?"<>|]/g, "").trim();
+
+  const firstLine = response.split("\n").find((l) => l.trim());
+  if (firstLine) return firstLine.slice(0, 60).replace(/[/:*?"<>|]/g, "").trim();
+
+  return "Untitled";
+}
+
+/**
+ * Find today's daily note path. Checks periodic-notes plugin first
+ * (community plugin), then falls back to built-in daily-notes config.
+ */
+export function getDailyNotePath(app: App): string {
+  // Check periodic-notes plugin (community) first
+  const periodicNotes = (app as any).plugins?.plugins?.["periodic-notes"];
+  if (periodicNotes?.settings?.daily?.enabled) {
+    const daily = periodicNotes.settings.daily;
+    const folder = daily.folder || "";
+    const format = daily.format || "YYYY-MM-DD";
+    const dateStr = moment().format(format);
+    return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+  }
+
+  // Fallback to built-in daily-notes plugin
+  const dailyNotes = (app as any).internalPlugins?.getPluginById?.("daily-notes");
+  const options = dailyNotes?.instance?.options || {};
+  const folder = options.folder || "";
+  const format = options.format || "YYYY-MM-DD";
+
+  const dateStr = moment().format(format);
+  return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+}
+
+/**
+ * Get paths for recent daily notes (last N days).
+ */
+export function getRecentDailyNotePaths(app: App, days: number): string[] {
+  const paths: string[] = [];
+
+  // Get config from periodic-notes or built-in
+  let folder = "";
+  let format = "YYYY-MM-DD";
+
+  const periodicNotes = (app as any).plugins?.plugins?.["periodic-notes"];
+  if (periodicNotes?.settings?.daily?.enabled) {
+    folder = periodicNotes.settings.daily.folder || "";
+    format = periodicNotes.settings.daily.format || "YYYY-MM-DD";
+  } else {
+    const dailyNotes = (app as any).internalPlugins?.getPluginById?.("daily-notes");
+    const options = dailyNotes?.instance?.options || {};
+    folder = options.folder || "";
+    format = options.format || "YYYY-MM-DD";
+  }
+
+  for (let i = 1; i <= days; i++) {
+    const dateStr = moment().subtract(i, "days").format(format);
+    const path = folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+    paths.push(path);
+  }
+
+  return paths;
+}
+
+/**
+ * Insert content under a heading in a markdown document.
+ * If the heading doesn't exist, appends it at the end.
+ */
+function insertUnderHeading(doc: string, heading: string, content: string, replace: boolean): string {
+  const headingLevel = (heading.match(/^#+/) || ["##"])[0];
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(
+    `(${escapedHeading}\\s*\\n)([\\s\\S]*?)(?=\\n${headingLevel.replace(/#/g, "\\#")}\\s|$)`,
+    "m"
+  );
+
+  const match = doc.match(regex);
+  if (match) {
+    if (replace) {
+      return doc.replace(regex, `$1${content}\n`);
+    }
+    return doc.replace(regex, `$1$2${content}\n`);
+  }
+
+  return `${doc.trimEnd()}\n\n${heading}\n${content}\n`;
+}
+
+export interface PostActionResult {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * Execute post-actions after a skill completes.
+ */
+export async function executePostActions(
+  app: App,
+  actions: PostAction[],
+  response: string
+): Promise<PostActionResult[]> {
+  const results: PostActionResult[] = [];
+  const title = extractTitle(response);
+  const date = moment().format("YYYY-MM-DD");
+
+  const vars: Record<string, string> = {
+    date,
+    title,
+    response,
+    note_path: "",
+  };
+
+  for (const action of actions) {
+    try {
+      if (action.type === "create_note" && action.path) {
+        const notePath = substituteVars(action.path, vars);
+        const noteContent = action.content ? substituteVars(action.content, vars) : response;
+
+        const folderPath = notePath.split("/").slice(0, -1).join("/");
+        if (folderPath) {
+          const folder = app.vault.getAbstractFileByPath(folderPath);
+          if (!folder) {
+            await app.vault.createFolder(folderPath);
+          }
+        }
+
+        const existing = app.vault.getAbstractFileByPath(notePath);
+        if (existing instanceof TFile) {
+          await app.vault.modify(existing, noteContent);
+          results.push({ success: true, message: `Updated: ${notePath}` });
+        } else {
+          await app.vault.create(notePath, noteContent);
+          results.push({ success: true, message: `Created: ${notePath}` });
+        }
+
+        vars.note_path = notePath.replace(/\.md$/, "");
+      }
+
+      if (
+        (action.type === "append_to_daily" || action.type === "replace_in_daily") &&
+        action.section
+      ) {
+        const dailyPath = getDailyNotePath(app);
+        let dailyFile = app.vault.getAbstractFileByPath(dailyPath);
+
+        if (!dailyFile) {
+          const folderPath = dailyPath.split("/").slice(0, -1).join("/");
+          if (folderPath) {
+            const folder = app.vault.getAbstractFileByPath(folderPath);
+            if (!folder) await app.vault.createFolder(folderPath);
+          }
+          await app.vault.create(dailyPath, `# ${moment().format("YYYY-MM-DD")}\n`);
+          dailyFile = app.vault.getAbstractFileByPath(dailyPath);
+        }
+
+        if (dailyFile instanceof TFile) {
+          const content = await app.vault.read(dailyFile);
+          const insertContent = substituteVars(action.content || "{{response}}", vars);
+          const updated = insertUnderHeading(
+            content,
+            action.section,
+            insertContent,
+            action.type === "replace_in_daily"
+          );
+          await app.vault.modify(dailyFile, updated);
+          results.push({ success: true, message: "Updated daily note" });
+        }
+      }
+    } catch (err: any) {
+      results.push({ success: false, message: `Post-action failed: ${err.message}` });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Run a skill in the background (for hooks/automation).
+ * Spawns CLI, collects response, executes post-actions, shows notification.
+ */
+export async function runSkillInBackground(
+  app: App,
+  settings: OpenBrainSettings,
+  skill: Skill,
+  contextNote?: string
+): Promise<void> {
+  const prompt = skill.autoPrompt || `Run the ${skill.name} skill.`;
+
+  // Build context from recent daily notes if available
+  let recentContext = "";
+  const recentPaths = getRecentDailyNotePaths(app, 3);
+  for (const path of recentPaths) {
+    const file = app.vault.getAbstractFileByPath(path);
+    if (file instanceof TFile) {
+      const content = await app.vault.read(file);
+      const fileName = path.split("/").pop() || path;
+      recentContext += `\n\n--- Recent daily note: ${fileName} ---\n${content}`;
+    }
+  }
+
+  const fullContext = (contextNote || "") + recentContext;
+  const systemPrompt = skill.systemPrompt + (fullContext ? `\n\n---\nContext:\n${fullContext}` : "");
+
+  new Notice(`OpenBrain: Running ${skill.name}...`);
+
+  return new Promise((resolve) => {
+    let response = "";
+
+    streamClaudeCode(settings, {
+      prompt,
+      noteContext: undefined, // Already included in systemPrompt
+      systemPrompt,
+      allowWrite: skill.tools.write ?? false,
+      allowCli: skill.tools.cli ?? false,
+      onChunk: (chunk: string) => {
+        response += chunk;
+      },
+      onError: (err: string) => {
+        new Notice(`OpenBrain: ${skill.name} failed — ${err}`, 8000);
+        resolve();
+      },
+      onDone: async () => {
+        if (response.trim() && skill.postActions.length > 0) {
+          const results = await executePostActions(app, skill.postActions, response);
+          const failures = results.filter((r) => !r.success);
+          if (failures.length > 0) {
+            new Notice(`OpenBrain: ${skill.name} — some post-actions failed`, 5000);
+          } else {
+            new Notice(`OpenBrain: ${skill.name} complete`, 3000);
+          }
+        } else if (response.trim()) {
+          new Notice(`OpenBrain: ${skill.name} complete`, 3000);
+        }
+        resolve();
+      },
+    });
+  });
+}

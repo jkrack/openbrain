@@ -1,0 +1,10 @@
+{
+  "id": "open-brain",
+  "name": "OpenBrain",
+  "version": "0.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "AI agent in the right rail with voice recording, transcription, and vault-aware reasoning.",
+  "author": "James",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}
