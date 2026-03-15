@@ -1036,7 +1036,11 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                     component={component}
                   />
                   {msg.content === "" && isStreaming && (
-                    <span className="ca-cursor" />
+                    <span className="ca-dots">
+                      <span className="ca-dot" />
+                      <span className="ca-dot" />
+                      <span className="ca-dot" />
+                    </span>
                   )}
                   {msg.content && (
                     <CopyButton content={msg.content} />
