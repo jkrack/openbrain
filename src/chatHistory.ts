@@ -370,6 +370,52 @@ async function linkInDailyNoteVaultApi(
   }
 }
 
+/**
+ * Append plain text (not a wikilink) to a section of today's daily note.
+ * Creates the daily note from template if it doesn't exist.
+ */
+export async function appendToDailySection(
+  app: App,
+  text: string,
+  section: string,
+  settings?: OpenBrainSettings
+): Promise<void> {
+  const dailyPath = getDailyPath(app, settings);
+  let file = app.vault.getAbstractFileByPath(dailyPath);
+
+  if (!(file instanceof TFile)) {
+    await createFromTemplate(app, "Daily Note.md", dailyPath);
+    file = app.vault.getAbstractFileByPath(dailyPath);
+  }
+
+  if (!(file instanceof TFile)) return;
+
+  const content = await app.vault.read(file);
+  const sectionRegex = new RegExp(`^##\\s+\\**${escapeRegex(section)}\\**\\s*$`, "m");
+  const match = content.match(sectionRegex);
+
+  if (match && match.index !== undefined) {
+    const insertPos = match.index + match[0].length;
+    const before = content.slice(0, insertPos);
+    const after = content.slice(insertPos);
+
+    const separatorMatch = after.match(/^\n---\n/);
+    if (separatorMatch) {
+      const updated = before + "\n---\n" + text + "\n" + after.slice(separatorMatch[0].length);
+      await app.vault.modify(file, updated);
+    } else {
+      const updated = before + "\n" + text + "\n" + after;
+      await app.vault.modify(file, updated);
+    }
+  } else {
+    const updated = content.trimEnd() + `\n\n## ${section}\n${text}\n`;
+    await app.vault.modify(file, updated);
+  }
+}
+
+/** Exported so other modules can resolve the daily note path. */
+export { getDailyPath };
+
 function getDailyPath(app: App, settings?: OpenBrainSettings): string {
   // Use OpenBrain settings if configured
   if (settings?.dailyNoteFolder) {

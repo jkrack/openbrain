@@ -1,8 +1,8 @@
-import { Plugin, TFile, WorkspaceLeaf } from "obsidian";
+import { Plugin, TFile, WorkspaceLeaf, Modal, Notice } from "obsidian";
 import { OpenBrainView, OPEN_BRAIN_VIEW_TYPE, RecordingStatus } from "./view";
 import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./settings";
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
-import { initChatFolder } from "./chatHistory";
+import { initChatFolder, appendToDailySection, parseChat } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 import { initTemplates } from "./templates";
 import { initPeopleFolder } from "./people";
@@ -151,6 +151,24 @@ export default class OpenBrainPlugin extends Plugin {
       },
     });
 
+    // Quick capture — global hotkey to capture a thought to daily note
+    this.addCommand({
+      id: "quick-capture",
+      name: "Quick capture to daily note",
+      callback: () => {
+        new QuickCaptureModal(this.app, this.settings).open();
+      },
+    });
+
+    // Search chat history
+    this.addCommand({
+      id: "search-chats",
+      name: "Search chat history",
+      callback: () => {
+        new ChatSearchModal(this.app, this.settings).open();
+      },
+    });
+
     this.addSettingTab(new OpenBrainSettingTab(this.app, this));
 
     // Reload skills when files change in skills folder
@@ -283,5 +301,175 @@ export default class OpenBrainPlugin extends Plugin {
 
   onunload() {
     this.app.workspace.detachLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
+  }
+}
+
+// ── Quick Capture Modal ────────────────────────────────────────────────
+
+class QuickCaptureModal extends Modal {
+  private settings: OpenBrainSettings;
+
+  constructor(app: any, settings: OpenBrainSettings) {
+    super(app);
+    this.settings = settings;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("ca-quick-capture-modal");
+    contentEl.createEl("h3", { text: "Quick capture" });
+
+    const input = contentEl.createEl("textarea", {
+      cls: "ca-quick-capture-input",
+      attr: { placeholder: "Capture a thought, task, or note...", rows: "3" },
+    });
+    input.focus();
+
+    const submit = async () => {
+      const text = input.value.trim();
+      if (!text) return;
+
+      // Format: if starts with "- [ ]" keep as-is, otherwise bullet it
+      const formatted = text.startsWith("- ") ? text : `- ${text}`;
+
+      await appendToDailySection(this.app, formatted, "Capture", this.settings);
+      new Notice("Captured to daily note");
+      this.close();
+    };
+
+    input.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        submit();
+      }
+    });
+
+    const btnRow = contentEl.createDiv({ cls: "ca-quick-capture-actions" });
+    const btn = btnRow.createEl("button", { text: "Capture", cls: "mod-cta" });
+    btn.addEventListener("click", submit);
+
+    const hint = btnRow.createEl("span", {
+      text: "Cmd+Enter to save",
+      cls: "ca-quick-capture-hint",
+    });
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+// ── Chat Search Modal ──────────────────────────────────────────────────
+
+class ChatSearchModal extends Modal {
+  private settings: OpenBrainSettings;
+
+  constructor(app: any, settings: OpenBrainSettings) {
+    super(app);
+    this.settings = settings;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("ca-chat-search-modal");
+    contentEl.createEl("h3", { text: "Search chat history" });
+
+    const input = contentEl.createEl("input", {
+      cls: "ca-chat-search-input",
+      attr: { type: "text", placeholder: "Search conversations..." },
+    });
+
+    const results = contentEl.createDiv({ cls: "ca-chat-search-results" });
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+
+    input.addEventListener("input", () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => this.search(input.value, results), 200);
+    });
+
+    input.focus();
+  }
+
+  private search(query: string, container: HTMLElement) {
+    container.empty();
+    if (!query.trim()) return;
+
+    const q = query.toLowerCase();
+    const folder = this.settings.chatFolder || "OpenBrain/chats";
+    const files = this.app.vault.getMarkdownFiles()
+      .filter((f: TFile) => f.path.startsWith(folder + "/"));
+
+    // Search frontmatter (title, skill) via metadataCache first
+    const matches: { file: TFile; title: string; skill: string; score: number }[] = [];
+
+    for (const file of files) {
+      const cache = this.app.metadataCache.getFileCache(file);
+      const fm = cache?.frontmatter;
+      if (fm?.type !== "openbrain-chat") continue;
+
+      const title = (fm.title || "").toLowerCase();
+      const skill = (fm.skill || "").toLowerCase();
+      let score = 0;
+
+      if (title.includes(q)) score += 3;
+      if (skill.includes(q)) score += 1;
+      if (file.basename.includes(q)) score += 1;
+
+      if (score > 0) {
+        matches.push({ file, title: fm.title || file.basename, skill: fm.skill || "", score });
+      }
+    }
+
+    matches.sort((a, b) => b.score - a.score || b.file.stat.mtime - a.file.stat.mtime);
+
+    if (matches.length === 0) {
+      // Fall back to full-text search
+      this.fullTextSearch(q, files, container);
+      return;
+    }
+
+    for (const match of matches.slice(0, 10)) {
+      const row = container.createDiv({ cls: "ca-chat-search-row" });
+      row.createSpan({ text: match.title, cls: "ca-chat-search-title" });
+      row.createSpan({ text: match.skill, cls: "ca-chat-search-skill" });
+      row.addEventListener("click", () => {
+        this.app.workspace.openLinkText(match.file.path, "");
+        this.close();
+      });
+    }
+  }
+
+  private async fullTextSearch(query: string, files: TFile[], container: HTMLElement) {
+    const matches: { file: TFile; title: string; snippet: string }[] = [];
+
+    for (const file of files.slice(0, 50)) {
+      const content = await this.app.vault.cachedRead(file);
+      const idx = content.toLowerCase().indexOf(query);
+      if (idx === -1) continue;
+
+      const cache = this.app.metadataCache.getFileCache(file);
+      const title = cache?.frontmatter?.title || file.basename;
+      const snippet = content.slice(Math.max(0, idx - 30), idx + 60).replace(/\n/g, " ");
+      matches.push({ file, title, snippet });
+    }
+
+    if (matches.length === 0) {
+      container.createDiv({ text: "No matches found", cls: "ca-chat-search-empty" });
+      return;
+    }
+
+    for (const match of matches.slice(0, 10)) {
+      const row = container.createDiv({ cls: "ca-chat-search-row" });
+      row.createSpan({ text: match.title, cls: "ca-chat-search-title" });
+      row.createSpan({ text: `...${match.snippet}...`, cls: "ca-chat-search-snippet" });
+      row.addEventListener("click", () => {
+        this.app.workspace.openLinkText(match.file.path, "");
+        this.close();
+      });
+    }
+  }
+
+  onClose() {
+    this.contentEl.empty();
   }
 }

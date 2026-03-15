@@ -15,6 +15,7 @@ import {
   generateChatFilename,
   listRecentChats,
   linkInDailyNote,
+  appendToDailySection,
 } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 import { PersonProfile, loadPeople, getRecentOneOnOnes, getPersonMeetingFolder } from "./people";
@@ -362,6 +363,29 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   }, [loadChatRequest?.nonce]);
 
   // Manual save handler
+  // Extract action items from conversation and add to daily note
+  const extractActionItems = async (msgs: Message[], s: OpenBrainSettings) => {
+    if (msgs.length < 2) return;
+
+    // Look for action items in assistant messages
+    const actionPattern = /- \[ \] .+/g;
+    const items: string[] = [];
+
+    for (const msg of msgs) {
+      if (msg.role !== "assistant") continue;
+      const matches = msg.content.match(actionPattern);
+      if (matches) items.push(...matches);
+    }
+
+    if (items.length === 0) return;
+
+    // Deduplicate
+    const unique = [...new Set(items)];
+    const taskBlock = unique.join("\n");
+
+    appendToDailySection(app, taskBlock, "Capture", s).catch(() => {});
+  };
+
   // Recent chat context injection helper
   async function getRecentChatContext(): Promise<string> {
     if (!settings.includeRecentChats) return "";
@@ -815,6 +839,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
       const section = skill?.dailyNoteSection || "Capture";
       linkInDailyNote(app, chatFilePath, section, meta.title, settings).catch(() => {});
+
+      // Extract action items and add to daily note
+      extractActionItems(messages, settings);
     }
     setMessages([]);
     setChatFilePath(null);
