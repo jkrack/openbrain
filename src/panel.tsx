@@ -117,6 +117,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const activeSkillIdRef = useRef(activeSkillId);
   activeSkillIdRef.current = activeSkillId;
 
+  const vaultPath = (app.vault.adapter as any).basePath as string | undefined;
+
   const threadRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<boolean>(false);
@@ -493,6 +495,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
               sessionId,
               allowWrite: effectiveWrite,
               allowCli: effectiveCli,
+              vaultPath,
               onChunk: (chunk: string) => {
                 if (!abortRef.current) appendAssistantChunk(analysisId, chunk);
               },
@@ -577,6 +580,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           sessionId,
           allowWrite: effectiveWrite,
           allowCli: effectiveCli,
+          vaultPath,
           onDone: async (newSessionId?: string) => {
             setIsStreaming(false);
             procRef.current = null;

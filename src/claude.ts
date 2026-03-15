@@ -23,6 +23,7 @@ export interface ClaudeCodeOptions extends StreamCallbacks {
   sessionId?: string;
   allowWrite: boolean;
   allowCli: boolean;
+  vaultPath?: string;
 }
 
 export interface ClaudeAPIOptions extends StreamCallbacks {
@@ -83,7 +84,10 @@ export function streamClaudeCode(
   ];
   env.PATH = [...extraPaths, env.PATH].filter(Boolean).join(":");
 
-  const proc = spawn(claudePath, args, { env });
+  const proc = spawn(claudePath, args, {
+    env,
+    cwd: opts.vaultPath || undefined,
+  });
 
   // Send prompt via stdin
   proc.stdin.write(opts.prompt);
