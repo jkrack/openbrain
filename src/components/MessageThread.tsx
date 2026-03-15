@@ -101,34 +101,40 @@ export function MessageThread({
           )}
         </div>
       )}
-      {messages.map((msg) => (
-        <div key={msg.id} className={`ca-msg ca-msg--${msg.role}`}>
-          <div className="ca-msg-content">
-            {msg.isAudio && <span className="ca-audio-tag">{"\uD83C\uDF99"} </span>}
-            {msg.role === "assistant" ? (
-              <>
-                <MarkdownBlock
-                  markdown={msg.content}
-                  app={app}
-                  component={component}
-                />
-                {msg.content === "" && isStreaming && (
-                  <span className="ca-dots">
-                    <span className="ca-dot" />
-                    <span className="ca-dot" />
-                    <span className="ca-dot" />
-                  </span>
-                )}
-                {msg.content && (
-                  <CopyButton content={msg.content} />
-                )}
-              </>
-            ) : (
-              <span className="ca-msg-text">{msg.content}</span>
-            )}
+      {messages.map((msg, idx) => {
+        const isLastAssistant = msg.role === "assistant" &&
+          idx === messages.length - 1;
+        return (
+          <div key={msg.id} className={`ca-msg ca-msg--${msg.role}`}>
+            <div className="ca-msg-content">
+              {msg.isAudio && <span className="ca-audio-tag">{"\uD83C\uDF99"} </span>}
+              {msg.role === "assistant" ? (
+                <>
+                  {msg.content && (
+                    <MarkdownBlock
+                      markdown={msg.content}
+                      app={app}
+                      component={component}
+                    />
+                  )}
+                  {isLastAssistant && isStreaming && (
+                    <span className="ca-dots">
+                      <span className="ca-dot" />
+                      <span className="ca-dot" />
+                      <span className="ca-dot" />
+                    </span>
+                  )}
+                  {msg.content && !isStreaming && (
+                    <CopyButton content={msg.content} />
+                  )}
+                </>
+              ) : (
+                <span className="ca-msg-text">{msg.content}</span>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }
