@@ -121,6 +121,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
   // Onboarding state
   const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
+  const [onboardingDone, setOnboardingDone] = useState(settings.onboardingComplete);
 
   // Person picker state (for skills with requiresPerson)
   const [showPersonPicker, setShowPersonPicker] = useState(false);
@@ -905,7 +906,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         useLocalStt={settings.useLocalStt}
         showTooltips={settings.showTooltips}
         chatMode={chatMode}
-        onboardingComplete={settings.onboardingComplete}
+        onboardingComplete={onboardingDone}
         onChatModeToggle={() => setChatMode((m) => m === "agent" ? "chat" : "agent")}
         onSkillMenuToggle={() => setShowSkillMenu((v) => !v)}
         onSkillSelect={selectSkill}
@@ -966,7 +967,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       {/* Message thread */}
       <div className="ca-thread" ref={threadRef}>
         {/* Welcome flow for first-run onboarding */}
-        {!settings.onboardingComplete && messages.length === 0 && !showPersonPicker && (
+        {!onboardingDone && messages.length === 0 && !showPersonPicker && (
           <div className="ca-welcome">
             {onboardingStep === 1 && (
               <>
@@ -1042,6 +1043,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                 <button
                   className="ca-welcome-btn"
                   onClick={() => {
+                    setOnboardingDone(true);
                     settings.onboardingComplete = true;
                     // Persist via plugin settings
                     const setting = (app as any).setting;
@@ -1060,7 +1062,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         )}
 
         {/* Normal empty state (post-onboarding) */}
-        {settings.onboardingComplete && messages.length === 0 && !showPersonPicker && (
+        {onboardingDone && messages.length === 0 && !showPersonPicker && (
           <div className="ca-empty">
             <div className="ca-empty-icon">◈</div>
             {selectedPerson ? (
