@@ -1,6 +1,17 @@
 import { execSync } from "child_process";
 
 /**
+ * Build env with extended PATH so CLI tools are discoverable in Electron.
+ */
+function getEnv(): Record<string, string | undefined> {
+  const env = { ...process.env };
+  const home = env.HOME || "";
+  const extraPaths = ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`];
+  env.PATH = [...extraPaths, env.PATH].filter(Boolean).join(":");
+  return env;
+}
+
+/**
  * Execute an Obsidian CLI command and return stdout.
  * Returns null if the command fails.
  */
@@ -9,6 +20,7 @@ function exec(command: string): string | null {
     return execSync(`obsidian ${command}`, {
       encoding: "utf-8",
       timeout: 10000,
+      env: getEnv(),
     }).trim();
   } catch {
     return null;

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Message, streamClaudeCode, streamClaudeAPI, transcribeAudioSegments } from "./claude";
+import { Message, streamClaudeCode, streamClaudeAPI, streamClaudeAPIChat, transcribeAudioSegments } from "./claude";
 import { useAudioRecorder, formatDuration } from "./useAudioRecorder";
 import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
@@ -114,6 +114,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   // showSaveConfirm removed — chats auto-save
 
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
+  const [chatMode, setChatMode] = useState<"agent" | "chat">("agent");
+  const [pendingImages, setPendingImages] = useState<{ base64: string; mediaType: string; preview: string }[]>([]);
 
   // Person picker state (for skills with requiresPerson)
   const [showPersonPicker, setShowPersonPicker] = useState(false);
@@ -220,6 +222,40 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   useEffect(() => {
     if (initialPrompt) setInput(initialPrompt);
   }, [initialPrompt]);
+
+  // Handle image paste (Cmd+V)
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          if (!blob) continue;
+
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(",")[1];
+            setPendingImages((prev) => [...prev, {
+              base64,
+              mediaType: item.type,
+              preview: dataUrl,
+            }]);
+
+            // Switch to chat mode if not already (images need API)
+            if (chatMode === "agent") setChatMode("chat");
+          };
+          reader.readAsDataURL(blob);
+        }
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [chatMode]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -601,8 +637,30 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           audioPrompt: audioPrompt || "Transcribe this audio. If there are action items or key points, note them after the transcription.",
           onDone: audioDone,
         });
+      } else if (chatMode === "chat") {
+        // --- Direct API chat mode (supports images) ---
+        const images = pendingImages.length > 0
+          ? pendingImages.map((img) => ({ base64: img.base64, mediaType: img.mediaType }))
+          : undefined;
+        if (pendingImages.length > 0) setPendingImages([]);
+
+        const allContext = [noteContext].filter(Boolean).join("");
+
+        await streamClaudeAPIChat(settings, {
+          ...callbacks,
+          messages: [...messages, userMsg],
+          systemPrompt: effectiveSystemPrompt,
+          noteContext: allContext || undefined,
+          images,
+          onDone: () => {
+            setIsStreaming(false);
+            recorder.clearAudio();
+            setAudioPrompt("");
+            setShowAudioPrompt(false);
+          },
+        });
       } else {
-        // Inject recent chat context for new conversations
+        // --- Agent mode (Claude Code CLI) ---
         let recentContext = "";
         if (!chatFilePath && messages.length === 0) {
           recentContext = await getRecentChatContext();
@@ -611,7 +669,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         const allContext = [noteContext, recentContext].filter(Boolean).join("");
         const enrichedNoteContext = allContext || undefined;
 
-        // Append referenced file paths to the prompt
         let fullPrompt = userText;
         if (attachedFiles.length > 0) {
           fullPrompt += "\n\nReferenced files (read these before responding):\n" +
@@ -791,6 +848,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         sessionId={sessionId}
         useLocalStt={settings.useLocalStt}
         showTooltips={settings.showTooltips}
+        chatMode={chatMode}
+        onChatModeToggle={() => setChatMode((m) => m === "agent" ? "chat" : "agent")}
         onSkillMenuToggle={() => setShowSkillMenu((v) => !v)}
         onSkillSelect={selectSkill}
         onToggleWrite={() => setAllowWrite((v) => !v)}
@@ -970,6 +1029,21 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Pending image previews */}
+      {pendingImages.length > 0 && (
+        <div className="ca-attached-files">
+          {pendingImages.map((img, i) => (
+            <span key={i} className="ca-attached-file ca-image-preview">
+              <img src={img.preview} alt="Attached" className="ca-image-thumb" />
+              <button
+                className="ca-attached-remove"
+                onClick={() => setPendingImages((prev) => prev.filter((_, j) => j !== i))}
+              >✕</button>
+            </span>
+          ))}
         </div>
       )}
 

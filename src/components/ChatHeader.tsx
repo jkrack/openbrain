@@ -12,6 +12,8 @@ export interface ChatHeaderProps {
   sessionId: string | undefined;
   useLocalStt: boolean;
   showTooltips: boolean;
+  chatMode: "agent" | "chat";
+  onChatModeToggle: () => void;
   onSkillMenuToggle: () => void;
   onSkillSelect: (skillId: string | null) => void;
   onToggleWrite: () => void;
@@ -31,6 +33,8 @@ export function ChatHeader({
   sessionId,
   useLocalStt,
   showTooltips,
+  chatMode,
+  onChatModeToggle,
   onSkillMenuToggle,
   onSkillSelect,
   onToggleWrite,
@@ -63,7 +67,17 @@ export function ChatHeader({
         )}
       </div>
       <div className="ca-header-right">
-        {skills.length > 0 && (
+        <button
+          className={`ca-mode-toggle ${chatMode === "chat" ? "ca-mode-chat" : "ca-mode-agent"}`}
+          onClick={onChatModeToggle}
+          aria-label={tip(chatMode === "agent"
+            ? "Agent mode — Claude can read/write vault and run commands"
+            : "Chat mode — direct conversation, supports images, no vault access"
+          )}
+        >
+          {chatMode === "agent" ? "Agent" : "Chat"}
+        </button>
+        {skills.length > 0 && chatMode === "agent" && (
           <div className="ca-skill-selector">
             <button
               className={`ca-tool-btn ${activeSkill ? "active" : ""}`}
@@ -96,26 +110,28 @@ export function ChatHeader({
             )}
           </div>
         )}
-        <button
-          className={`ca-tool-btn ${effectiveWrite ? "active" : ""}`}
-          onClick={onToggleWrite}
-          aria-label={tip(effectiveWrite
-            ? "File editing ON — Claude can create and modify notes"
-            : "File editing OFF — Claude can only read"
-          )}
-        >
-          write
-        </button>
-        <button
-          className={`ca-tool-btn ${effectiveCli ? "active" : ""}`}
-          onClick={onToggleCli}
-          aria-label={tip(effectiveCli
-            ? "Shell access ON — Claude can run commands and search your vault"
-            : "Shell access OFF — Claude cannot run commands"
-          )}
-        >
-          cli
-        </button>
+        {chatMode === "agent" && <>
+          <button
+            className={`ca-tool-btn ${effectiveWrite ? "active" : ""}`}
+            onClick={onToggleWrite}
+            aria-label={tip(effectiveWrite
+              ? "File editing ON — Claude can create and modify notes"
+              : "File editing OFF — Claude can only read"
+            )}
+          >
+            write
+          </button>
+          <button
+            className={`ca-tool-btn ${effectiveCli ? "active" : ""}`}
+            onClick={onToggleCli}
+            aria-label={tip(effectiveCli
+              ? "Shell access ON — Claude can run commands and search your vault"
+              : "Shell access OFF — Claude cannot run commands"
+            )}
+          >
+            cli
+          </button>
+        </>}
         <button
           className="ca-icon-btn"
           onClick={onNewChat}
