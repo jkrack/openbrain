@@ -70,6 +70,15 @@ export function streamClaudeCode(
     args.push("--disallowed-tools", ...disallowed);
   }
 
+  // Auto-accept tool calls when permissions are granted.
+  // Non-interactive spawn can't prompt for approval, so we set
+  // the appropriate permission mode based on what's enabled.
+  if (opts.allowWrite && opts.allowCli) {
+    args.push("--permission-mode", "bypassPermissions");
+  } else if (opts.allowWrite) {
+    args.push("--permission-mode", "acceptEdits");
+  }
+
   // Spawn the CLI — must unset CLAUDECODE to avoid nested-session block.
   // Electron/Obsidian on macOS doesn't inherit the user's shell PATH,
   // so we add common bin directories where claude may be installed.
