@@ -198,7 +198,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   useEffect(() => {
     onStatusChange?.({
       recording: recorder.state === "recording",
-      transcribing: isStreaming && recorder.state !== "recording",
+      transcribing: recorder.state === "processing",
       duration: recorder.duration,
     });
   }, [recorder.state, recorder.duration, isStreaming, onStatusChange]);
