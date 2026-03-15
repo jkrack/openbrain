@@ -608,3 +608,100 @@ export async function streamClaudeAPIChat(
     opts.onError(`Network error: ${err.message}`);
   }
 }
+
+/**
+ * Stream via OpenRouter API — supports any model (GPT-4o, Claude, Gemini, Llama, etc.)
+ * Uses OpenAI-compatible format.
+ */
+export async function streamOpenRouterChat(
+  settings: OpenBrainSettings,
+  opts: ClaudeAPIChatOptions
+) {
+  if (!settings.openrouterApiKey) {
+    opts.onError("OpenRouter API key required. Add it in OpenBrain settings.");
+    return;
+  }
+
+  const systemContent = opts.noteContext
+    ? `${opts.systemPrompt}\n\n---\nActive note content:\n${opts.noteContext}`
+    : opts.systemPrompt;
+
+  const apiMessages: any[] = [
+    { role: "system", content: systemContent },
+  ];
+
+  for (const m of opts.messages) {
+    if (m === opts.messages[opts.messages.length - 1] && m.role === "user" && opts.images?.length) {
+      const content: any[] = [{ type: "text", text: m.content }];
+      for (const img of opts.images) {
+        content.push({
+          type: "image_url",
+          image_url: { url: `data:${img.mediaType};base64,${img.base64}` },
+        });
+      }
+      apiMessages.push({ role: m.role, content });
+    } else {
+      apiMessages.push({ role: m.role, content: m.content });
+    }
+  }
+
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${settings.openrouterApiKey}`,
+        "HTTP-Referer": "https://github.com/jkrack/openbrain",
+        "X-Title": "OpenBrain",
+      },
+      body: JSON.stringify({
+        model: settings.openrouterModel || "anthropic/claude-sonnet-4-20250514",
+        messages: apiMessages,
+        max_tokens: settings.maxTokens,
+        stream: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      opts.onError(`OpenRouter error: ${err.error?.message || response.statusText}`);
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      opts.onError("No response body");
+      return;
+    }
+
+    const decoder = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) opts.onChunk(delta);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+
+    opts.onDone();
+  } catch (err: any) {
+    opts.onError(`Network error: ${err.message}`);
+  }
+}

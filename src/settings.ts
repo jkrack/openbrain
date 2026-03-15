@@ -25,6 +25,9 @@ export interface OpenBrainSettings {
   onboardingComplete: boolean;
   openclawEnabled: boolean;
   openclawGatewayUrl: string;
+  chatProvider: "anthropic" | "openrouter";
+  openrouterApiKey: string;
+  openrouterModel: string;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -51,6 +54,9 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   onboardingComplete: false,
   openclawEnabled: false,
   openclawGatewayUrl: "ws://127.0.0.1:18789",
+  chatProvider: "anthropic",
+  openrouterApiKey: "",
+  openrouterModel: "anthropic/claude-sonnet-4-20250514",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -146,6 +152,58 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           })
       );
+
+    // ── Chat Mode Provider ──
+    containerEl.createEl("h3", { text: "Chat mode" });
+
+    new Setting(containerEl)
+      .setName("Provider")
+      .setDesc("Which API to use for Chat mode conversations and image analysis.")
+      .addDropdown((drop) =>
+        drop
+          .addOption("anthropic", "Anthropic (Claude)")
+          .addOption("openrouter", "OpenRouter (any model)")
+          .setValue(this.plugin.settings.chatProvider)
+          .onChange(async (value) => {
+            this.plugin.settings.chatProvider = value as "anthropic" | "openrouter";
+            await this.plugin.saveSettings();
+            this.display();
+          })
+      );
+
+    if (this.plugin.settings.chatProvider === "openrouter") {
+      new Setting(containerEl)
+        .setName("OpenRouter API key")
+        .setDesc("Get one at openrouter.ai/keys")
+        .addText((text) => {
+          text
+            .setPlaceholder("sk-or-...")
+            .setValue(this.plugin.settings.openrouterApiKey)
+            .onChange(async (value) => {
+              this.plugin.settings.openrouterApiKey = value;
+              await this.plugin.saveSettings();
+            });
+          text.inputEl.type = "password";
+          text.inputEl.autocomplete = "off";
+          return text;
+        });
+
+      new Setting(containerEl)
+        .setName("Model")
+        .setDesc(
+          "OpenRouter model ID. Examples: anthropic/claude-sonnet-4-20250514, " +
+          "openai/gpt-4o, google/gemini-2.5-pro, meta-llama/llama-4-maverick"
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder("anthropic/claude-sonnet-4-20250514")
+            .setValue(this.plugin.settings.openrouterModel)
+            .onChange(async (value) => {
+              this.plugin.settings.openrouterModel = value;
+              await this.plugin.saveSettings();
+            })
+        );
+    }
 
     // ── Behavior ──
     containerEl.createEl("h3", { text: "Behavior" });

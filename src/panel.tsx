@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Message, streamClaudeCode, streamClaudeAPI, streamClaudeAPIChat, summarizeChat, transcribeAudioSegments } from "./claude";
+import { Message, streamClaudeCode, streamClaudeAPI, streamClaudeAPIChat, streamOpenRouterChat, summarizeChat, transcribeAudioSegments } from "./claude";
 import { useAudioRecorder, formatDuration } from "./useAudioRecorder";
 import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
@@ -635,7 +635,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         const smartCtx = buildSmartContext(app, userText, attachedFiles);
         const allContext = [noteContext, smartCtx].filter(Boolean).join("");
 
-        await streamClaudeAPIChat(settings, {
+        const chatOpts = {
           ...callbacks,
           messages: [...messages, userMsg],
           systemPrompt: effectiveSystemPrompt,
@@ -647,7 +647,13 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             setAudioPrompt("");
             setShowAudioPrompt(false);
           },
-        });
+        };
+
+        if (settings.chatProvider === "openrouter") {
+          await streamOpenRouterChat(settings, chatOpts);
+        } else {
+          await streamClaudeAPIChat(settings, chatOpts);
+        }
       } else {
         // --- Agent mode (Claude Code CLI) ---
         let recentContext = "";

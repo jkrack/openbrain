@@ -291,17 +291,23 @@ export default class OpenBrainPlugin extends Plugin {
   async loadSettings() {
     const data = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
-    // Decrypt API key on load
+    // Decrypt API keys on load
     if (this.settings.apiKey) {
       this.settings.apiKey = decrypt(this.settings.apiKey);
+    }
+    if (this.settings.openrouterApiKey) {
+      this.settings.openrouterApiKey = decrypt(this.settings.openrouterApiKey);
     }
   }
 
   async saveSettings() {
-    // Encrypt API key before saving
+    // Encrypt API keys before saving
     const dataToSave = { ...this.settings };
     if (dataToSave.apiKey) {
       dataToSave.apiKey = encrypt(dataToSave.apiKey);
+    }
+    if (dataToSave.openrouterApiKey) {
+      dataToSave.openrouterApiKey = encrypt(dataToSave.openrouterApiKey);
     }
     await this.saveData(dataToSave);
   }
