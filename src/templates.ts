@@ -196,6 +196,14 @@ Skills are specialized workflows. Type / in the input to activate one:
 
 Skills can also be selected from the dropdown in the header.
 
+### Creating your own skills
+
+**Option 1: Use /Create Skill** — describe what you want in conversation and OpenBrain generates the skill file for you.
+
+**Option 2: Use a template** — copy a skill template from \`OpenBrain/templates/\` (files starting with "Skill -") into \`OpenBrain/skills/\` and customize it.
+
+**Option 3: Write from scratch** — create a \`.md\` file in \`OpenBrain/skills/\` with YAML frontmatter (name, description, tools) and a system prompt body.
+
 ## Voice Recording
 
 Click the mic button (or use the "Start/stop voice recording" hotkey) to record audio.
