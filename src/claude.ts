@@ -139,7 +139,12 @@ export function streamClaudeCode(
     stderrOutput += data.toString();
   });
 
+  let settled = false;
+  const settle = () => { settled = true; };
+
   proc.on("close", (code) => {
+    if (settled) return;
+    settle();
     if (code !== 0 && stderrOutput) {
       opts.onError(
         stderrOutput.includes("command not found") || stderrOutput.includes("ENOENT")
@@ -152,11 +157,24 @@ export function streamClaudeCode(
   });
 
   proc.on("error", (err) => {
+    if (settled) return;
+    settle();
     opts.onError(
       err.message.includes("ENOENT")
         ? "Claude Code CLI not found. Install it from https://docs.anthropic.com/en/docs/claude-code"
         : `Failed to start CLI: ${err.message}`
     );
+  });
+
+  proc.on("exit", (code) => {
+    if (settled) return;
+    settle();
+    // Safety net — if close/error didn't fire, still resolve
+    if (code !== 0) {
+      opts.onError(`CLI exited with code ${code}`);
+    } else {
+      opts.onDone(resultSessionId);
+    }
   });
 
   return proc;
