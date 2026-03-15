@@ -4,6 +4,7 @@ import React from "react";
 import { OpenBrainPanel } from "./panel";
 import { OpenBrainSettings } from "./settings";
 import { Skill } from "./skills";
+import { VaultIndex } from "./vaultIndex";
 
 export const OPEN_BRAIN_VIEW_TYPE = "open-brain-view";
 
@@ -30,6 +31,7 @@ export class OpenBrainView extends ItemView {
   private loadNonce = 0;
   private loadChatRequest: LoadChatRequest | undefined;
   plugin: any; // Set by main.ts when creating the view
+  vaultIndex: VaultIndex | null = null;
 
   constructor(leaf: WorkspaceLeaf, settings: OpenBrainSettings, skills: Skill[]) {
     super(leaf);
@@ -111,6 +113,7 @@ export class OpenBrainView extends ItemView {
         },
         loadChatRequest: this.loadChatRequest,
         onChatPathChange: this.handleChatPathChange,
+        vaultIndex: this.vaultIndex,
       })
     );
   }

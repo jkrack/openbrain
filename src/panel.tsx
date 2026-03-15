@@ -5,7 +5,7 @@ import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
 import { transcribeBlob, transcribeSegments } from "./stt";
 import { RecordingStatus } from "./view";
-import { App, Component, MarkdownRenderer, Notice, TFile } from "obsidian";
+import { App, Component, MarkdownRenderer, Notice } from "obsidian";
 import { ChildProcess } from "child_process";
 import {
   ChatMeta,
@@ -15,6 +15,7 @@ import {
   generateChatFilename,
   listRecentChats,
 } from "./chatHistory";
+import { VaultIndex } from "./vaultIndex";
 
 interface PanelProps {
   settings: OpenBrainSettings;
@@ -26,6 +27,7 @@ interface PanelProps {
   onStatusChange?: (status: RecordingStatus) => void;
   loadChatRequest?: { path: string; nonce: number };
   onChatPathChange?: (path: string | null) => void;
+  vaultIndex?: VaultIndex | null;
 }
 
 function generateId() {
@@ -90,7 +92,7 @@ function CopyButton({ content }: { content: string }) {
   );
 }
 
-export function OpenBrainPanel({ settings, app, initialPrompt, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange }: PanelProps) {
+export function OpenBrainPanel({ settings, app, initialPrompt, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(initialPrompt || "");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -113,9 +115,14 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
   // @ mention state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionResults, setMentionResults] = useState<string[]>([]);
+  const [mentionResults, setMentionResults] = useState<{ path: string; basename: string }[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
-  const [attachedFiles, setAttachedFiles] = useState<{ path: string; content: string }[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
+
+  // / slash command state
+  const [slashQuery, setSlashQuery] = useState<string | null>(null);
+  const [slashResults, setSlashResults] = useState<Skill[]>([]);
+  const [slashIndex, setSlashIndex] = useState(0);
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justLoadedRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
@@ -577,21 +584,20 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           recentContext = await getRecentChatContext();
         }
 
-        // Build attached file context from @ mentions
-        const fileContext = attachedFiles.length > 0
-          ? "\n\n--- Referenced files ---\n" +
-            attachedFiles.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n")
-          : "";
-
-        const allContext = [noteContext, recentContext, fileContext].filter(Boolean).join("");
+        const allContext = [noteContext, recentContext].filter(Boolean).join("");
         const enrichedNoteContext = allContext || undefined;
 
-        // Clear attached files after sending
-        if (attachedFiles.length > 0) setAttachedFiles([]);
+        // Append referenced file paths to the prompt
+        let fullPrompt = userText;
+        if (attachedFiles.length > 0) {
+          fullPrompt += "\n\nReferenced files (read these before responding):\n" +
+            attachedFiles.map((p) => `- ${p}`).join("\n");
+          setAttachedFiles([]);
+        }
 
         const proc = streamClaudeCode(settings, {
           ...callbacks,
-          prompt: userText,
+          prompt: fullPrompt,
           noteContext: enrichedNoteContext,
           noteFilePath,
           systemPrompt: effectiveSystemPrompt,
@@ -620,28 +626,38 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   }, [input, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // @ mention navigation
-    if (mentionQuery !== null) {
+    // Dropdown navigation (@ mentions or / commands)
+    const isDropdownOpen = mentionQuery !== null || slashQuery !== null;
+    if (isDropdownOpen) {
+      const results = mentionQuery !== null ? mentionResults : slashResults;
+      const setIndex = mentionQuery !== null ? setMentionIndex : setSlashIndex;
+      const currentIndex = mentionQuery !== null ? mentionIndex : slashIndex;
+
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setMentionIndex((i) => Math.min(i + 1, mentionResults.length - 1));
+        setIndex(Math.min(currentIndex + 1, results.length - 1));
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setMentionIndex((i) => Math.max(i - 1, 0));
+        setIndex(Math.max(currentIndex - 1, 0));
         return;
       }
       if (e.key === "Enter" || e.key === "Tab") {
-        if (mentionResults.length > 0) {
+        if (results.length > 0) {
           e.preventDefault();
-          insertMention(mentionResults[mentionIndex]);
+          if (mentionQuery !== null) {
+            insertMention(mentionResults[mentionIndex]);
+          } else {
+            insertSlashCommand(slashResults[slashIndex]);
+          }
           return;
         }
       }
       if (e.key === "Escape") {
         e.preventDefault();
         setMentionQuery(null);
+        setSlashQuery(null);
         return;
       }
     }
@@ -651,59 +667,81 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     }
   };
 
-  // @ mention: detect query from input
+  // Detect @ mentions and / commands from input
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInput(val);
 
     const pos = e.target.selectionStart;
     const textBefore = val.slice(0, pos);
-    const atMatch = textBefore.match(/@([^\s@]*)$/);
 
+    // Check for @ mention
+    const atMatch = textBefore.match(/@([^\s@]*)$/);
     if (atMatch) {
-      const query = atMatch[1].toLowerCase();
+      const query = atMatch[1];
       setMentionQuery(query);
       setMentionIndex(0);
+      setSlashQuery(null);
 
-      // Search vault markdown files
-      const allFiles = app.vault.getMarkdownFiles();
-      const matches = allFiles
-        .filter((f) => f.path.toLowerCase().includes(query) || f.basename.toLowerCase().includes(query))
-        .sort((a, b) => b.stat.mtime - a.stat.mtime)
-        .slice(0, 8)
-        .map((f) => f.path);
-      setMentionResults(matches);
-    } else {
-      setMentionQuery(null);
+      if (vaultIndex) {
+        const results = vaultIndex.search(query);
+        setMentionResults(results);
+      }
+      return;
     }
+    setMentionQuery(null);
+
+    // Check for / command (at start or after whitespace)
+    const slashMatch = textBefore.match(/(?:^|\s)\/([^\s]*)$/);
+    if (slashMatch && skills.length > 0) {
+      const query = slashMatch[1].toLowerCase();
+      setSlashQuery(query);
+      setSlashIndex(0);
+
+      const filtered = query
+        ? skills.filter((s) => s.name.toLowerCase().includes(query))
+        : skills;
+      setSlashResults(filtered.slice(0, 8));
+      return;
+    }
+    setSlashQuery(null);
   };
 
-  // Insert selected file as attached context
-  const insertMention = async (filePath: string) => {
-    const file = app.vault.getAbstractFileByPath(filePath);
-    if (file instanceof TFile) {
-      const content = await app.vault.read(file);
-      setAttachedFiles((prev) => {
-        if (prev.some((f) => f.path === filePath)) return prev;
-        return [...prev, { path: filePath, content }];
-      });
-    }
+  // Insert selected file as attached reference (path only)
+  const insertMention = (entry: { path: string; basename: string }) => {
+    setAttachedFiles((prev) => {
+      if (prev.includes(entry.path)) return prev;
+      return [...prev, entry.path];
+    });
 
-    // Replace @query with @filename in input
+    // Replace @query with @basename in input
     const pos = inputRef.current?.selectionStart ?? input.length;
     const textBefore = input.slice(0, pos);
     const textAfter = input.slice(pos);
-    const replaced = textBefore.replace(/@[^\s@]*$/, `@${filePath.split("/").pop()?.replace(".md", "") ?? filePath} `);
+    const replaced = textBefore.replace(/@[^\s@]*$/, `@${entry.basename} `);
     setInput(replaced + textAfter);
     setMentionQuery(null);
-
-    // Refocus input
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   // Remove an attached file
   const removeAttachedFile = (path: string) => {
-    setAttachedFiles((prev) => prev.filter((f) => f.path !== path));
+    setAttachedFiles((prev) => prev.filter((p) => p !== path));
+  };
+
+  // Insert slash command — activate the selected skill
+  const insertSlashCommand = (skill: Skill) => {
+    // Remove /query from input
+    const pos = inputRef.current?.selectionStart ?? input.length;
+    const textBefore = input.slice(0, pos);
+    const textAfter = input.slice(pos);
+    const replaced = textBefore.replace(/(?:^|\s)\/[^\s]*$/, "").trimEnd();
+    setInput(replaced + (replaced ? " " : "") + textAfter);
+    setSlashQuery(null);
+
+    // Activate the skill
+    setActiveSkillId(skill.id);
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const handleMicClick = useCallback(async () => {
@@ -975,10 +1013,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       {/* Attached files from @ mentions */}
       {attachedFiles.length > 0 && (
         <div className="ca-attached-files">
-          {attachedFiles.map((f) => (
-            <span key={f.path} className="ca-attached-file">
-              {f.path.split("/").pop()}
-              <button className="ca-attached-remove" onClick={() => removeAttachedFile(f.path)}>✕</button>
+          {attachedFiles.map((p) => (
+            <span key={p} className="ca-attached-file">
+              {p.split("/").pop()?.replace(".md", "") ?? p}
+              <button className="ca-attached-remove" onClick={() => removeAttachedFile(p)}>✕</button>
             </span>
           ))}
         </div>
@@ -1000,13 +1038,27 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           {/* @ mention dropdown */}
           {mentionQuery !== null && mentionResults.length > 0 && (
             <div className="ca-mention-menu">
-              {mentionResults.map((path, i) => (
+              {mentionResults.map((entry, i) => (
                 <button
-                  key={path}
+                  key={entry.path}
                   className={`ca-mention-option ${i === mentionIndex ? "active" : ""}`}
-                  onMouseDown={(e) => { e.preventDefault(); insertMention(path); }}
+                  onMouseDown={(e) => { e.preventDefault(); insertMention(entry); }}
                 >
-                  {path}
+                  {entry.basename}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* / slash command dropdown */}
+          {slashQuery !== null && slashResults.length > 0 && (
+            <div className="ca-mention-menu">
+              {slashResults.map((skill, i) => (
+                <button
+                  key={skill.id}
+                  className={`ca-mention-option ${i === slashIndex ? "active" : ""}`}
+                  onMouseDown={(e) => { e.preventDefault(); insertSlashCommand(skill); }}
+                >
+                  {skill.name}
                 </button>
               ))}
             </div>

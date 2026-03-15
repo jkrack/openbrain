@@ -3,10 +3,12 @@ import { OpenBrainView, OPEN_BRAIN_VIEW_TYPE, RecordingStatus } from "./view";
 import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./settings";
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
 import { initChatFolder } from "./chatHistory";
+import { VaultIndex } from "./vaultIndex";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
   skills: Skill[] = [];
+  vaultIndex: VaultIndex | null = null;
   private statusBarEl: HTMLElement | null = null;
 
   async onload() {
@@ -18,6 +20,7 @@ export default class OpenBrainPlugin extends Plugin {
       (leaf) => {
         const view = new OpenBrainView(leaf, this.settings, this.skills);
         view.plugin = this;
+        view.vaultIndex = this.vaultIndex;
         view.onStatusChange = (status) => this.updateStatusBar(status);
         return view;
       }
@@ -26,6 +29,34 @@ export default class OpenBrainPlugin extends Plugin {
     // Initialize chat folder and Base file
     initChatFolder(this.app, this.settings.chatFolder).catch((e) =>
       console.error("OpenBrain: failed to init chat folder", e)
+    );
+
+    // Build vault metadata index once layout is ready
+    this.app.workspace.onLayoutReady(() => {
+      this.vaultIndex = new VaultIndex(this.app);
+      this.refreshViews();
+    });
+
+    // Keep vault index updated
+    this.registerEvent(
+      this.app.vault.on("create", (file) => {
+        if (file instanceof TFile) this.vaultIndex?.update(file.path);
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on("modify", (file) => {
+        if (file instanceof TFile) this.vaultIndex?.update(file.path);
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on("delete", (file) => {
+        this.vaultIndex?.remove(file.path);
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        this.vaultIndex?.rename(oldPath, file.path);
+      })
     );
 
     this.addRibbonIcon("brain", "OpenBrain", () => {
@@ -166,7 +197,10 @@ export default class OpenBrainPlugin extends Plugin {
     const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
     for (const leaf of leaves) {
       if (leaf.view instanceof OpenBrainView) {
-        (leaf.view as OpenBrainView).updateSkills(this.skills);
+        const view = leaf.view as OpenBrainView;
+        view.updateSkills(this.skills);
+        view.vaultIndex = this.vaultIndex;
+        view.rerender();
       }
     }
   }
