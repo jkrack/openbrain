@@ -216,26 +216,40 @@
   font-size: 12px;
   color: var(--text-muted);
 }
-.ca-setup-banner a {
-  color: var(--interactive-accent);
-}
 .ca-setup-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-weight: 600;
   color: var(--text-normal);
   margin-bottom: 6px;
   font-size: 13px;
 }
-.ca-setup-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 0;
+.ca-setup-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
 }
-.ca-setup-ok {
-  color: var(--text-success);
+.ca-setup-dismiss:hover {
+  color: var(--text-normal);
 }
-.ca-setup-missing {
-  color: var(--text-error);
+.ca-setup-text {
+  line-height: 1.5;
+}
+.ca-setup-text.ca-setup-optional {
+  margin-top: 8px;
+  opacity: 0.8;
+}
+.ca-setup-link {
+  color: var(--interactive-accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+.ca-setup-link:hover {
+  text-decoration: underline;
 }
 
 /* Messages */

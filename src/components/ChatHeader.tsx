@@ -8,17 +8,14 @@ export interface ChatHeaderProps {
   showSkillMenu: boolean;
   effectiveWrite: boolean;
   effectiveCli: boolean;
-  messageCount: number;
   noteContext: string | undefined;
   sessionId: string | undefined;
   useLocalStt: boolean;
-  showSaveConfirm: boolean;
   showTooltips: boolean;
   onSkillMenuToggle: () => void;
   onSkillSelect: (skillId: string | null) => void;
   onToggleWrite: () => void;
   onToggleCli: () => void;
-  onSave: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
 }
@@ -30,17 +27,14 @@ export function ChatHeader({
   showSkillMenu,
   effectiveWrite,
   effectiveCli,
-  messageCount,
   noteContext,
   sessionId,
   useLocalStt,
-  showSaveConfirm,
   showTooltips,
   onSkillMenuToggle,
   onSkillSelect,
   onToggleWrite,
   onToggleCli,
-  onSave,
   onNewChat,
   onOpenSettings,
 }: ChatHeaderProps) {
@@ -121,14 +115,6 @@ export function ChatHeader({
           )}
         >
           cli
-        </button>
-        <button
-          className="ca-icon-btn ca-save-btn"
-          onClick={onSave}
-          aria-label={tip("Save chat now")}
-          disabled={messageCount === 0}
-        >
-          {showSaveConfirm ? "\u2713" : "\uD83D\uDCBE"}
         </button>
         <button
           className="ca-icon-btn"

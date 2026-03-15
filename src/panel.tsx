@@ -111,7 +111,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     chatFilePathRef.current = p;
     setChatFilePathState(p);
   };
-  const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+  // showSaveConfirm removed — chats auto-save
 
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
 
@@ -152,28 +152,35 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     : baseSystemPrompt;
 
   // Check setup status on mount
+  const [setupDismissed, setSetupDismissed] = useState(false);
   useEffect(() => {
-    const check = async () => {
+    const check = () => {
+      const { execSync } = require("child_process");
+      const home = process.env.HOME || "";
+      const extraPaths = [
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+        `${home}/.local/bin`,
+      ];
+      const env = {
+        ...process.env,
+        PATH: [...extraPaths, process.env.PATH].filter(Boolean).join(":"),
+      };
+
       let claudeCli = false;
       try {
-        const { execSync } = require("child_process");
         const claudePath = settings.claudePath || "claude";
-        execSync(`${claudePath} --version`, { timeout: 5000, encoding: "utf-8" });
+        execSync(`${claudePath} --version`, { timeout: 5000, encoding: "utf-8", env });
         claudeCli = true;
       } catch {}
 
       let obsidianCli = false;
       try {
-        const { execSync } = require("child_process");
-        execSync("obsidian version", { timeout: 5000, encoding: "utf-8" });
+        execSync("obsidian version", { timeout: 5000, encoding: "utf-8", env });
         obsidianCli = true;
       } catch {}
 
-      setSetupStatus({
-        claudeCli,
-        obsidianCli,
-        apiKey: !!settings.apiKey,
-      });
+      setSetupStatus({ claudeCli, obsidianCli, apiKey: !!settings.apiKey });
     };
     check();
   }, [settings.claudePath, settings.apiKey]);
@@ -318,26 +325,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   }, [loadChatRequest?.nonce]);
 
   // Manual save handler
-  const handleManualSave = async () => {
-    if (messages.length === 0) return;
-    if (debouncedSaveRef.current) {
-      clearTimeout(debouncedSaveRef.current);
-      debouncedSaveRef.current = null;
-    }
-    const meta = buildMeta();
-    const folder = settings.chatFolder || "OpenBrain/chats";
-    const currentPath = chatFilePathRef.current;
-    const path = currentPath ?? `${folder}/${generateChatFilename()}`;
-    await saveChat(app, path, messages, meta);
-    if (!mountedRef.current) return;
-    if (!currentPath) {
-      setChatFilePath(path);
-      onChatPathChange?.(path);
-    }
-    setShowSaveConfirm(true);
-    setTimeout(() => setShowSaveConfirm(false), 1500);
-  };
-
   // Recent chat context injection helper
   async function getRecentChatContext(): Promise<string> {
     if (!settings.includeRecentChats) return "";
@@ -800,17 +787,14 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         showSkillMenu={showSkillMenu}
         effectiveWrite={effectiveWrite}
         effectiveCli={effectiveCli}
-        messageCount={messages.length}
         noteContext={noteContext}
         sessionId={sessionId}
         useLocalStt={settings.useLocalStt}
-        showSaveConfirm={showSaveConfirm}
         showTooltips={settings.showTooltips}
         onSkillMenuToggle={() => setShowSkillMenu((v) => !v)}
         onSkillSelect={selectSkill}
         onToggleWrite={() => setAllowWrite((v) => !v)}
         onToggleCli={() => setAllowCli((v) => !v)}
-        onSave={handleManualSave}
         onNewChat={clearConversation}
         onOpenSettings={() => {
           const setting = (app as any).setting;
@@ -830,40 +814,36 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         />
       )}
 
-      {/* Setup banner — show when dependencies missing */}
-      {setupStatus && !setupStatus.claudeCli && messages.length === 0 && (
+      {/* Setup banner — only when Claude CLI is missing and not dismissed */}
+      {setupStatus && !setupStatus.claudeCli && !setupDismissed && messages.length === 0 && (
         <div className="ca-setup-banner">
-          <div className="ca-setup-title">Setup required</div>
-          <div className="ca-setup-item">
-            <span className={setupStatus.claudeCli ? "ca-setup-ok" : "ca-setup-missing"}>
-              {setupStatus.claudeCli ? "✓" : "✕"}
-            </span>
-            <span>
-              Claude Code CLI — {setupStatus.claudeCli
-                ? "installed"
-                : "not found. Install from docs.anthropic.com/en/docs/claude-code"}
-            </span>
+          <div className="ca-setup-title">
+            Claude Code CLI not found
+            <button
+              className="ca-setup-dismiss"
+              onClick={() => setSetupDismissed(true)}
+              aria-label="Dismiss"
+            >✕</button>
           </div>
-          <div className="ca-setup-item">
-            <span className={setupStatus.obsidianCli ? "ca-setup-ok" : "ca-setup-missing"}>
-              {setupStatus.obsidianCli ? "✓" : "○"}
-            </span>
-            <span>
-              Obsidian CLI — {setupStatus.obsidianCli
-                ? "enabled"
-                : "optional. Enable in Settings → General → Command line interface for vault search and task tracking"}
-            </span>
+          <div className="ca-setup-text">
+            Text chat requires the Claude Code CLI.{" "}
+            <a href="https://docs.anthropic.com/en/docs/claude-code" className="ca-setup-link">Install it</a>
+            {" "}or check the path in{" "}
+            <a
+              href="#"
+              className="ca-setup-link"
+              onClick={(e) => {
+                e.preventDefault();
+                const setting = (app as any).setting;
+                if (setting) { setting.open(); setting.openTabById("open-brain"); }
+              }}
+            >settings</a>.
           </div>
-          <div className="ca-setup-item">
-            <span className={setupStatus.apiKey ? "ca-setup-ok" : "ca-setup-missing"}>
-              {setupStatus.apiKey ? "✓" : "○"}
-            </span>
-            <span>
-              API key — {setupStatus.apiKey
-                ? "configured"
-                : "optional. Only needed for voice transcription via API"}
-            </span>
-          </div>
+          {!setupStatus.obsidianCli && (
+            <div className="ca-setup-text ca-setup-optional">
+              Tip: Enable the Obsidian CLI (Settings → General → Command line interface) for vault search and task tracking.
+            </div>
+          )}
         </div>
       )}
 
