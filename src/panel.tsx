@@ -784,7 +784,11 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     const created = await createFromTemplate(app, "One on One.md", notePath, {
       title: person.name,
     });
-    if (created) setPersonNotePath(created);
+    if (created) {
+      setPersonNotePath(created);
+      // Link the 1:1 note in today's daily note under Meetings
+      linkInDailyNote(app, created, "Meetings", `1:1 — ${person.name}`).catch(() => {});
+    }
 
     // Build file references: person profile + recent 1:1 notes
     const filesToReference = [person.filePath];
