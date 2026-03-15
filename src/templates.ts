@@ -118,10 +118,44 @@ interface TemplateEntry {
   content: string;
 }
 
+const PROJECT_TEMPLATE = `# {{title}}
+
+**Status:** Active
+**Owner:**
+**Started:** {{date}}
+
+---
+
+## Overview
+What is this project and why does it matter?
+
+---
+
+## Goals
+- [ ]
+
+---
+
+## Key Decisions
+
+---
+
+## Open Questions
+-
+
+---
+
+## Progress Log
+
+### {{date}}
+- Project created
+`;
+
 const BUILT_IN_TEMPLATES: TemplateEntry[] = [
   { filename: "Daily Note.md", content: DAILY_NOTE_TEMPLATE },
   { filename: "Meeting.md", content: MEETING_TEMPLATE },
   { filename: "One on One.md", content: ONE_ON_ONE_TEMPLATE },
+  { filename: "Project.md", content: PROJECT_TEMPLATE },
 ];
 
 // ── Public API ─────────────────────────────────────────────────────────

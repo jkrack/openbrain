@@ -18,6 +18,7 @@ import {
   appendToDailySection,
 } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
+import { buildSmartContext } from "./smartContext";
 import { PersonProfile, loadPeople, getRecentOneOnOnes, getPersonMeetingFolder } from "./people";
 import { createFromTemplate } from "./templates";
 import { ChatHeader } from "./components/ChatHeader";
@@ -669,7 +670,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           : undefined;
         if (pendingImages.length > 0) setPendingImages([]);
 
-        const allContext = [noteContext].filter(Boolean).join("");
+        // Smart context for chat mode too
+        const smartCtx = buildSmartContext(app, userText, attachedFiles);
+        const allContext = [noteContext, smartCtx].filter(Boolean).join("");
 
         await streamClaudeAPIChat(settings, {
           ...callbacks,
@@ -695,11 +698,17 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         const enrichedNoteContext = allContext || undefined;
 
         let fullPrompt = userText;
+
+        // Attach @ referenced files
         if (attachedFiles.length > 0) {
           fullPrompt += "\n\nReferenced files (read these before responding):\n" +
             attachedFiles.map((p) => `- ${p}`).join("\n");
           setAttachedFiles([]);
         }
+
+        // Smart context: auto-find relevant vault notes
+        const smartCtx = buildSmartContext(app, userText, attachedFiles);
+        if (smartCtx) fullPrompt += smartCtx;
 
         const proc = streamClaudeCode(settings, {
           ...callbacks,

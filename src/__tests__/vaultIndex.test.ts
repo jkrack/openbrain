@@ -38,10 +38,14 @@ function scoreSearch(entries: IndexEntry[], query: string, limit = 8): IndexEntr
 
     let score = 0;
     if (bn.startsWith(q)) {
-      score = 4;
+      score = 5;
     } else if (bn.includes(q)) {
-      score = 3;
+      score = 4;
     } else if (entry.aliases.some((a) => a.toLowerCase().includes(q))) {
+      score = 3;
+    } else if (entry.tags.some((t) => t.toLowerCase().includes(q))) {
+      score = 2.5;
+    } else if (entry.headings.some((h) => h.toLowerCase().includes(q))) {
       score = 2;
     } else if (p.includes(q)) {
       score = 1;
@@ -59,7 +63,7 @@ function scoreSearch(entries: IndexEntry[], query: string, limit = 8): IndexEntr
 // ── Test data ────────────────────────────────────────────────────────────
 
 function makeEntry(path: string, basename: string, aliases: string[] = []): IndexEntry {
-  return { path, basename, aliases };
+  return { path, basename, aliases, tags: [], headings: [], links: [], frontmatterType: "" };
 }
 
 const testEntries: IndexEntry[] = [
