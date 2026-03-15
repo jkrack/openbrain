@@ -20,6 +20,7 @@ export interface Skill {
   trigger?: string;
   postActions: PostAction[];
   dailyNoteSection?: string;
+  requiresPerson?: boolean;
   systemPrompt: string;
   filePath: string;
 }
@@ -75,6 +76,7 @@ export function parseSkillFile(content: string, filePath: string): Skill | null 
     trigger: frontmatter.trigger,
     postActions,
     dailyNoteSection: frontmatter.daily_note_section,
+    requiresPerson: frontmatter.requires_person === true,
     systemPrompt: body,
     filePath,
   };

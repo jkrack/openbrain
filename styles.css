@@ -98,6 +98,61 @@
   color: var(--text-normal);
 }
 
+/* Person picker */
+.ca-person-picker {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ca-person-picker-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-normal);
+  margin-bottom: 8px;
+}
+.ca-person-picker-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 12px 0;
+}
+.ca-person-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s;
+}
+.ca-person-option:hover {
+  border-color: var(--interactive-accent);
+}
+.ca-person-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-normal);
+}
+.ca-person-role {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.ca-person-cancel {
+  margin-top: 4px;
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+.ca-person-cancel:hover {
+  color: var(--text-normal);
+}
+
 /* Thread */
 .ca-thread {
   flex: 1;

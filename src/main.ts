@@ -5,6 +5,7 @@ import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./ski
 import { initChatFolder } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 import { initTemplates } from "./templates";
+import { initPeopleFolder } from "./people";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -33,6 +34,9 @@ export default class OpenBrainPlugin extends Plugin {
     );
     initTemplates(this.app).catch((e) =>
       console.error("OpenBrain: failed to init templates", e)
+    );
+    initPeopleFolder(this.app).catch((e) =>
+      console.error("OpenBrain: failed to init people folder", e)
     );
 
     // Build vault metadata index once layout is ready

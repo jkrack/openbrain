@@ -17,6 +17,8 @@ import {
   linkInDailyNote,
 } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
+import { PersonProfile, loadPeople, getRecentOneOnOnes, getPersonMeetingFolder } from "./people";
+import { createFromTemplate } from "./templates";
 
 interface PanelProps {
   settings: OpenBrainSettings;
@@ -124,6 +126,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const [slashQuery, setSlashQuery] = useState<string | null>(null);
   const [slashResults, setSlashResults] = useState<Skill[]>([]);
   const [slashIndex, setSlashIndex] = useState(0);
+
+  // Person picker state (for skills with requiresPerson)
+  const [showPersonPicker, setShowPersonPicker] = useState(false);
+  const [people, setPeople] = useState<PersonProfile[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<PersonProfile | null>(null);
+  const [personNotePath, setPersonNotePath] = useState<string | null>(null);
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justLoadedRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
@@ -148,7 +156,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
   const effectiveWrite = activeSkill?.tools.write ?? allowWrite;
   const effectiveCli = activeSkill?.tools.cli ?? allowCli;
-  const effectiveSystemPrompt = activeSkill?.systemPrompt || settings.systemPrompt;
+  const baseSystemPrompt = activeSkill?.systemPrompt || settings.systemPrompt;
+  const effectiveSystemPrompt = selectedPerson
+    ? `${baseSystemPrompt}\n\n--- Person Context ---\n${selectedPerson.fullContent}`
+    : baseSystemPrompt;
 
   // Apply tool overrides when skill changes
   useEffect(() => {
@@ -737,7 +748,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   };
 
   // Insert slash command — activate the selected skill
-  const insertSlashCommand = (skill: Skill) => {
+  const insertSlashCommand = async (skill: Skill) => {
     // Remove /query from input
     const pos = inputRef.current?.selectionStart ?? input.length;
     const textBefore = input.slice(0, pos);
@@ -748,6 +759,46 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
     // Activate the skill
     setActiveSkillId(skill.id);
+
+    // If skill requires a person, show the person picker
+    if (skill.requiresPerson) {
+      const loaded = await loadPeople(app);
+      setPeople(loaded);
+      setShowPersonPicker(true);
+    } else {
+      setSelectedPerson(null);
+      setPersonNotePath(null);
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  };
+
+  // Handle person selection — create 1:1 note and inject context
+  const selectPerson = async (person: PersonProfile) => {
+    setSelectedPerson(person);
+    setShowPersonPicker(false);
+
+    // Create the 1:1 note from template
+    const folder = getPersonMeetingFolder(person.name);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const notePath = `${folder}/${dateStr}.md`;
+    const created = await createFromTemplate(app, "One on One.md", notePath, {
+      title: person.name,
+    });
+    if (created) setPersonNotePath(created);
+
+    // Load recent 1:1 context
+    const recentNotes = await getRecentOneOnOnes(app, person.name);
+    if (recentNotes.length > 0) {
+      const contextSuffix = "\n\n--- Recent 1:1 History ---\n" + recentNotes.join("\n\n");
+      // Attach as a file reference so Claude reads it
+      setAttachedFiles((prev) => {
+        const newFiles = [...prev];
+        // Add the person's profile
+        if (!newFiles.includes(person.filePath)) newFiles.push(person.filePath);
+        return newFiles;
+      });
+    }
+
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
@@ -792,6 +843,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       procRef.current = null;
     }
     setIsStreaming(false);
+    setSelectedPerson(null);
+    setPersonNotePath(null);
+    setShowPersonPicker(false);
     onChatPathChange?.(null);
   };
 
@@ -911,15 +965,49 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         </div>
       </div>
 
+      {/* Person picker overlay */}
+      {showPersonPicker && (
+        <div className="ca-person-picker">
+          <div className="ca-person-picker-title">Who is this 1:1 with?</div>
+          {people.length === 0 && (
+            <div className="ca-person-picker-empty">
+              No profiles found. Create profiles in OpenBrain/people/
+            </div>
+          )}
+          {people.map((person) => (
+            <button
+              key={person.filePath}
+              className="ca-person-option"
+              onClick={() => selectPerson(person)}
+            >
+              <span className="ca-person-name">{person.name}</span>
+              <span className="ca-person-role">{person.role} — {person.domain}</span>
+            </button>
+          ))}
+          <button
+            className="ca-person-cancel"
+            onClick={() => { setShowPersonPicker(false); setActiveSkillId(null); }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Message thread */}
       <div className="ca-thread" ref={threadRef}>
-        {messages.length === 0 && (
+        {messages.length === 0 && !showPersonPicker && (
           <div className="ca-empty">
             <div className="ca-empty-icon">◈</div>
             <div className="ca-empty-text">
-              {activeSkill ? activeSkill.description || activeSkill.name : "Ask anything about your vault"}
+              {selectedPerson
+                ? `1:1 with ${selectedPerson.name}`
+                : activeSkill ? activeSkill.description || activeSkill.name : "Ask anything about your vault"}
             </div>
-            <div className="ca-empty-sub">Powered by Claude Code</div>
+            <div className="ca-empty-sub">
+              {selectedPerson
+                ? `${selectedPerson.role} — ${selectedPerson.domain}`
+                : "Powered by Claude Code"}
+            </div>
           </div>
         )}
         {messages.map((msg) => (
