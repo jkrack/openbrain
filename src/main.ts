@@ -4,7 +4,7 @@ import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./sett
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
 import { initChatFolder, appendToDailySection, parseChat } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
-import { initTemplates } from "./templates";
+import { initTemplates, createGettingStartedNote } from "./templates";
 import { initPeopleFolder } from "./people";
 import { configure as configureObsidianCli } from "./obsidianCli";
 
@@ -41,6 +41,9 @@ export default class OpenBrainPlugin extends Plugin {
       );
       await initPeopleFolder(this.app).catch((e) =>
         console.error("OpenBrain: failed to init people folder", e)
+      );
+      await createGettingStartedNote(this.app).catch((e) =>
+        console.error("OpenBrain: failed to create getting started note", e)
       );
 
       // Build vault metadata index

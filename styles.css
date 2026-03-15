@@ -879,3 +879,118 @@
   text-align: center;
   padding: 20px;
 }
+
+/* Welcome / Onboarding flow */
+.ca-welcome {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.ca-welcome-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-normal);
+  letter-spacing: -0.01em;
+}
+
+.ca-welcome-text {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 280px;
+}
+
+.ca-welcome-btn {
+  margin-top: 8px;
+  padding: 8px 24px;
+  border-radius: 8px;
+  border: none;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.ca-welcome-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.ca-welcome-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ca-welcome-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  width: 100%;
+  max-width: 300px;
+}
+
+.ca-welcome-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
+.ca-welcome-check-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.ca-welcome-check.ready .ca-welcome-check-icon {
+  color: var(--text-success, #4caf50);
+  font-weight: 600;
+}
+
+.ca-welcome-check.missing .ca-welcome-check-icon {
+  color: var(--text-error, #e54);
+  font-weight: 600;
+}
+
+.ca-welcome-check.optional .ca-welcome-check-icon {
+  color: var(--text-muted);
+}
+
+.ca-welcome-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  width: 100%;
+  max-width: 300px;
+}
+
+.ca-welcome-tip {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.ca-welcome-tip b {
+  color: var(--interactive-accent);
+  font-weight: 600;
+}

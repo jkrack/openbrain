@@ -22,6 +22,7 @@ export interface OpenBrainSettings {
   dailyNoteFolder: string;
   dailyNoteFormat: string;
   obsidianCliPath: string;
+  onboardingComplete: boolean;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -45,6 +46,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   dailyNoteFolder: "0. Daily/{{YYYY}}/{{MM}}",
   dailyNoteFormat: "YYYY-MM-DD",
   obsidianCliPath: "obsidian",
+  onboardingComplete: false,
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {

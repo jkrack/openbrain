@@ -119,6 +119,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const [chatMode, setChatMode] = useState<"agent" | "chat">("agent");
   const [pendingImages, setPendingImages] = useState<{ base64: string; mediaType: string; preview: string }[]>([]);
 
+  // Onboarding state
+  const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
+
   // Person picker state (for skills with requiresPerson)
   const [showPersonPicker, setShowPersonPicker] = useState(false);
   const [people, setPeople] = useState<PersonProfile[]>([]);
@@ -902,6 +905,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         useLocalStt={settings.useLocalStt}
         showTooltips={settings.showTooltips}
         chatMode={chatMode}
+        onboardingComplete={settings.onboardingComplete}
         onChatModeToggle={() => setChatMode((m) => m === "agent" ? "chat" : "agent")}
         onSkillMenuToggle={() => setShowSkillMenu((v) => !v)}
         onSkillSelect={selectSkill}
@@ -961,7 +965,102 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
       {/* Message thread */}
       <div className="ca-thread" ref={threadRef}>
-        {messages.length === 0 && !showPersonPicker && (
+        {/* Welcome flow for first-run onboarding */}
+        {!settings.onboardingComplete && messages.length === 0 && !showPersonPicker && (
+          <div className="ca-welcome">
+            {onboardingStep === 1 && (
+              <>
+                <div className="ca-welcome-title">Welcome to OpenBrain</div>
+                <div className="ca-welcome-text">
+                  Your AI assistant for Obsidian — chat, voice, meeting notes, and vault management.
+                </div>
+                <button
+                  className="ca-welcome-btn"
+                  onClick={() => setOnboardingStep(2)}
+                >
+                  Get Started →
+                </button>
+              </>
+            )}
+            {onboardingStep === 2 && setupStatus && (
+              <>
+                <div className="ca-welcome-title">Setup Check</div>
+                <div className="ca-welcome-checks">
+                  <div className={`ca-welcome-check ${setupStatus.claudeCli ? "ready" : "missing"}`}>
+                    <span className="ca-welcome-check-icon">{setupStatus.claudeCli ? "\u2713" : "\u2715"}</span>
+                    <span>Claude Code CLI {setupStatus.claudeCli ? "" : "(required for text chat)"}</span>
+                  </div>
+                  <div className={`ca-welcome-check ${setupStatus.apiKey ? "ready" : "optional"}`}>
+                    <span className="ca-welcome-check-icon">{setupStatus.apiKey ? "\u2713" : "\u25CB"}</span>
+                    <span>Anthropic API key {setupStatus.apiKey ? "" : "(optional, for voice + chat mode)"}</span>
+                  </div>
+                  <div className={`ca-welcome-check ${setupStatus.obsidianCli ? "ready" : "optional"}`}>
+                    <span className="ca-welcome-check-icon">{setupStatus.obsidianCli ? "\u2713" : "\u25CB"}</span>
+                    <span>Obsidian CLI {setupStatus.obsidianCli ? "" : "(optional, for vault search)"}</span>
+                  </div>
+                </div>
+                <button
+                  className="ca-welcome-btn"
+                  onClick={() => setOnboardingStep(3)}
+                  disabled={!setupStatus.claudeCli}
+                >
+                  Continue →
+                </button>
+                {!setupStatus.claudeCli && (
+                  <div className="ca-welcome-text" style={{ marginTop: 8, fontSize: 12 }}>
+                    Install the <a href="https://docs.anthropic.com/en/docs/claude-code" className="ca-setup-link">Claude Code CLI</a> to continue, or check the path in{" "}
+                    <a
+                      href="#"
+                      className="ca-setup-link"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const setting = (app as any).setting;
+                        if (setting) { setting.open(); setting.openTabById("open-brain"); }
+                      }}
+                    >settings</a>.
+                  </div>
+                )}
+              </>
+            )}
+            {onboardingStep === 3 && (
+              <>
+                <div className="ca-welcome-title">Quick Tips</div>
+                <div className="ca-welcome-tips">
+                  <div className="ca-welcome-tip">
+                    <b>Chat</b> — Type a message to talk with Claude about your vault
+                  </div>
+                  <div className="ca-welcome-tip">
+                    <b>@files</b> — Type @ to reference any file in your vault as context
+                  </div>
+                  <div className="ca-welcome-tip">
+                    <b>/skills</b> — Type / to activate skills (meeting notes, vault health, reviews)
+                  </div>
+                  <div className="ca-welcome-tip">
+                    <b>Voice</b> — Use the mic button to record and transcribe audio
+                  </div>
+                </div>
+                <button
+                  className="ca-welcome-btn"
+                  onClick={() => {
+                    settings.onboardingComplete = true;
+                    // Persist via plugin settings
+                    const setting = (app as any).setting;
+                    const plugin = setting?.pluginTabs?.find((t: any) => t.id === "open-brain")?.plugin;
+                    if (plugin) {
+                      plugin.settings.onboardingComplete = true;
+                      plugin.saveSettings();
+                    }
+                  }}
+                >
+                  Start chatting →
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Normal empty state (post-onboarding) */}
+        {settings.onboardingComplete && messages.length === 0 && !showPersonPicker && (
           <div className="ca-empty">
             <div className="ca-empty-icon">◈</div>
             {selectedPerson ? (

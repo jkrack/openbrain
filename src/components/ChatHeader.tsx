@@ -13,6 +13,7 @@ export interface ChatHeaderProps {
   useLocalStt: boolean;
   showTooltips: boolean;
   chatMode: "agent" | "chat";
+  onboardingComplete: boolean;
   onChatModeToggle: () => void;
   onSkillMenuToggle: () => void;
   onSkillSelect: (skillId: string | null) => void;
@@ -34,6 +35,7 @@ export function ChatHeader({
   useLocalStt,
   showTooltips,
   chatMode,
+  onboardingComplete,
   onChatModeToggle,
   onSkillMenuToggle,
   onSkillSelect,
@@ -67,17 +69,19 @@ export function ChatHeader({
         )}
       </div>
       <div className="ca-header-right">
-        <button
-          className={`ca-mode-toggle ${chatMode === "chat" ? "ca-mode-chat" : "ca-mode-agent"}`}
-          onClick={onChatModeToggle}
-          aria-label={tip(chatMode === "agent"
-            ? "Agent mode — Claude can read/write vault and run commands"
-            : "Chat mode — direct conversation, supports images, no vault access"
-          )}
-        >
-          {chatMode === "agent" ? "Agent" : "Chat"}
-        </button>
-        {skills.length > 0 && chatMode === "agent" && (
+        {onboardingComplete && (
+          <button
+            className={`ca-mode-toggle ${chatMode === "chat" ? "ca-mode-chat" : "ca-mode-agent"}`}
+            onClick={onChatModeToggle}
+            aria-label={tip(chatMode === "agent"
+              ? "Agent mode — Claude can read/write vault and run commands"
+              : "Chat mode — direct conversation, supports images, no vault access"
+            )}
+          >
+            {chatMode === "agent" ? "Agent" : "Chat"}
+          </button>
+        )}
+        {onboardingComplete && skills.length > 0 && chatMode === "agent" && (
           <div className="ca-skill-selector">
             <button
               className={`ca-tool-btn ${activeSkill ? "active" : ""}`}
@@ -110,7 +114,7 @@ export function ChatHeader({
             )}
           </div>
         )}
-        {chatMode === "agent" && <>
+        {onboardingComplete && chatMode === "agent" && <>
           <button
             className={`ca-tool-btn ${effectiveWrite ? "active" : ""}`}
             onClick={onToggleWrite}
