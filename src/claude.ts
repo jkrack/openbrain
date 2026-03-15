@@ -223,6 +223,74 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
   return proc;
 }
 
+/**
+ * Generate a one-line TLDR summary of a conversation.
+ * Tries Claude Code CLI first (reuses session), falls back to API.
+ */
+export async function summarizeChat(
+  settings: OpenBrainSettings,
+  messages: Message[],
+  sessionId?: string,
+  vaultPath?: string
+): Promise<string | null> {
+  if (messages.length < 2) return null;
+
+  const prompt = "Summarize this entire conversation in ONE sentence (under 80 chars) for a daily note. Just the summary, nothing else.";
+
+  // Try Claude Code CLI with existing session
+  if (sessionId) {
+    try {
+      const { execSync } = require("child_process");
+      const claudePath = settings.claudePath || "claude";
+      const home = process.env.HOME || "";
+      const env = { ...process.env };
+      delete env.CLAUDECODE;
+      env.PATH = ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`, `${home}/.nvm/versions/node`, env.PATH].filter(Boolean).join(":");
+
+      const result = execSync(
+        `${claudePath} -p --resume ${sessionId} --output-format text`,
+        { input: prompt, encoding: "utf-8", timeout: 15000, env, cwd: vaultPath }
+      );
+      const summary = result.trim();
+      if (summary && summary.length < 200) return summary;
+    } catch {}
+  }
+
+  // Fall back to API
+  if (settings.apiKey) {
+    try {
+      const lastMessages = messages.slice(-6).map((m) => ({
+        role: m.role,
+        content: m.content.slice(0, 300),
+      }));
+      lastMessages.push({ role: "user", content: prompt });
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: settings.model,
+          max_tokens: 100,
+          messages: lastMessages,
+          stream: false,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const text = result.content?.find((b: any) => b.type === "text")?.text;
+        if (text && text.length < 200) return text.trim();
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const arrayBuffer = await blob.arrayBuffer();
   const bytes = new Uint8Array(arrayBuffer);

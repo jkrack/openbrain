@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Message, streamClaudeCode, streamClaudeAPI, streamClaudeAPIChat, transcribeAudioSegments } from "./claude";
+import { Message, streamClaudeCode, streamClaudeAPI, streamClaudeAPIChat, summarizeChat, transcribeAudioSegments } from "./claude";
 import { useAudioRecorder, formatDuration } from "./useAudioRecorder";
 import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
@@ -796,9 +796,25 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       clearTimeout(debouncedSaveRef.current);
       debouncedSaveRef.current = null;
     }
-    // Save before clearing if there's content
+    // Generate TLDR and save before clearing
     if (messages.length > 0 && chatFilePath) {
-      await saveChat(app, chatFilePath, messages, buildMeta());
+      const meta = buildMeta();
+
+      // Try to generate a summary for better title
+      if (messages.length >= 2) {
+        const tldr = await summarizeChat(
+          settings, messages, sessionIdRef.current, vaultPath
+        );
+        if (tldr) meta.title = tldr;
+      }
+
+      await saveChat(app, chatFilePath, messages, meta);
+
+      // Update daily note link with the better title
+      const currentSkillId = activeSkillIdRef.current;
+      const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
+      const section = skill?.dailyNoteSection || "Capture";
+      linkInDailyNote(app, chatFilePath, section, meta.title, settings).catch(() => {});
     }
     setMessages([]);
     setChatFilePath(null);
