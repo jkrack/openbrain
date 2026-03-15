@@ -56,7 +56,33 @@ export function streamClaudeCode(
   const contextNote = opts.noteContext
     ? `\n\n---${notePath}\nActive note content:\n${opts.noteContext}`
     : "";
-  args.push("--append-system-prompt", opts.systemPrompt + contextNote);
+
+  // Tell Claude about the Obsidian CLI when shell access is enabled
+  const obsidianCliContext = opts.allowCli ? `
+
+--- Obsidian CLI ---
+You have access to the Obsidian CLI. Use it for vault operations instead of raw file I/O when possible.
+
+Key commands:
+  obsidian daily                          # Open today's daily note
+  obsidian daily:read                     # Read today's daily note
+  obsidian daily:append content="text"    # Append to today's daily note
+  obsidian search query="search terms"    # Full-text vault search
+  obsidian tasks file="path" todo         # Get open tasks from a file
+  obsidian tasks daily todo               # Get open tasks from daily note
+  obsidian backlinks file="path"          # Find all backlinks to a file
+  obsidian links file="path"              # Get outgoing links from a file
+  obsidian read file="path"               # Read a file
+  obsidian create name="path" content="text"  # Create a new note
+  obsidian append file="path" content="text"  # Append to a note
+  obsidian properties file="path"         # Read file frontmatter
+  obsidian property:set file="path" name="key" value="val"  # Set a property
+  obsidian outline file="path"            # Get headings/structure
+
+Prefer these over direct file read/write — they work through Obsidian's APIs and handle links, metadata, and caching correctly.
+` : "";
+
+  args.push("--append-system-prompt", opts.systemPrompt + contextNote + obsidianCliContext);
 
   // Control tool access based on toggles
   const disallowed: string[] = [];

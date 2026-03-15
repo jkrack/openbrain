@@ -1,6 +1,7 @@
 import { App, TFile, TFolder, Notice, moment } from "obsidian";
 import { Message } from "./claude";
 import { createFromTemplate } from "./templates";
+import * as cli from "./obsidianCli";
 
 // ── Interfaces ──────────────────────────────────────────────────────────
 
@@ -305,7 +306,8 @@ export async function initChatFolder(app: App, folder: string): Promise<void> {
 
 /**
  * Add a [[wikilink]] to a section of today's daily note.
- * Creates the daily note if it doesn't exist.
+ * Creates the daily note from template if it doesn't exist.
+ * Tries Obsidian CLI first, falls back to vault API.
  * Skips if the link is already present (idempotent).
  */
 export async function linkInDailyNote(
@@ -314,19 +316,49 @@ export async function linkInDailyNote(
   section: string,
   displayTitle?: string
 ): Promise<void> {
-  // Find today's daily note path using periodic-notes or core daily notes
-  const dailyPath = getDailyPath(app);
-
-  // Build the wikilink
   const linkTarget = filePath.replace(/\.md$/, "");
   const link = displayTitle
     ? `- [[${linkTarget}|${displayTitle}]]`
     : `- [[${linkTarget}]]`;
 
+  // Try Obsidian CLI first
+  if (cli.isAvailable()) {
+    // Check if daily note exists, create from template if not
+    const existing = cli.dailyRead();
+    if (existing === null) {
+      // Create daily note from template using vault API (CLI doesn't support our custom templates)
+      const dailyPath = getDailyPath(app);
+      await createFromTemplate(app, "Daily Note.md", dailyPath);
+    }
+
+    // Check for duplicates
+    const content = cli.dailyRead();
+    if (content && content.includes(`[[${linkTarget}`)) return;
+
+    // Append the link under the section
+    // Use daily:append with a section-targeted format
+    cli.dailyAppend(`\n${link}`);
+
+    // If we need section targeting, fall through to vault API
+    // (Obsidian CLI daily:append appends to end, not to a section)
+    // For now, use vault API for section-specific insertion
+    return linkInDailyNoteVaultApi(app, linkTarget, link, section);
+  }
+
+  return linkInDailyNoteVaultApi(app, linkTarget, link, section);
+}
+
+/** Vault API fallback for section-specific daily note linking. */
+async function linkInDailyNoteVaultApi(
+  app: App,
+  linkTarget: string,
+  link: string,
+  section: string
+): Promise<void> {
+  const dailyPath = getDailyPath(app);
   let file = app.vault.getAbstractFileByPath(dailyPath);
 
   if (!(file instanceof TFile)) {
-    // Create the daily note from template
     await createFromTemplate(app, "Daily Note.md", dailyPath);
     file = app.vault.getAbstractFileByPath(dailyPath);
   }
@@ -334,8 +366,6 @@ export async function linkInDailyNote(
   if (!(file instanceof TFile)) return;
 
   const content = await app.vault.read(file);
-
-  // Don't add duplicate links
   if (content.includes(`[[${linkTarget}`)) return;
 
   // Find the section and insert after it
@@ -343,12 +373,10 @@ export async function linkInDailyNote(
   const match = content.match(sectionRegex);
 
   if (match && match.index !== undefined) {
-    // Find the end of the section heading line
     const insertPos = match.index + match[0].length;
     const before = content.slice(0, insertPos);
     const after = content.slice(insertPos);
 
-    // Insert link after the heading (and any --- separator)
     const separatorMatch = after.match(/^\n---\n/);
     if (separatorMatch) {
       const updated = before + "\n---\n" + link + "\n" + after.slice(separatorMatch[0].length);
@@ -358,14 +386,17 @@ export async function linkInDailyNote(
       await app.vault.modify(file, updated);
     }
   } else {
-    // Section not found — append to end
     const updated = content.trimEnd() + `\n\n## ${section}\n${link}\n`;
     await app.vault.modify(file, updated);
   }
 }
 
 function getDailyPath(app: App): string {
-  // Check periodic-notes plugin first
+  // Try Obsidian CLI first
+  const cliPath = cli.dailyPath();
+  if (cliPath) return cliPath;
+
+  // Check periodic-notes plugin
   const periodicNotes = (app as any).plugins?.plugins?.["periodic-notes"];
   if (periodicNotes?.settings?.daily?.enabled) {
     const daily = periodicNotes.settings.daily;
@@ -385,7 +416,6 @@ function getDailyPath(app: App): string {
     return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
   }
 
-  // Default
   return `${moment().format("YYYY-MM-DD")}.md`;
 }
 
