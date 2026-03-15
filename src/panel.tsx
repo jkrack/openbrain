@@ -85,9 +85,16 @@ function CopyButton({ content }: { content: string }) {
   );
 }
 
+interface SetupStatus {
+  claudeCli: boolean;
+  obsidianCli: boolean;
+  apiKey: boolean;
+}
+
 export function OpenBrainPanel({ settings, app, initialPrompt, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(initialPrompt || "");
+  const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [noteContext, setNoteContext] = useState<string | undefined>();
   const [noteFilePath, setNoteFilePath] = useState<string | undefined>();
@@ -143,6 +150,33 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const effectiveSystemPrompt = selectedPerson
     ? `${baseSystemPrompt}\n\n--- Person Context ---\n${selectedPerson.fullContent}`
     : baseSystemPrompt;
+
+  // Check setup status on mount
+  useEffect(() => {
+    const check = async () => {
+      let claudeCli = false;
+      try {
+        const { execSync } = require("child_process");
+        const claudePath = settings.claudePath || "claude";
+        execSync(`${claudePath} --version`, { timeout: 5000, encoding: "utf-8" });
+        claudeCli = true;
+      } catch {}
+
+      let obsidianCli = false;
+      try {
+        const { execSync } = require("child_process");
+        execSync("obsidian version", { timeout: 5000, encoding: "utf-8" });
+        obsidianCli = true;
+      } catch {}
+
+      setSetupStatus({
+        claudeCli,
+        obsidianCli,
+        apiKey: !!settings.apiKey,
+      });
+    };
+    check();
+  }, [settings.claudePath, settings.apiKey]);
 
   // Apply tool overrides when skill changes
   useEffect(() => {
@@ -796,21 +830,69 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         />
       )}
 
+      {/* Setup banner — show when dependencies missing */}
+      {setupStatus && !setupStatus.claudeCli && messages.length === 0 && (
+        <div className="ca-setup-banner">
+          <div className="ca-setup-title">Setup required</div>
+          <div className="ca-setup-item">
+            <span className={setupStatus.claudeCli ? "ca-setup-ok" : "ca-setup-missing"}>
+              {setupStatus.claudeCli ? "✓" : "✕"}
+            </span>
+            <span>
+              Claude Code CLI — {setupStatus.claudeCli
+                ? "installed"
+                : "not found. Install from docs.anthropic.com/en/docs/claude-code"}
+            </span>
+          </div>
+          <div className="ca-setup-item">
+            <span className={setupStatus.obsidianCli ? "ca-setup-ok" : "ca-setup-missing"}>
+              {setupStatus.obsidianCli ? "✓" : "○"}
+            </span>
+            <span>
+              Obsidian CLI — {setupStatus.obsidianCli
+                ? "enabled"
+                : "optional. Enable in Settings → General → Command line interface for vault search and task tracking"}
+            </span>
+          </div>
+          <div className="ca-setup-item">
+            <span className={setupStatus.apiKey ? "ca-setup-ok" : "ca-setup-missing"}>
+              {setupStatus.apiKey ? "✓" : "○"}
+            </span>
+            <span>
+              API key — {setupStatus.apiKey
+                ? "configured"
+                : "optional. Only needed for voice transcription via API"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Message thread */}
       <div className="ca-thread" ref={threadRef}>
         {messages.length === 0 && !showPersonPicker && (
           <div className="ca-empty">
             <div className="ca-empty-icon">◈</div>
-            <div className="ca-empty-text">
-              {selectedPerson
-                ? `1:1 with ${selectedPerson.name}`
-                : activeSkill ? activeSkill.description || activeSkill.name : "Ask anything about your vault"}
-            </div>
-            <div className="ca-empty-sub">
-              {selectedPerson
-                ? `${selectedPerson.role} — ${selectedPerson.domain}`
-                : "Powered by Claude Code"}
-            </div>
+            {selectedPerson ? (
+              <>
+                <div className="ca-empty-text">1:1 with {selectedPerson.name}</div>
+                <div className="ca-empty-sub">{selectedPerson.role} — {selectedPerson.domain}</div>
+              </>
+            ) : activeSkill ? (
+              <>
+                <div className="ca-empty-text">{activeSkill.description || activeSkill.name}</div>
+                <div className="ca-empty-sub">Type a message or record audio to begin</div>
+              </>
+            ) : (
+              <>
+                <div className="ca-empty-text">Ask anything about your vault</div>
+                <div className="ca-empty-hints">
+                  <span className="ca-hint">Type a message to chat</span>
+                  <span className="ca-hint"><b>@</b> to reference a file</span>
+                  <span className="ca-hint"><b>/</b> to activate a skill</span>
+                  <span className="ca-hint">Mic button to record voice</span>
+                </div>
+              </>
+            )}
           </div>
         )}
         {messages.map((msg) => (
@@ -931,7 +1013,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           className={`ca-mic-btn ${isRecording ? "recording" : ""} ${recorder.state === "processing" ? "processing" : ""}`}
           onClick={handleMicClick}
           disabled={isStreaming || recorder.state === "processing"}
-          title={tip(isRecording ? "Stop recording" : "Start recording")}
+          title={tip(isRecording ? "Stop recording" : "Record voice message")}
+          aria-label={isRecording ? "Stop recording" : "Record voice message"}
         >
           {recorder.state === "processing" ? "…" : isRecording ? "■" : "⏺"}
         </button>
@@ -939,6 +1022,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           className="ca-send-btn"
           onClick={handleSend}
           disabled={isStreaming || isRecording || !input.trim()}
+          aria-label="Send message"
+          title={tip("Send message")}
         >
           ↑
         </button>

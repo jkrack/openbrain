@@ -38,7 +38,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   chatFolder: "OpenBrain/chats",
   lastChatPath: "",
   includeRecentChats: false,
-  showTooltips: true,
+  showTooltips: true, // Default ON for new users
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -53,9 +53,15 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
+    // ── Setup ──
+    containerEl.createEl("h3", { text: "Setup" });
+
     new Setting(containerEl)
-      .setName("Claude Code CLI path")
-      .setDesc("Path to the claude CLI. Used for all text messages.")
+      .setName("Claude Code CLI")
+      .setDesc(
+        "Path to the Claude Code CLI. Required for text chat. " +
+        "Install from https://docs.anthropic.com/en/docs/claude-code"
+      )
       .addText((text) =>
         text
           .setPlaceholder("claude")
@@ -68,7 +74,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Anthropic API key")
-      .setDesc("Optional. Only required for voice recording and transcription.")
+      .setDesc(
+        "Optional. Only needed for voice transcription via API. " +
+        "Not required if using local transcription or text-only chat."
+      )
       .addText((text) =>
         text
           .setPlaceholder("sk-ant-...")
@@ -80,8 +89,8 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Model")
-      .setDesc("Claude model for voice transcription (API). Text uses your Claude Code default.")
+      .setName("Voice model")
+      .setDesc("Which Claude model to use for voice transcription via API.")
       .addDropdown((drop) =>
         drop
           .addOption("claude-sonnet-4-20250514", "Claude Sonnet 4")
@@ -93,9 +102,12 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })
       );
 
+    // ── Behavior ──
+    containerEl.createEl("h3", { text: "Behavior" });
+
     new Setting(containerEl)
-      .setName("Include active note")
-      .setDesc("Automatically include active note content as context.")
+      .setName("Include active note as context")
+      .setDesc("Automatically share the note you're viewing with Claude so it can reference your current work.")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.includeActiveNote)
@@ -106,32 +118,8 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Allow vault writes")
-      .setDesc("Let Claude read and write files in your vault.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.allowVaultWrite)
-          .onChange(async (value) => {
-            this.plugin.settings.allowVaultWrite = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Allow CLI execution")
-      .setDesc("Let Claude run shell commands.")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.allowCliExec)
-          .onChange(async (value) => {
-            this.plugin.settings.allowCliExec = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Auto-transcribe on stop")
-      .setDesc("Send audio to Claude immediately when recording stops.")
+      .setName("Auto-send on recording stop")
+      .setDesc("Immediately send audio for transcription when you stop recording. Turn off to review before sending.")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.transcribeOnStop)
@@ -142,26 +130,68 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("System prompt")
+      .setDesc("Custom instructions for Claude. Applied to every conversation unless a skill overrides it.")
+      .addTextArea((text) =>
+        text
+          .setValue(this.plugin.settings.systemPrompt)
+          .onChange(async (value) => {
+            this.plugin.settings.systemPrompt = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    // ── Permissions ──
+    containerEl.createEl("h3", { text: "Permissions" });
+    containerEl.createEl("p", {
+      text: "These control what Claude can do. Start with both off and enable as needed.",
+      cls: "setting-item-description",
+    });
+
+    new Setting(containerEl)
+      .setName("Allow file editing")
+      .setDesc(
+        "Let Claude create and edit files in your vault. " +
+        "Required for skills that write meeting notes or update daily notes. " +
+        "Can also be toggled per-chat from the header."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.allowVaultWrite)
+          .onChange(async (value) => {
+            this.plugin.settings.allowVaultWrite = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Allow shell commands")
+      .setDesc(
+        "Let Claude run terminal commands and use the Obsidian CLI. " +
+        "Required for vault search, task queries, and some skills. " +
+        "Can also be toggled per-chat from the header."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.allowCliExec)
+          .onChange(async (value) => {
+            this.plugin.settings.allowCliExec = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    // ── Folders ──
+    containerEl.createEl("h3", { text: "Folders" });
+
+    new Setting(containerEl)
       .setName("Skills folder")
-      .setDesc("Vault folder containing skill definition files (.md).")
+      .setDesc("Where skill definitions live. Each .md file in this folder becomes an available skill.")
       .addText((text) =>
         text
           .setPlaceholder("OpenBrain/skills")
           .setValue(this.plugin.settings.skillsFolder)
           .onChange(async (value) => {
             this.plugin.settings.skillsFolder = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("System prompt")
-      .setDesc("Additional instructions appended to Claude Code's default prompt.")
-      .addTextArea((text) =>
-        text
-          .setValue(this.plugin.settings.systemPrompt)
-          .onChange(async (value) => {
-            this.plugin.settings.systemPrompt = value;
             await this.plugin.saveSettings();
           })
       );

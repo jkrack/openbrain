@@ -190,6 +190,54 @@
   font-size: 11px;
 }
 
+.ca-empty-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  text-align: left;
+}
+.ca-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.ca-hint b {
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+
+/* Setup banner */
+.ca-setup-banner {
+  padding: 12px;
+  margin: 8px 12px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ca-setup-banner a {
+  color: var(--interactive-accent);
+}
+.ca-setup-title {
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.ca-setup-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+.ca-setup-ok {
+  color: var(--text-success);
+}
+.ca-setup-missing {
+  color: var(--text-error);
+}
+
 /* Messages */
 .ca-msg {
   display: flex;

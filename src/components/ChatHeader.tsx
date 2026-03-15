@@ -51,17 +51,17 @@ export function ChatHeader({
       <div className="ca-header-left">
         <span className="ca-title">OpenBrain</span>
         {noteContext && (
-          <span className="ca-note-badge" title={tip("Active note loaded")}>
+          <span className="ca-note-badge" title={tip("Your active note is included as context")}>
             note
           </span>
         )}
         {sessionId && (
-          <span className="ca-note-badge" title={tip("Session active")}>
+          <span className="ca-note-badge" title={tip("Multi-turn session — Claude remembers this conversation")}>
             session
           </span>
         )}
         {useLocalStt && (
-          <span className="ca-note-badge" title={tip("Local transcription active")}>
+          <span className="ca-note-badge" title={tip("Voice transcription runs locally on your device")}>
             local
           </span>
         )}
@@ -72,15 +72,17 @@ export function ChatHeader({
             <button
               className={`ca-tool-btn ${activeSkill ? "active" : ""}`}
               onClick={onSkillMenuToggle}
-              title={tip(activeSkill?.description || "Select skill")}
+              title={tip(activeSkill?.description || "Choose a skill — specialized workflows for meetings, reviews, etc.")}
+              aria-label={`Skill: ${activeSkill?.name || "General"}`}
             >
               {activeSkill?.name || "General"}
             </button>
             {showSkillMenu && (
-              <div className="ca-skill-menu">
+              <div className="ca-skill-menu" role="listbox">
                 <button
                   className={`ca-skill-option ${!activeSkill ? "active" : ""}`}
                   onClick={() => onSkillSelect(null)}
+                  role="option"
                 >
                   General
                 </button>
@@ -90,6 +92,7 @@ export function ChatHeader({
                     className={`ca-skill-option ${activeSkillId === skill.id ? "active" : ""}`}
                     onClick={() => onSkillSelect(skill.id)}
                     title={tip(skill.description)}
+                    role="option"
                   >
                     {skill.name}
                   </button>
@@ -101,34 +104,49 @@ export function ChatHeader({
         <button
           className={`ca-tool-btn ${effectiveWrite ? "active" : ""}`}
           onClick={onToggleWrite}
-          title={tip("Allow file read/write")}
+          title={tip(effectiveWrite
+            ? "File editing ON — Claude can create and modify notes"
+            : "File editing OFF — Claude can only read"
+          )}
+          aria-label={`File editing ${effectiveWrite ? "enabled" : "disabled"}`}
         >
           write
         </button>
         <button
           className={`ca-tool-btn ${effectiveCli ? "active" : ""}`}
           onClick={onToggleCli}
-          title={tip("Allow shell commands")}
+          title={tip(effectiveCli
+            ? "Shell access ON — Claude can run commands and search your vault"
+            : "Shell access OFF — Claude cannot run commands"
+          )}
+          aria-label={`Shell access ${effectiveCli ? "enabled" : "disabled"}`}
         >
           cli
         </button>
         <button
           className="ca-icon-btn ca-save-btn"
           onClick={onSave}
-          title={tip("Save chat")}
+          title={tip("Save chat now")}
+          aria-label="Save chat"
           disabled={messageCount === 0}
         >
           {showSaveConfirm ? "\u2713" : "\uD83D\uDCBE"}
         </button>
-        <button className="ca-icon-btn" onClick={onNewChat} title={tip("New chat")}>
+        <button
+          className="ca-icon-btn"
+          onClick={onNewChat}
+          title={tip("Start a new conversation (saves current chat first)")}
+          aria-label="New chat"
+        >
           +
         </button>
         <button
           className="ca-icon-btn"
           onClick={onOpenSettings}
           title={tip("OpenBrain settings")}
+          aria-label="Settings"
         >
-          \u2699
+          {"\u2699"}
         </button>
       </div>
     </div>
