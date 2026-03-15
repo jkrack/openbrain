@@ -5,7 +5,7 @@ import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
 import { transcribeBlob, transcribeSegments } from "./stt";
 import { RecordingStatus } from "./view";
-import { App, Component, MarkdownRenderer, Notice } from "obsidian";
+import { App, Component, Notice } from "obsidian";
 import { ChildProcess } from "child_process";
 import {
   ChatMeta,
@@ -24,6 +24,8 @@ import { createFromTemplate } from "./templates";
 import { ChatHeader } from "./components/ChatHeader";
 import { PersonPicker } from "./components/PersonPicker";
 import { InputArea } from "./components/InputArea";
+import { MessageThread } from "./components/MessageThread";
+import { AudioControls } from "./components/AudioControls";
 
 interface PanelProps {
   settings: OpenBrainSettings;
@@ -40,51 +42,6 @@ interface PanelProps {
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
-}
-
-function MarkdownBlock({ markdown, app, component }: { markdown: string; app: App; component: Component }) {
-  const elRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = elRef.current;
-    if (!el) return;
-    el.empty();
-    MarkdownRenderer.render(app, markdown, el, "", component);
-  }, [markdown]);
-
-  return <div ref={elRef} className="ca-markdown" />;
-}
-
-function CopyButton({ content }: { content: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback for older Electron versions
-      const textarea = document.createElement("textarea");
-      textarea.value = content;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [content]);
-
-  return (
-    <button
-      className={`ca-copy-btn ${copied ? "copied" : ""}`}
-      onClick={handleCopy}
-      title={copied ? "Copied!" : "Copy as markdown"}  // CopyButton has own props
-    >
-      {copied ? "✓" : "⧉"}
-    </button>
-  );
 }
 
 interface SetupStatus {
@@ -1061,130 +1018,32 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           </div>
         )}
 
-        {/* Normal empty state (post-onboarding) */}
-        {onboardingDone && messages.length === 0 && !showPersonPicker && (
-          <div className="ca-empty">
-            <div className="ca-empty-icon">◈</div>
-            {selectedPerson ? (
-              <>
-                <div className="ca-empty-text">1:1 with {selectedPerson.name}</div>
-                <div className="ca-empty-sub">{selectedPerson.role} — {selectedPerson.domain}</div>
-              </>
-            ) : activeSkill ? (
-              <>
-                <div className="ca-empty-text">{activeSkill.description || activeSkill.name}</div>
-                <div className="ca-empty-sub">Type a message or record audio to begin</div>
-              </>
-            ) : (
-              <>
-                <div className="ca-empty-text">Ask anything about your vault</div>
-                <div className="ca-empty-hints">
-                  <span className="ca-hint">Type a message to chat</span>
-                  <span className="ca-hint"><b>@</b> to reference a file</span>
-                  <span className="ca-hint"><b>/</b> to activate a skill</span>
-                  <span className="ca-hint">Mic button to record voice</span>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        {messages.map((msg) => (
-          <div key={msg.id} className={`ca-msg ca-msg--${msg.role}`}>
-            <div className="ca-msg-content">
-              {msg.isAudio && <span className="ca-audio-tag">🎙 </span>}
-              {msg.role === "assistant" ? (
-                <>
-                  <MarkdownBlock
-                    markdown={msg.content}
-                    app={app}
-                    component={component}
-                  />
-                  {msg.content === "" && isStreaming && (
-                    <span className="ca-dots">
-                      <span className="ca-dot" />
-                      <span className="ca-dot" />
-                      <span className="ca-dot" />
-                    </span>
-                  )}
-                  {msg.content && (
-                    <CopyButton content={msg.content} />
-                  )}
-                </>
-              ) : (
-                <span className="ca-msg-text">{msg.content}</span>
-              )}
-            </div>
-          </div>
-        ))}
+        <MessageThread
+          messages={messages}
+          isStreaming={isStreaming}
+          activeSkill={activeSkill}
+          selectedPerson={selectedPerson}
+          onboardingDone={onboardingDone}
+          showPersonPicker={showPersonPicker}
+          app={app}
+          component={component}
+          showTooltips={settings.showTooltips}
+        />
       </div>
 
-      {/* Waveform / recording state */}
-      {isRecording && (
-        <div className="ca-waveform">
-          <span className="ca-rec-dot" />
-          <div className="ca-bars">
-            {recorder.waveformData.map((v, i) => (
-              <div
-                key={i}
-                className="ca-bar"
-                style={{ height: `${Math.max(3, v * 32)}px` }}
-              />
-            ))}
-          </div>
-          <span className="ca-rec-time">
-            {formatDuration(recorder.duration)}
-            {recorder.segmentCount > 0 && ` (${recorder.segmentCount + 1} segments)`}
-          </span>
-        </div>
-      )}
-
-      {/* Audio ready state */}
-      {hasAudio && !isRecording && (
-        <div className="ca-audio-ready">
-          <span className="ca-audio-ready-label">
-            Recording ready — {formatDuration(recorder.duration)}
-            {recorder.audioSegments.length > 1 && ` (${recorder.audioSegments.length} segments)`}
-          </span>
-          <div className="ca-audio-actions">
-            {showAudioPrompt && (
-              <input
-                className="ca-audio-prompt-input"
-                placeholder="Instructions (optional)"
-                value={audioPrompt}
-                onChange={(e) => setAudioPrompt(e.target.value)}
-                autoFocus
-              />
-            )}
-            <button
-              className="ca-icon-btn"
-              onClick={() => setShowAudioPrompt((v) => !v)}
-              aria-label={tip("Add instructions")}
-            >
-              ✎
-            </button>
-            <button className="ca-icon-btn" onClick={recorder.clearAudio} aria-label={tip("Discard")}>
-              ✕
-            </button>
-            <button className="ca-send-btn" onClick={handleSendAudio} disabled={isStreaming}>
-              Send
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Mic error banner */}
-      {recorder.error && (
-        <div className="ca-mic-error">
-          <span className="ca-mic-error-text">{recorder.error}</span>
-          <button
-            className="ca-icon-btn"
-            onClick={() => recorder.clearError()}
-            aria-label={tip("Dismiss")}
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      <AudioControls
+        isRecording={isRecording}
+        hasAudio={hasAudio}
+        isStreaming={isStreaming}
+        recorder={recorder}
+        audioPrompt={audioPrompt}
+        showAudioPrompt={showAudioPrompt}
+        showTooltips={settings.showTooltips}
+        onAudioPromptChange={setAudioPrompt}
+        onToggleAudioPrompt={() => setShowAudioPrompt((v) => !v)}
+        onSendAudio={handleSendAudio}
+        formatDuration={formatDuration}
+      />
 
       {/* Pending image previews */}
       {pendingImages.length > 0 && (

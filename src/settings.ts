@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, Setting, Notice } from "obsidian";
 import OpenBrainPlugin from "./main";
 
 export interface OpenBrainSettings {
@@ -77,6 +77,18 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.claudePath = value;
             await this.plugin.saveSettings();
+            // Validate the path
+            try {
+              const { execSync } = require("child_process");
+              const home = process.env.HOME || "";
+              const env = {
+                ...process.env,
+                PATH: ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`, `${home}/.nvm/versions/node`, process.env.PATH].filter(Boolean).join(":"),
+              };
+              execSync(`${value || "claude"} --version`, { timeout: 5000, encoding: "utf-8", env });
+            } catch {
+              new Notice("Claude Code CLI not found at this path.");
+            }
           })
       );
 

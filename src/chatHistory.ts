@@ -210,7 +210,7 @@ export async function loadChat(app: App, path: string): Promise<ChatFile | null>
     const content = await app.vault.read(file);
     const result = parseChat(content, path);
     if ("error" in result) {
-      console.warn("OpenBrain: failed to parse chat file:", result.error);
+      console.warn(`OpenBrain: failed to parse ${path}: ${result.error}`);
       return null;
     }
     return result;

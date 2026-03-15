@@ -44,7 +44,7 @@ export function useAudioRecorder(): AudioRecorderResult {
   const streamRef = useRef<MediaStream | null>(null);
   const segmentsRef = useRef<Blob[]>([]);
   const mimeTypeRef = useRef<string>("audio/webm");
-  const rotatingRef = useRef(false);
+  const rotationQueue = useRef<Promise<void>>(Promise.resolve());
 
   const updateWaveform = useCallback(() => {
     if (!analyserRef.current) return;
@@ -93,23 +93,21 @@ export function useAudioRecorder(): AudioRecorderResult {
   }, []);
 
   const rotateSegment = useCallback(async () => {
-    if (rotatingRef.current) return;
-    rotatingRef.current = true;
+    rotationQueue.current = rotationQueue.current.then(async () => {
+      const blob = await finalizeCurrentSegment();
+      if (blob.size > 0) {
+        segmentsRef.current.push(blob);
+        setSegmentCount(segmentsRef.current.length);
+      }
 
-    const blob = await finalizeCurrentSegment();
-    if (blob.size > 0) {
-      segmentsRef.current.push(blob);
-      setSegmentCount(segmentsRef.current.length);
-    }
-
-    // Restart recording on the same mic stream
-    const stream = streamRef.current;
-    if (stream && stream.active) {
-      startRecorderOnStream(stream);
-      segmentElapsedRef.current = 0;
-    }
-
-    rotatingRef.current = false;
+      // Restart recording on the same mic stream
+      const stream = streamRef.current;
+      if (stream && stream.active) {
+        startRecorderOnStream(stream);
+        segmentElapsedRef.current = 0;
+      }
+    });
+    await rotationQueue.current;
   }, [finalizeCurrentSegment, startRecorderOnStream]);
 
   const startRecording = useCallback(async (deviceId?: string) => {
