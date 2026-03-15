@@ -965,11 +965,11 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             <button
               className="ca-icon-btn"
               onClick={() => setShowAudioPrompt((v) => !v)}
-              title={tip("Add instructions")}
+              aria-label={tip("Add instructions")}
             >
               ✎
             </button>
-            <button className="ca-icon-btn" onClick={recorder.clearAudio} title={tip("Discard")}>
+            <button className="ca-icon-btn" onClick={recorder.clearAudio} aria-label={tip("Discard")}>
               ✕
             </button>
             <button className="ca-send-btn" onClick={handleSendAudio} disabled={isStreaming}>
@@ -986,7 +986,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           <button
             className="ca-icon-btn"
             onClick={() => recorder.clearError()}
-            title={tip("Dismiss")}
+            aria-label={tip("Dismiss")}
           >
             ✕
           </button>
@@ -1013,8 +1013,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           className={`ca-mic-btn ${isRecording ? "recording" : ""} ${recorder.state === "processing" ? "processing" : ""}`}
           onClick={handleMicClick}
           disabled={isStreaming || recorder.state === "processing"}
-          title={tip(isRecording ? "Stop recording" : "Record voice message")}
-          aria-label={isRecording ? "Stop recording" : "Record voice message"}
+          aria-label={tip(isRecording ? "Stop recording" : "Record voice message")}
         >
           {recorder.state === "processing" ? "…" : isRecording ? "■" : "⏺"}
         </button>
@@ -1022,8 +1021,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           className="ca-send-btn"
           onClick={handleSend}
           disabled={isStreaming || isRecording || !input.trim()}
-          aria-label="Send message"
-          title={tip("Send message")}
+          aria-label={tip("Send message")}
         >
           ↑
         </button>

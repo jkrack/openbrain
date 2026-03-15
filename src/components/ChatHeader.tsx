@@ -44,6 +44,8 @@ export function ChatHeader({
   onNewChat,
   onOpenSettings,
 }: ChatHeaderProps) {
+  // Use aria-label for both accessibility and Obsidian's tooltip system.
+  // Only set when tooltips are enabled; always set aria-label for screen readers.
   const tip = (text: string) => (showTooltips ? text : undefined);
 
   return (
@@ -51,17 +53,17 @@ export function ChatHeader({
       <div className="ca-header-left">
         <span className="ca-title">OpenBrain</span>
         {noteContext && (
-          <span className="ca-note-badge" title={tip("Your active note is included as context")}>
+          <span className="ca-note-badge" aria-label={tip("Your active note is included as context")}>
             note
           </span>
         )}
         {sessionId && (
-          <span className="ca-note-badge" title={tip("Multi-turn session — Claude remembers this conversation")}>
+          <span className="ca-note-badge" aria-label={tip("Multi-turn session — Claude remembers this conversation")}>
             session
           </span>
         )}
         {useLocalStt && (
-          <span className="ca-note-badge" title={tip("Voice transcription runs locally on your device")}>
+          <span className="ca-note-badge" aria-label={tip("Voice transcription runs locally on your device")}>
             local
           </span>
         )}
@@ -72,8 +74,7 @@ export function ChatHeader({
             <button
               className={`ca-tool-btn ${activeSkill ? "active" : ""}`}
               onClick={onSkillMenuToggle}
-              title={tip(activeSkill?.description || "Choose a skill — specialized workflows for meetings, reviews, etc.")}
-              aria-label={`Skill: ${activeSkill?.name || "General"}`}
+              aria-label={tip(activeSkill?.description || "Choose a skill — specialized workflows for meetings, reviews, etc.")}
             >
               {activeSkill?.name || "General"}
             </button>
@@ -91,7 +92,7 @@ export function ChatHeader({
                     key={skill.id}
                     className={`ca-skill-option ${activeSkillId === skill.id ? "active" : ""}`}
                     onClick={() => onSkillSelect(skill.id)}
-                    title={tip(skill.description)}
+                    aria-label={tip(skill.description)}
                     role="option"
                   >
                     {skill.name}
@@ -104,30 +105,27 @@ export function ChatHeader({
         <button
           className={`ca-tool-btn ${effectiveWrite ? "active" : ""}`}
           onClick={onToggleWrite}
-          title={tip(effectiveWrite
+          aria-label={tip(effectiveWrite
             ? "File editing ON — Claude can create and modify notes"
             : "File editing OFF — Claude can only read"
           )}
-          aria-label={`File editing ${effectiveWrite ? "enabled" : "disabled"}`}
         >
           write
         </button>
         <button
           className={`ca-tool-btn ${effectiveCli ? "active" : ""}`}
           onClick={onToggleCli}
-          title={tip(effectiveCli
+          aria-label={tip(effectiveCli
             ? "Shell access ON — Claude can run commands and search your vault"
             : "Shell access OFF — Claude cannot run commands"
           )}
-          aria-label={`Shell access ${effectiveCli ? "enabled" : "disabled"}`}
         >
           cli
         </button>
         <button
           className="ca-icon-btn ca-save-btn"
           onClick={onSave}
-          title={tip("Save chat now")}
-          aria-label="Save chat"
+          aria-label={tip("Save chat now")}
           disabled={messageCount === 0}
         >
           {showSaveConfirm ? "\u2713" : "\uD83D\uDCBE"}
@@ -135,16 +133,14 @@ export function ChatHeader({
         <button
           className="ca-icon-btn"
           onClick={onNewChat}
-          title={tip("Start a new conversation (saves current chat first)")}
-          aria-label="New chat"
+          aria-label={tip("Start a new conversation (saves current chat first)")}
         >
           +
         </button>
         <button
           className="ca-icon-btn"
           onClick={onOpenSettings}
-          title={tip("OpenBrain settings")}
-          aria-label="Settings"
+          aria-label={tip("OpenBrain settings")}
         >
           {"\u2699"}
         </button>
