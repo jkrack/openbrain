@@ -7,6 +7,7 @@ import { VaultIndex } from "./vaultIndex";
 import { initTemplates, createGettingStartedNote } from "./templates";
 import { initPeopleFolder } from "./people";
 import { configure as configureObsidianCli } from "./obsidianCli";
+import { encrypt, decrypt } from "./secureStorage";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -295,11 +296,21 @@ export default class OpenBrainPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+    // Decrypt API key on load
+    if (this.settings.apiKey) {
+      this.settings.apiKey = decrypt(this.settings.apiKey);
+    }
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    // Encrypt API key before saving
+    const dataToSave = { ...this.settings };
+    if (dataToSave.apiKey) {
+      dataToSave.apiKey = encrypt(dataToSave.apiKey);
+    }
+    await this.saveData(dataToSave);
   }
 
   onunload() {

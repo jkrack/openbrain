@@ -113,7 +113,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .setDesc(
         "Optional. Only needed for voice transcription via API. " +
         "Not required if using local transcription or text-only chat. " +
-        "Stored locally in your vault's plugin data."
+        "Encrypted using your system keychain when available."
       )
       .addText((text) => {
         text
