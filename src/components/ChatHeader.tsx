@@ -74,11 +74,11 @@ export function ChatHeader({
             className={`ca-mode-toggle ${chatMode === "chat" ? "ca-mode-chat" : "ca-mode-agent"}`}
             onClick={onChatModeToggle}
             aria-label={tip(chatMode === "agent"
-              ? "Agent mode — Claude can read/write vault and run commands"
+              ? "Vault mode — Claude can read/write vault, run skills, and search"
               : "Chat mode — direct conversation, supports images, no vault access"
             )}
           >
-            {chatMode === "agent" ? "Agent" : "Chat"}
+            {chatMode === "agent" ? "Vault" : "Chat"}
           </button>
         )}
         {onboardingComplete && skills.length > 0 && chatMode === "agent" && (
