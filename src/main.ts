@@ -28,19 +28,20 @@ export default class OpenBrainPlugin extends Plugin {
       }
     );
 
-    // Initialize chat folder, Base file, and templates
-    initChatFolder(this.app, this.settings.chatFolder).catch((e) =>
-      console.error("OpenBrain: failed to init chat folder", e)
-    );
-    initTemplates(this.app).catch((e) =>
-      console.error("OpenBrain: failed to init templates", e)
-    );
-    initPeopleFolder(this.app).catch((e) =>
-      console.error("OpenBrain: failed to init people folder", e)
-    );
+    // Initialize everything once vault is ready
+    this.app.workspace.onLayoutReady(async () => {
+      // Create folders, templates, and people profiles
+      await initChatFolder(this.app, this.settings.chatFolder).catch((e) =>
+        console.error("OpenBrain: failed to init chat folder", e)
+      );
+      await initTemplates(this.app).catch((e) =>
+        console.error("OpenBrain: failed to init templates", e)
+      );
+      await initPeopleFolder(this.app).catch((e) =>
+        console.error("OpenBrain: failed to init people folder", e)
+      );
 
-    // Build vault metadata index once layout is ready
-    this.app.workspace.onLayoutReady(() => {
+      // Build vault metadata index
       this.vaultIndex = new VaultIndex(this.app);
       this.refreshViews();
     });
