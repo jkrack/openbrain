@@ -2,10 +2,9 @@ import { Plugin, TFile, WorkspaceLeaf, Modal, Notice } from "obsidian";
 import { OpenBrainView, OPEN_BRAIN_VIEW_TYPE, RecordingStatus } from "./view";
 import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./settings";
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
-import { initChatFolder, appendToDailySection, parseChat } from "./chatHistory";
+import { appendToDailySection, parseChat } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
-import { initTemplates, createGettingStartedNote } from "./templates";
-import { initPeopleFolder } from "./people";
+import { initVault } from "./initVault";
 import { configure as configureObsidianCli } from "./obsidianCli";
 import { encrypt, decrypt } from "./secureStorage";
 
@@ -33,21 +32,7 @@ export default class OpenBrainPlugin extends Plugin {
 
     // Initialize everything once vault is ready
     this.app.workspace.onLayoutReady(async () => {
-      // Create folders, templates, and people profiles
-      await initChatFolder(this.app, this.settings.chatFolder).catch((e) =>
-        console.error("OpenBrain: failed to init chat folder", e)
-      );
-      await initTemplates(this.app).catch((e) =>
-        console.error("OpenBrain: failed to init templates", e)
-      );
-      await initPeopleFolder(this.app).catch((e) =>
-        console.error("OpenBrain: failed to init people folder", e)
-      );
-      await createGettingStartedNote(this.app).catch((e) =>
-        console.error("OpenBrain: failed to create getting started note", e)
-      );
-
-      // Build vault metadata index
+      await initVault(this.app, this.settings);
       this.vaultIndex = new VaultIndex(this.app);
       this.refreshViews();
     });
