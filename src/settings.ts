@@ -112,16 +112,21 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .setName("Anthropic API key")
       .setDesc(
         "Optional. Only needed for voice transcription via API. " +
-        "Not required if using local transcription or text-only chat."
+        "Not required if using local transcription or text-only chat. " +
+        "Stored locally in your vault's plugin data."
       )
-      .addText((text) =>
+      .addText((text) => {
         text
           .setPlaceholder("sk-ant-...")
           .setValue(this.plugin.settings.apiKey)
           .onChange(async (value) => {
             this.plugin.settings.apiKey = value;
             await this.plugin.saveSettings();
-          })
+          });
+        text.inputEl.type = "password";
+        text.inputEl.autocomplete = "off";
+        return text;
+      }
       );
 
     new Setting(containerEl)
