@@ -86,11 +86,8 @@ export class OpenBrainView extends ItemView {
     container.empty();
     this.root = createRoot(container);
 
-    // Restore last chat if it exists
-    const lastPath = this.plugin?.settings?.lastChatPath;
-    if (lastPath && this.app.vault.getAbstractFileByPath(lastPath)) {
-      this.loadChatRequest = { path: lastPath, nonce: ++this.loadNonce };
-    }
+    // Start fresh on open — conversations are saved in chat history
+    // and can be resumed via "Resume chat in OpenBrain" command
 
     this.rerender();
   }
