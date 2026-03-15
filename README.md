@@ -14,7 +14,7 @@ Record voice memos with one click. Transcribe locally (private, offline via sher
 Type `/` to activate specialized workflows:
 
 - **1:1** — Prepare for and run one-on-one meetings with auto-loaded context
-- **Meeting Agent** — Transcribe and structure meeting notes
+- **Meeting Notes** — Transcribe and structure meeting notes
 - **Morning Briefing** — Review your day, tasks, and priorities
 - **End of Day** — Summarize what happened, capture loose ends
 - **Weekly Review** — Reflect on the week, plan ahead

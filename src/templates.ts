@@ -175,7 +175,7 @@ Open the panel from the ribbon icon (brain) or the command palette ("Open OpenBr
 
 ## Chat Modes
 
-- **Agent mode** (default) — Claude can read your vault, run commands, and edit files (with permission)
+- **Vault mode** (default) — Claude can read your vault, run commands, and edit files (with permission)
 - **Chat mode** — direct conversation with Claude, supports pasting images, no vault access
 
 Toggle between modes with the button in the header.
@@ -184,7 +184,7 @@ Toggle between modes with the button in the header.
 
 Skills are specialized workflows. Type / in the input to activate one:
 
-- **Meeting Agent** — transcribe and structure meeting notes
+- **Meeting Notes** — transcribe and structure meeting notes
 - **1:1** — prepare for and run one-on-one meetings with auto-loaded context
 - **Morning Briefing** — review your day, tasks, and priorities
 - **End of Day** — summarize what happened, capture loose ends
