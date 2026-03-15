@@ -291,9 +291,10 @@ export async function initChatFolder(app: App, folder: string): Promise<void> {
     }
   }
 
-  // Create Base file if missing (never overwrite)
+  // Create Base file if missing (never overwrite).
+  // Use adapter.write() since vault.create() may reject non-.md extensions.
   const basePath = `${folder}/Chat History.base`;
   if (!app.vault.getAbstractFileByPath(basePath)) {
-    await app.vault.create(basePath, BASE_CONTENT);
+    await (app.vault.adapter as any).write(basePath, BASE_CONTENT);
   }
 }
