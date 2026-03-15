@@ -123,6 +123,7 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
     "/opt/homebrew/bin",
     `${home}/.local/bin`,
     `${home}/.nvm/versions/node`,
+    "/Applications/Obsidian.app/Contents/MacOS",
   ];
   env.PATH = [...extraPaths, env.PATH].filter(Boolean).join(":");
 

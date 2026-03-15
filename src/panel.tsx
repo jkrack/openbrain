@@ -163,6 +163,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         "/usr/local/bin",
         "/opt/homebrew/bin",
         `${home}/.local/bin`,
+        "/Applications/Obsidian.app/Contents/MacOS",
       ];
       const env = {
         ...process.env,

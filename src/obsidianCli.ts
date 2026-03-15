@@ -6,7 +6,12 @@ import { execSync } from "child_process";
 function getEnv(): Record<string, string | undefined> {
   const env = { ...process.env };
   const home = env.HOME || "";
-  const extraPaths = ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`];
+  const extraPaths = [
+    "/usr/local/bin",
+    "/opt/homebrew/bin",
+    `${home}/.local/bin`,
+    "/Applications/Obsidian.app/Contents/MacOS",
+  ];
   env.PATH = [...extraPaths, env.PATH].filter(Boolean).join(":");
   return env;
 }
