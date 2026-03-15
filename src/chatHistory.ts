@@ -1,5 +1,6 @@
 import { App, TFile, TFolder, Notice, moment } from "obsidian";
 import { Message } from "./claude";
+import { createFromTemplate } from "./templates";
 
 // ── Interfaces ──────────────────────────────────────────────────────────
 
@@ -325,9 +326,8 @@ export async function linkInDailyNote(
   let file = app.vault.getAbstractFileByPath(dailyPath);
 
   if (!(file instanceof TFile)) {
-    // Create the daily note with minimal structure
-    const dateStr = moment().format("YYYY-MM-DD (dddd)");
-    await app.vault.create(dailyPath, `# ${dateStr}\n`);
+    // Create the daily note from template
+    await createFromTemplate(app, "Daily Note.md", dailyPath);
     file = app.vault.getAbstractFileByPath(dailyPath);
   }
 

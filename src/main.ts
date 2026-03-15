@@ -4,6 +4,7 @@ import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./sett
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
 import { initChatFolder } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
+import { initTemplates } from "./templates";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -26,9 +27,12 @@ export default class OpenBrainPlugin extends Plugin {
       }
     );
 
-    // Initialize chat folder and Base file
+    // Initialize chat folder, Base file, and templates
     initChatFolder(this.app, this.settings.chatFolder).catch((e) =>
       console.error("OpenBrain: failed to init chat folder", e)
+    );
+    initTemplates(this.app).catch((e) =>
+      console.error("OpenBrain: failed to init templates", e)
     );
 
     // Build vault metadata index once layout is ready
