@@ -40,6 +40,28 @@ Built-in templates for daily notes, meetings, 1:1s, and projects. Customize them
 ### Quick capture
 Capture a thought from the command palette without opening the panel. Goes straight to today's daily note.
 
+### OpenClaw integration
+Connect OpenBrain to [OpenClaw](https://github.com/openclaw/openclaw) to access your vault from any messaging channel — WhatsApp, Slack, Telegram, Discord, Signal, and more.
+
+When enabled, OpenBrain registers as an OpenClaw node and exposes 10 vault commands:
+
+| Command | What it does |
+|---------|-------------|
+| `vault.search` | Full-text search across your vault |
+| `vault.read` | Read any note's content |
+| `vault.create` | Create a note from template |
+| `vault.daily.read` | Read today's daily note |
+| `vault.daily.append` | Append to a daily note section |
+| `vault.capture` | Quick capture to daily note |
+| `vault.tasks` | Get open tasks from any file |
+| `vault.skills.list` | List available skills |
+| `vault.people.list` | List person profiles |
+| `vault.chat.search` | Search conversation history |
+
+This means you can message "capture: call Sarah about the migration" from WhatsApp and it lands in your daily note. Or ask "what are my open tasks?" from Slack and get a response from your vault.
+
+**Setup:** Enable in Settings → OpenClaw. Requires [OpenClaw](https://github.com/openclaw/openclaw) running locally. Localhost-only by default, all write operations gated by existing permissions.
+
 ## Requirements
 
 - **Claude Code CLI** (required) — [Install](https://docs.anthropic.com/en/docs/claude-code)
@@ -95,6 +117,7 @@ Open Settings → OpenBrain to configure:
 - Daily note folder and format
 - System prompt
 - Tooltip visibility
+- OpenClaw integration (gateway URL, enable/disable)
 
 ## Disclaimer
 
