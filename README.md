@@ -96,6 +96,17 @@ Open Settings → OpenBrain to configure:
 - System prompt
 - Tooltip visibility
 
+## Disclaimer
+
+**This plugin is in early development.** OpenBrain can create, modify, and delete files in your vault when write permissions are enabled. While permissions are off by default and require explicit activation, AI-generated actions may produce unexpected results.
+
+- **Back up your vault** before enabling file editing or shell commands
+- **Review changes** before approving — the Note Organizer and Vault Health skills propose plans before acting
+- **The authors are not responsible** for any data loss, file deletions, or vault corruption
+- **Use at your own risk** — this software is provided as-is under the MIT License
+
+We recommend starting with permissions off and enabling them only as needed for specific skills.
+
 ## License
 
 [MIT](LICENSE)
