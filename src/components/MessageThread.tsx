@@ -4,6 +4,8 @@ import { Skill } from "../skills";
 import { PersonProfile } from "../people";
 import { App, Component, MarkdownRenderer } from "obsidian";
 
+const MESSAGES_PER_PAGE = 50;
+
 function MarkdownBlock({ markdown, app, component }: { markdown: string; app: App; component: Component }) {
   const elRef = useRef<HTMLDivElement>(null);
 
@@ -26,7 +28,6 @@ function CopyButton({ content }: { content: string }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older Electron versions
       const textarea = document.createElement("textarea");
       textarea.value = content;
       document.body.appendChild(textarea);
@@ -72,6 +73,24 @@ export function MessageThread({
   component,
   showTooltips,
 }: MessageThreadProps) {
+  const [visibleCount, setVisibleCount] = useState(MESSAGES_PER_PAGE);
+
+  // Reset visible count when messages are cleared (new chat)
+  useEffect(() => {
+    if (messages.length <= MESSAGES_PER_PAGE) {
+      setVisibleCount(MESSAGES_PER_PAGE);
+    }
+  }, [messages.length]);
+
+  const hiddenCount = Math.max(0, messages.length - visibleCount);
+  const visibleMessages = hiddenCount > 0
+    ? messages.slice(hiddenCount)
+    : messages;
+
+  const loadMore = () => {
+    setVisibleCount((prev) => prev + MESSAGES_PER_PAGE);
+  };
+
   return (
     <>
       {/* Normal empty state (post-onboarding) */}
@@ -101,9 +120,18 @@ export function MessageThread({
           )}
         </div>
       )}
-      {messages.map((msg, idx) => {
+
+      {/* Load earlier messages button */}
+      {hiddenCount > 0 && (
+        <button className="ca-load-more" onClick={loadMore}>
+          Load {Math.min(hiddenCount, MESSAGES_PER_PAGE)} earlier messages ({hiddenCount} hidden)
+        </button>
+      )}
+
+      {visibleMessages.map((msg, idx) => {
+        const globalIdx = hiddenCount + idx;
         const isLastAssistant = msg.role === "assistant" &&
-          idx === messages.length - 1;
+          globalIdx === messages.length - 1;
         return (
           <div key={msg.id} className={`ca-msg ca-msg--${msg.role}`}>
             <div className="ca-msg-content">

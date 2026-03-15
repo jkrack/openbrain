@@ -284,6 +284,25 @@
   text-decoration: underline;
 }
 
+/* Load more messages */
+.ca-load-more {
+  display: block;
+  width: auto;
+  margin: 8px auto;
+  padding: 6px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ca-load-more:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
 /* Messages */
 .ca-msg {
   display: flex;
