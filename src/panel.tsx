@@ -19,6 +19,9 @@ import {
 import { VaultIndex } from "./vaultIndex";
 import { PersonProfile, loadPeople, getRecentOneOnOnes, getPersonMeetingFolder } from "./people";
 import { createFromTemplate } from "./templates";
+import { ChatHeader } from "./components/ChatHeader";
+import { PersonPicker } from "./components/PersonPicker";
+import { InputArea } from "./components/InputArea";
 
 interface PanelProps {
   settings: OpenBrainSettings;
@@ -37,30 +40,17 @@ function generateId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function MarkdownBlock({
-  markdown,
-  app,
-  component,
-}: {
-  markdown: string;
-  app: App;
-  component: Component;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
+function MarkdownBlock({ markdown, app, component }: { markdown: string; app: App; component: Component }) {
+  const elRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = elRef.current;
     if (!el) return;
+    el.empty();
+    MarkdownRenderer.render(app, markdown, el, "", component);
+  }, [markdown]);
 
-    const timeout = setTimeout(() => {
-      el.empty();
-      MarkdownRenderer.render(app, markdown, el, "", component);
-    }, 50);
-
-    return () => clearTimeout(timeout);
-  }, [markdown, app, component]);
-
-  return <div ref={containerRef} className="ca-markdown" />;
+  return <div ref={elRef} className="ca-markdown" />;
 }
 
 function CopyButton({ content }: { content: string }) {
@@ -116,22 +106,16 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   };
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
 
-  // @ mention state
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionResults, setMentionResults] = useState<{ path: string; basename: string }[]>([]);
-  const [mentionIndex, setMentionIndex] = useState(0);
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
-
-  // / slash command state
-  const [slashQuery, setSlashQuery] = useState<string | null>(null);
-  const [slashResults, setSlashResults] = useState<Skill[]>([]);
-  const [slashIndex, setSlashIndex] = useState(0);
 
   // Person picker state (for skills with requiresPerson)
   const [showPersonPicker, setShowPersonPicker] = useState(false);
   const [people, setPeople] = useState<PersonProfile[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<PersonProfile | null>(null);
   const [personNotePath, setPersonNotePath] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justLoadedRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
@@ -142,7 +126,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const vaultPath = (app.vault.adapter as any).basePath as string | undefined;
 
   const threadRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<boolean>(false);
   const procRef = useRef<ChildProcess | null>(null);
   const responseRef = useRef<string>("");
@@ -260,6 +243,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       const currentPath = chatFilePathRef.current;
       const path = currentPath ?? `${folder}/${generateChatFilename()}`;
       await saveChat(app, path, messages, meta);
+      if (!mountedRef.current) return;
       if (!currentPath) {
         setChatFilePath(path);
         onChatPathChange?.(path);
@@ -311,6 +295,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     const currentPath = chatFilePathRef.current;
     const path = currentPath ?? `${folder}/${generateChatFilename()}`;
     await saveChat(app, path, messages, meta);
+    if (!mountedRef.current) return;
     if (!currentPath) {
       setChatFilePath(path);
       onChatPathChange?.(path);
@@ -643,121 +628,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     sendMessage(input);
   }, [input, sendMessage]);
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Dropdown navigation (@ mentions or / commands)
-    const isDropdownOpen = mentionQuery !== null || slashQuery !== null;
-    if (isDropdownOpen) {
-      const results = mentionQuery !== null ? mentionResults : slashResults;
-      const setIndex = mentionQuery !== null ? setMentionIndex : setSlashIndex;
-      const currentIndex = mentionQuery !== null ? mentionIndex : slashIndex;
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setIndex(Math.min(currentIndex + 1, results.length - 1));
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setIndex(Math.max(currentIndex - 1, 0));
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        if (results.length > 0) {
-          e.preventDefault();
-          if (mentionQuery !== null) {
-            insertMention(mentionResults[mentionIndex]);
-          } else {
-            insertSlashCommand(slashResults[slashIndex]);
-          }
-          return;
-        }
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setMentionQuery(null);
-        setSlashQuery(null);
-        return;
-      }
-    }
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  // Detect @ mentions and / commands from input
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setInput(val);
-
-    const pos = e.target.selectionStart;
-    const textBefore = val.slice(0, pos);
-
-    // Check for @ mention
-    const atMatch = textBefore.match(/@([^\s@]*)$/);
-    if (atMatch) {
-      const query = atMatch[1];
-      setMentionQuery(query);
-      setMentionIndex(0);
-      setSlashQuery(null);
-
-      if (vaultIndex) {
-        const results = vaultIndex.search(query);
-        setMentionResults(results);
-      }
-      return;
-    }
-    setMentionQuery(null);
-
-    // Check for / command (at start or after whitespace)
-    const slashMatch = textBefore.match(/(?:^|\s)\/([^\s]*)$/);
-    if (slashMatch && skills.length > 0) {
-      const query = slashMatch[1].toLowerCase();
-      setSlashQuery(query);
-      setSlashIndex(0);
-
-      const filtered = query
-        ? skills.filter((s) => s.name.toLowerCase().includes(query))
-        : skills;
-      setSlashResults(filtered.slice(0, 8));
-      return;
-    }
-    setSlashQuery(null);
-  };
-
-  // Insert selected file as attached reference (path only)
-  const insertMention = (entry: { path: string; basename: string }) => {
-    setAttachedFiles((prev) => {
-      if (prev.includes(entry.path)) return prev;
-      return [...prev, entry.path];
-    });
-
-    // Replace @query with @basename in input
-    const pos = inputRef.current?.selectionStart ?? input.length;
-    const textBefore = input.slice(0, pos);
-    const textAfter = input.slice(pos);
-    const replaced = textBefore.replace(/@[^\s@]*$/, `@${entry.basename} `);
-    setInput(replaced + textAfter);
-    setMentionQuery(null);
-    setTimeout(() => inputRef.current?.focus(), 0);
-  };
-
-  // Remove an attached file
-  const removeAttachedFile = (path: string) => {
-    setAttachedFiles((prev) => prev.filter((p) => p !== path));
-  };
-
-  // Insert slash command — activate the selected skill
-  const insertSlashCommand = async (skill: Skill) => {
-    // Remove /query from input
-    const pos = inputRef.current?.selectionStart ?? input.length;
-    const textBefore = input.slice(0, pos);
-    const textAfter = input.slice(pos);
-    const replaced = textBefore.replace(/(?:^|\s)\/[^\s]*$/, "").trimEnd();
-    setInput(replaced + (replaced ? " " : "") + textAfter);
-    setSlashQuery(null);
-
-    // Activate the skill
+  // Handle skill activation from InputArea slash command
+  const handleSkillActivate = async (skill: Skill) => {
     setActiveSkillId(skill.id);
 
     // If skill requires a person, show the person picker
@@ -768,7 +640,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     } else {
       setSelectedPerson(null);
       setPersonNotePath(null);
-      setTimeout(() => inputRef.current?.focus(), 0);
     }
   };
 
@@ -784,6 +655,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     const created = await createFromTemplate(app, "One on One.md", notePath, {
       title: person.name,
     });
+    if (!mountedRef.current) return;
     if (created) {
       setPersonNotePath(created);
       // Link the 1:1 note in today's daily note under Meetings
@@ -793,6 +665,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     // Build file references: person profile + recent 1:1 notes
     const filesToReference = [person.filePath];
     const recentNotes = await getRecentOneOnOnes(app, person.name);
+    if (!mountedRef.current) return;
 
     // Also reference the recent 1:1 note files directly
     const recentFolder = getPersonMeetingFolder(person.name);
@@ -886,125 +759,41 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   return (
     <div className="claude-agent-panel">
       {/* Header */}
-      <div className="ca-header">
-        <div className="ca-header-left">
-          <span className="ca-title">OpenBrain</span>
-          {noteContext && (
-            <span className="ca-note-badge" title={tip("Active note loaded")}>
-              note
-            </span>
-          )}
-          {sessionId && (
-            <span className="ca-note-badge" title={tip("Session active")}>
-              session
-            </span>
-          )}
-          {settings.useLocalStt && (
-            <span className="ca-note-badge" title={tip("Local transcription active")}>
-              local
-            </span>
-          )}
-        </div>
-        <div className="ca-header-right">
-          {skills.length > 0 && (
-            <div className="ca-skill-selector">
-              <button
-                className={`ca-tool-btn ${activeSkill ? "active" : ""}`}
-                onClick={() => setShowSkillMenu((v) => !v)}
-                title={tip(activeSkill?.description || "Select skill")}
-              >
-                {activeSkill?.name || "General"}
-              </button>
-              {showSkillMenu && (
-                <div className="ca-skill-menu">
-                  <button
-                    className={`ca-skill-option ${!activeSkill ? "active" : ""}`}
-                    onClick={() => selectSkill(null)}
-                  >
-                    General
-                  </button>
-                  {skills.map((skill) => (
-                    <button
-                      key={skill.id}
-                      className={`ca-skill-option ${activeSkillId === skill.id ? "active" : ""}`}
-                      onClick={() => selectSkill(skill.id)}
-                      title={tip(skill.description)}
-                    >
-                      {skill.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          <button
-            className={`ca-tool-btn ${effectiveWrite ? "active" : ""}`}
-            onClick={() => setAllowWrite((v) => !v)}
-            title={tip("Allow file read/write")}
-          >
-            write
-          </button>
-          <button
-            className={`ca-tool-btn ${effectiveCli ? "active" : ""}`}
-            onClick={() => setAllowCli((v) => !v)}
-            title={tip("Allow shell commands")}
-          >
-            cli
-          </button>
-          <button
-            className="ca-icon-btn ca-save-btn"
-            onClick={handleManualSave}
-            title={tip("Save chat")}
-            disabled={messages.length === 0}
-          >
-            {showSaveConfirm ? "✓" : "💾"}
-          </button>
-          <button className="ca-icon-btn" onClick={clearConversation} title={tip("New chat")}>
-            +
-          </button>
-          <button
-            className="ca-icon-btn"
-            onClick={() => {
-              // Open Obsidian settings and navigate to OpenBrain tab
-              const setting = (app as any).setting;
-              if (setting) {
-                setting.open();
-                setting.openTabById("open-brain");
-              }
-            }}
-            title={tip("OpenBrain settings")}
-          >
-            ⚙
-          </button>
-        </div>
-      </div>
+      <ChatHeader
+        activeSkill={activeSkill}
+        activeSkillId={activeSkillId}
+        skills={skills}
+        showSkillMenu={showSkillMenu}
+        effectiveWrite={effectiveWrite}
+        effectiveCli={effectiveCli}
+        messageCount={messages.length}
+        noteContext={noteContext}
+        sessionId={sessionId}
+        useLocalStt={settings.useLocalStt}
+        showSaveConfirm={showSaveConfirm}
+        showTooltips={settings.showTooltips}
+        onSkillMenuToggle={() => setShowSkillMenu((v) => !v)}
+        onSkillSelect={selectSkill}
+        onToggleWrite={() => setAllowWrite((v) => !v)}
+        onToggleCli={() => setAllowCli((v) => !v)}
+        onSave={handleManualSave}
+        onNewChat={clearConversation}
+        onOpenSettings={() => {
+          const setting = (app as any).setting;
+          if (setting) {
+            setting.open();
+            setting.openTabById("open-brain");
+          }
+        }}
+      />
 
       {/* Person picker overlay */}
       {showPersonPicker && (
-        <div className="ca-person-picker">
-          <div className="ca-person-picker-title">Who is this 1:1 with?</div>
-          {people.length === 0 && (
-            <div className="ca-person-picker-empty">
-              No profiles found. Create profiles in OpenBrain/people/
-            </div>
-          )}
-          {people.map((person) => (
-            <button
-              key={person.filePath}
-              className="ca-person-option"
-              onClick={() => selectPerson(person)}
-            >
-              <span className="ca-person-name">{person.name}</span>
-              <span className="ca-person-role">{person.role} — {person.domain}</span>
-            </button>
-          ))}
-          <button
-            className="ca-person-cancel"
-            onClick={() => { setShowPersonPicker(false); setActiveSkillId(null); }}
-          >
-            Cancel
-          </button>
-        </div>
+        <PersonPicker
+          people={people}
+          onSelect={selectPerson}
+          onCancel={() => { setShowPersonPicker(false); setActiveSkillId(null); }}
+        />
       )}
 
       {/* Message thread */}
@@ -1122,61 +911,22 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         </div>
       )}
 
-      {/* Input row */}
-      {/* Attached files from @ mentions */}
-      {attachedFiles.length > 0 && (
-        <div className="ca-attached-files">
-          {attachedFiles.map((p) => (
-            <span key={p} className="ca-attached-file">
-              {p.split("/").pop()?.replace(".md", "") ?? p}
-              <button className="ca-attached-remove" onClick={() => removeAttachedFile(p)}>✕</button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Input row */}
-      <div className="ca-input-row">
-        <div className="ca-input-wrapper">
-          <textarea
-            ref={inputRef}
-            className="ca-input"
-            placeholder={isRecording ? "Recording..." : activeSkill?.autoPrompt ? "Press enter to run..." : "Ask anything... (@ to reference a file)"}
-            value={input}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            disabled={isRecording || isStreaming}
-            rows={1}
-          />
-          {/* @ mention dropdown */}
-          {mentionQuery !== null && mentionResults.length > 0 && (
-            <div className="ca-mention-menu">
-              {mentionResults.map((entry, i) => (
-                <button
-                  key={entry.path}
-                  className={`ca-mention-option ${i === mentionIndex ? "active" : ""}`}
-                  onMouseDown={(e) => { e.preventDefault(); insertMention(entry); }}
-                >
-                  {entry.basename}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* / slash command dropdown */}
-          {slashQuery !== null && slashResults.length > 0 && (
-            <div className="ca-mention-menu">
-              {slashResults.map((skill, i) => (
-                <button
-                  key={skill.id}
-                  className={`ca-mention-option ${i === slashIndex ? "active" : ""}`}
-                  onMouseDown={(e) => { e.preventDefault(); insertSlashCommand(skill); }}
-                >
-                  {skill.name}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Input area with @ mentions, / commands, mic, and send */}
+      <InputArea
+        input={input}
+        onInputChange={setInput}
+        onSend={handleSend}
+        isStreaming={isStreaming}
+        isRecording={isRecording}
+        attachedFiles={attachedFiles}
+        onRemoveFile={(path) => setAttachedFiles((prev) => prev.filter((p) => p !== path))}
+        onFileAttach={(path) => setAttachedFiles((prev) => prev.includes(path) ? prev : [...prev, path])}
+        skills={skills}
+        vaultIndex={vaultIndex ?? null}
+        onSkillActivate={handleSkillActivate}
+        showTooltips={settings.showTooltips}
+        placeholder={isRecording ? "Recording..." : activeSkill?.autoPrompt ? "Press enter to run..." : "Ask anything... (@ to reference a file)"}
+      >
         <button
           className={`ca-mic-btn ${isRecording ? "recording" : ""} ${recorder.state === "processing" ? "processing" : ""}`}
           onClick={handleMicClick}
@@ -1192,7 +942,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         >
           ↑
         </button>
-      </div>
+      </InputArea>
     </div>
   );
 }
