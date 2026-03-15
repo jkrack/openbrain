@@ -1,5 +1,12 @@
 import { execSync } from "child_process";
 
+let cliPath = "obsidian";
+
+/** Set the Obsidian CLI path from settings. */
+export function configure(path: string): void {
+  cliPath = path || "obsidian";
+}
+
 /**
  * Build env with extended PATH so CLI tools are discoverable in Electron.
  */
@@ -22,7 +29,7 @@ function getEnv(): Record<string, string | undefined> {
  */
 function exec(command: string): string | null {
   try {
-    return execSync(`obsidian ${command}`, {
+    return execSync(`${cliPath} ${command}`, {
       encoding: "utf-8",
       timeout: 10000,
       env: getEnv(),

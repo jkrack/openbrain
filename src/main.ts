@@ -6,6 +6,7 @@ import { initChatFolder } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 import { initTemplates } from "./templates";
 import { initPeopleFolder } from "./people";
+import { configure as configureObsidianCli } from "./obsidianCli";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -15,6 +16,7 @@ export default class OpenBrainPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+    configureObsidianCli(this.settings.obsidianCliPath);
     this.skills = await loadSkills(this.app, this.settings.skillsFolder);
 
     this.registerView(

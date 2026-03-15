@@ -21,6 +21,7 @@ export interface OpenBrainSettings {
   showTooltips: boolean;
   dailyNoteFolder: string;
   dailyNoteFormat: string;
+  obsidianCliPath: string;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -43,6 +44,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   showTooltips: true, // Default ON for new users
   dailyNoteFolder: "0. Daily/{{YYYY}}/{{MM}}",
   dailyNoteFormat: "YYYY-MM-DD",
+  obsidianCliPath: "obsidian",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -72,6 +74,22 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.claudePath)
           .onChange(async (value) => {
             this.plugin.settings.claudePath = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Obsidian CLI path")
+      .setDesc(
+        "Path to the Obsidian CLI. Enable it in Obsidian Settings → General → Command line interface. " +
+        "Used for vault search, task queries, and daily note management."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("obsidian")
+          .setValue(this.plugin.settings.obsidianCliPath)
+          .onChange(async (value) => {
+            this.plugin.settings.obsidianCliPath = value || "obsidian";
             await this.plugin.saveSettings();
           })
       );
