@@ -314,7 +314,7 @@ export default class OpenBrainPlugin extends Plugin {
   }
 
   onunload() {
-    this.app.workspace.detachLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
+    // Don't detach leaves in onunload per Obsidian plugin guidelines
   }
 }
 

@@ -105,8 +105,6 @@ export async function transcribeBlob(
 ): Promise<TranscribeResult> {
   const start = Date.now();
 
-  console.log(`[OpenBrain] transcribeBlob: starting, blob size=${blob.size}`);
-
   // Convert to WAV
   const wavBuffer = await blobToWav(blob);
   const wavPath = await writeTempWav(wavBuffer);
@@ -117,14 +115,12 @@ export async function transcribeBlob(
     await mkdir(debugDir, { recursive: true });
     const debugWavPath = join(debugDir, "last_recording.wav");
     await fsCopyFile(wavPath, debugWavPath);
-    console.log(`[OpenBrain] debug WAV saved to: ${debugWavPath}`);
   } catch (e: any) {
     console.warn(`[OpenBrain] failed to save debug WAV: ${e.message}`);
   }
 
   try {
     const text = await runSherpaOnnx(wavPath, settings);
-    console.log(`[OpenBrain] transcription result: "${text.trim()}" (${Date.now() - start}ms)`);
     return {
       text: text.trim(),
       durationMs: Date.now() - start,
@@ -206,11 +202,6 @@ function runSherpaOnnx(
     });
 
     proc.on("close", (code) => {
-      console.log(`[OpenBrain] sherpa-onnx exit code: ${code}`);
-      if (stdout.trim()) {
-        console.log(`[OpenBrain] sherpa-onnx stdout: ${stdout.trim().slice(0, 200)}`);
-      }
-
       if (code !== 0) {
         reject(
           new Error(
@@ -223,7 +214,6 @@ function runSherpaOnnx(
         // Parse stderr to find the JSON result line.
         const allOutput = stderr + "\n" + stdout;
         const transcription = parseSherpaOutput(allOutput);
-        console.log(`[OpenBrain] parsed transcription: "${transcription.slice(0, 100)}"`);
         resolve(transcription);
       }
     });
