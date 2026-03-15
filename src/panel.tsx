@@ -625,34 +625,97 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           onDone: audioDone,
         });
       } else if (chatMode === "chat") {
-        // --- Direct API chat mode (supports images) ---
-        const images = pendingImages.length > 0
-          ? pendingImages.map((img) => ({ base64: img.base64, mediaType: img.mediaType }))
-          : undefined;
-        if (pendingImages.length > 0) setPendingImages([]);
+        // --- Chat mode ---
+        const hasImages = pendingImages.length > 0;
+        const hasApiKey = settings.chatProvider === "openrouter"
+          ? !!settings.openrouterApiKey
+          : !!settings.apiKey;
 
-        // Smart context for chat mode too
-        const smartCtx = buildSmartContext(app, userText, attachedFiles);
-        const allContext = [noteContext, smartCtx].filter(Boolean).join("");
+        if (hasImages && hasApiKey) {
+          // Images require API — use configured provider
+          const images = pendingImages.map((img) => ({ base64: img.base64, mediaType: img.mediaType }));
+          setPendingImages([]);
 
-        const chatOpts = {
-          ...callbacks,
-          messages: [...messages, userMsg],
-          systemPrompt: effectiveSystemPrompt,
-          noteContext: allContext || undefined,
-          images,
-          onDone: () => {
-            setIsStreaming(false);
-            recorder.clearAudio();
-            setAudioPrompt("");
-            setShowAudioPrompt(false);
-          },
-        };
+          const smartCtx = buildSmartContext(app, userText, attachedFiles);
+          const allContext = [noteContext, smartCtx].filter(Boolean).join("");
 
-        if (settings.chatProvider === "openrouter") {
-          await streamOpenRouterChat(settings, chatOpts);
+          const chatOpts = {
+            ...callbacks,
+            messages: [...messages, userMsg],
+            systemPrompt: effectiveSystemPrompt,
+            noteContext: allContext || undefined,
+            images,
+            onDone: () => {
+              setIsStreaming(false);
+              recorder.clearAudio();
+              setAudioPrompt("");
+              setShowAudioPrompt(false);
+            },
+          };
+
+          if (settings.chatProvider === "openrouter") {
+            await streamOpenRouterChat(settings, chatOpts);
+          } else {
+            await streamClaudeAPIChat(settings, chatOpts);
+          }
+        } else if (hasApiKey && !hasImages) {
+          // No images but API key available — use API for speed
+          if (pendingImages.length > 0) setPendingImages([]);
+
+          const smartCtx = buildSmartContext(app, userText, attachedFiles);
+          const allContext = [noteContext, smartCtx].filter(Boolean).join("");
+
+          const chatOpts = {
+            ...callbacks,
+            messages: [...messages, userMsg],
+            systemPrompt: effectiveSystemPrompt,
+            noteContext: allContext || undefined,
+            onDone: () => {
+              setIsStreaming(false);
+              recorder.clearAudio();
+              setAudioPrompt("");
+              setShowAudioPrompt(false);
+            },
+          };
+
+          if (settings.chatProvider === "openrouter") {
+            await streamOpenRouterChat(settings, chatOpts);
+          } else {
+            await streamClaudeAPIChat(settings, chatOpts);
+          }
         } else {
-          await streamClaudeAPIChat(settings, chatOpts);
+          // No API key — fall back to Claude Code CLI (no images, no tools)
+          if (hasImages) {
+            setPendingImages([]);
+            callbacks.onError("Images require an API key (Anthropic or OpenRouter). Configure one in settings, or switch to Vault mode.");
+            setIsStreaming(false);
+            return;
+          }
+
+          const smartCtx = buildSmartContext(app, userText, attachedFiles);
+          const allContext = [noteContext, smartCtx].filter(Boolean).join("");
+          const enrichedNoteContext = allContext || undefined;
+
+          const proc = streamClaudeCode(settings, {
+            ...callbacks,
+            prompt: userText,
+            noteContext: enrichedNoteContext,
+            noteFilePath,
+            systemPrompt: effectiveSystemPrompt,
+            sessionId,
+            allowWrite: false,
+            allowCli: false,
+            vaultPath,
+            onDone: async (newSessionId?: string) => {
+              setIsStreaming(false);
+              procRef.current = null;
+              if (newSessionId) setSessionId(newSessionId);
+              recorder.clearAudio();
+              setAudioPrompt("");
+              setShowAudioPrompt(false);
+            },
+          });
+          procRef.current = proc;
         }
       } else {
         // --- Agent mode (Claude Code CLI) ---
