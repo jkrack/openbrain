@@ -330,6 +330,75 @@
 }
 
 /* Input row */
+/* Attached files from @ mentions */
+.ca-attached-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.ca-attached-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  font-size: 11px;
+}
+.ca-attached-remove {
+  background: none;
+  border: none;
+  color: var(--text-on-accent);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+  opacity: 0.7;
+}
+.ca-attached-remove:hover {
+  opacity: 1;
+}
+
+/* @ mention dropdown */
+.ca-input-wrapper {
+  flex: 1;
+  position: relative;
+}
+.ca-mention-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  margin-bottom: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+.ca-mention-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-normal);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ca-mention-option:hover,
+.ca-mention-option.active {
+  background: var(--background-modifier-hover);
+}
+
 .ca-input-row {
   display: flex;
   align-items: flex-end;
@@ -340,7 +409,7 @@
 }
 
 .ca-input {
-  flex: 1;
+  width: 100%;
   resize: none;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;

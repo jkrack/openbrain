@@ -5,7 +5,7 @@ import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
 import { transcribeBlob, transcribeSegments } from "./stt";
 import { RecordingStatus } from "./view";
-import { App, Component, MarkdownRenderer, Notice } from "obsidian";
+import { App, Component, MarkdownRenderer, Notice, TFile } from "obsidian";
 import { ChildProcess } from "child_process";
 import {
   ChatMeta,
@@ -83,7 +83,7 @@ function CopyButton({ content }: { content: string }) {
     <button
       className={`ca-copy-btn ${copied ? "copied" : ""}`}
       onClick={handleCopy}
-      title={copied ? "Copied!" : "Copy as markdown"}
+      title={copied ? "Copied!" : "Copy as markdown"}  // CopyButton has own props
     >
       {copied ? "✓" : "⧉"}
     </button>
@@ -110,6 +110,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     setChatFilePathState(p);
   };
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+
+  // @ mention state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionResults, setMentionResults] = useState<string[]>([]);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [attachedFiles, setAttachedFiles] = useState<{ path: string; content: string }[]>([]);
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justLoadedRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
@@ -126,6 +132,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const responseRef = useRef<string>("");
 
   const recorder = useAudioRecorder();
+
+  // Tooltip helper — returns title prop only if tooltips enabled
+  const tip = (text: string) => settings.showTooltips ? text : undefined;
 
   const activeSkill = skills.find((s) => s.id === activeSkillId) || null;
 
@@ -567,9 +576,18 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         if (!chatFilePath && messages.length === 0) {
           recentContext = await getRecentChatContext();
         }
-        const enrichedNoteContext = noteContext
-          ? noteContext + recentContext
-          : recentContext || undefined;
+
+        // Build attached file context from @ mentions
+        const fileContext = attachedFiles.length > 0
+          ? "\n\n--- Referenced files ---\n" +
+            attachedFiles.map((f) => `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``).join("\n\n")
+          : "";
+
+        const allContext = [noteContext, recentContext, fileContext].filter(Boolean).join("");
+        const enrichedNoteContext = allContext || undefined;
+
+        // Clear attached files after sending
+        if (attachedFiles.length > 0) setAttachedFiles([]);
 
         const proc = streamClaudeCode(settings, {
           ...callbacks,
@@ -602,10 +620,90 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   }, [input, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // @ mention navigation
+    if (mentionQuery !== null) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => Math.min(i + 1, mentionResults.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        if (mentionResults.length > 0) {
+          e.preventDefault();
+          insertMention(mentionResults[mentionIndex]);
+          return;
+        }
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  // @ mention: detect query from input
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setInput(val);
+
+    const pos = e.target.selectionStart;
+    const textBefore = val.slice(0, pos);
+    const atMatch = textBefore.match(/@([^\s@]*)$/);
+
+    if (atMatch) {
+      const query = atMatch[1].toLowerCase();
+      setMentionQuery(query);
+      setMentionIndex(0);
+
+      // Search vault markdown files
+      const allFiles = app.vault.getMarkdownFiles();
+      const matches = allFiles
+        .filter((f) => f.path.toLowerCase().includes(query) || f.basename.toLowerCase().includes(query))
+        .sort((a, b) => b.stat.mtime - a.stat.mtime)
+        .slice(0, 8)
+        .map((f) => f.path);
+      setMentionResults(matches);
+    } else {
+      setMentionQuery(null);
+    }
+  };
+
+  // Insert selected file as attached context
+  const insertMention = async (filePath: string) => {
+    const file = app.vault.getAbstractFileByPath(filePath);
+    if (file instanceof TFile) {
+      const content = await app.vault.read(file);
+      setAttachedFiles((prev) => {
+        if (prev.some((f) => f.path === filePath)) return prev;
+        return [...prev, { path: filePath, content }];
+      });
+    }
+
+    // Replace @query with @filename in input
+    const pos = inputRef.current?.selectionStart ?? input.length;
+    const textBefore = input.slice(0, pos);
+    const textAfter = input.slice(pos);
+    const replaced = textBefore.replace(/@[^\s@]*$/, `@${filePath.split("/").pop()?.replace(".md", "") ?? filePath} `);
+    setInput(replaced + textAfter);
+    setMentionQuery(null);
+
+    // Refocus input
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  // Remove an attached file
+  const removeAttachedFile = (path: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.path !== path));
   };
 
   const handleMicClick = useCallback(async () => {
@@ -679,17 +777,17 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         <div className="ca-header-left">
           <span className="ca-title">OpenBrain</span>
           {noteContext && (
-            <span className="ca-note-badge" title="Active note loaded">
+            <span className="ca-note-badge" title={tip("Active note loaded")}>
               note
             </span>
           )}
           {sessionId && (
-            <span className="ca-note-badge" title="Session active">
+            <span className="ca-note-badge" title={tip("Session active")}>
               session
             </span>
           )}
           {settings.useLocalStt && (
-            <span className="ca-note-badge" title="Local transcription active">
+            <span className="ca-note-badge" title={tip("Local transcription active")}>
               local
             </span>
           )}
@@ -700,7 +798,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
               <button
                 className={`ca-tool-btn ${activeSkill ? "active" : ""}`}
                 onClick={() => setShowSkillMenu((v) => !v)}
-                title={activeSkill?.description || "Select skill"}
+                title={tip(activeSkill?.description || "Select skill")}
               >
                 {activeSkill?.name || "General"}
               </button>
@@ -717,7 +815,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                       key={skill.id}
                       className={`ca-skill-option ${activeSkillId === skill.id ? "active" : ""}`}
                       onClick={() => selectSkill(skill.id)}
-                      title={skill.description}
+                      title={tip(skill.description)}
                     >
                       {skill.name}
                     </button>
@@ -729,27 +827,27 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           <button
             className={`ca-tool-btn ${effectiveWrite ? "active" : ""}`}
             onClick={() => setAllowWrite((v) => !v)}
-            title="Allow file read/write"
+            title={tip("Allow file read/write")}
           >
             write
           </button>
           <button
             className={`ca-tool-btn ${effectiveCli ? "active" : ""}`}
             onClick={() => setAllowCli((v) => !v)}
-            title="Allow shell commands"
+            title={tip("Allow shell commands")}
           >
             cli
           </button>
           <button
             className="ca-icon-btn ca-save-btn"
             onClick={handleManualSave}
-            title="Save chat"
+            title={tip("Save chat")}
             disabled={messages.length === 0}
           >
             {showSaveConfirm ? "✓" : "💾"}
           </button>
-          <button className="ca-icon-btn" onClick={clearConversation} title="Clear conversation">
-            ↺
+          <button className="ca-icon-btn" onClick={clearConversation} title={tip("New chat")}>
+            +
           </button>
           <button
             className="ca-icon-btn"
@@ -761,7 +859,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                 setting.openTabById("open-brain");
               }
             }}
-            title="OpenBrain settings"
+            title={tip("OpenBrain settings")}
           >
             ⚙
           </button>
@@ -845,11 +943,11 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             <button
               className="ca-icon-btn"
               onClick={() => setShowAudioPrompt((v) => !v)}
-              title="Add instructions"
+              title={tip("Add instructions")}
             >
               ✎
             </button>
-            <button className="ca-icon-btn" onClick={recorder.clearAudio} title="Discard">
+            <button className="ca-icon-btn" onClick={recorder.clearAudio} title={tip("Discard")}>
               ✕
             </button>
             <button className="ca-send-btn" onClick={handleSendAudio} disabled={isStreaming}>
@@ -866,7 +964,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           <button
             className="ca-icon-btn"
             onClick={() => recorder.clearError()}
-            title="Dismiss"
+            title={tip("Dismiss")}
           >
             ✕
           </button>
@@ -874,22 +972,51 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       )}
 
       {/* Input row */}
+      {/* Attached files from @ mentions */}
+      {attachedFiles.length > 0 && (
+        <div className="ca-attached-files">
+          {attachedFiles.map((f) => (
+            <span key={f.path} className="ca-attached-file">
+              {f.path.split("/").pop()}
+              <button className="ca-attached-remove" onClick={() => removeAttachedFile(f.path)}>✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Input row */}
       <div className="ca-input-row">
-        <textarea
-          ref={inputRef}
-          className="ca-input"
-          placeholder={isRecording ? "Recording..." : activeSkill?.autoPrompt ? "Press enter to run..." : "Ask anything..."}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isRecording || isStreaming}
-          rows={1}
-        />
+        <div className="ca-input-wrapper">
+          <textarea
+            ref={inputRef}
+            className="ca-input"
+            placeholder={isRecording ? "Recording..." : activeSkill?.autoPrompt ? "Press enter to run..." : "Ask anything... (@ to reference a file)"}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            disabled={isRecording || isStreaming}
+            rows={1}
+          />
+          {/* @ mention dropdown */}
+          {mentionQuery !== null && mentionResults.length > 0 && (
+            <div className="ca-mention-menu">
+              {mentionResults.map((path, i) => (
+                <button
+                  key={path}
+                  className={`ca-mention-option ${i === mentionIndex ? "active" : ""}`}
+                  onMouseDown={(e) => { e.preventDefault(); insertMention(path); }}
+                >
+                  {path}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button
           className={`ca-mic-btn ${isRecording ? "recording" : ""} ${recorder.state === "processing" ? "processing" : ""}`}
           onClick={handleMicClick}
           disabled={isStreaming || recorder.state === "processing"}
-          title={isRecording ? "Stop recording" : "Start recording"}
+          title={tip(isRecording ? "Stop recording" : "Start recording")}
         >
           {recorder.state === "processing" ? "…" : isRecording ? "■" : "⏺"}
         </button>

@@ -18,6 +18,7 @@ export interface OpenBrainSettings {
   chatFolder: string;
   lastChatPath: string;
   includeRecentChats: boolean;
+  showTooltips: boolean;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   chatFolder: "OpenBrain/chats",
   lastChatPath: "",
   includeRecentChats: false,
+  showTooltips: true,
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -214,6 +216,21 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     // Populate mic dropdown asynchronously
     this.populateMicDropdown(micSetting);
+
+    // ── Interface ──
+    containerEl.createEl("h3", { text: "Interface" });
+
+    new Setting(containerEl)
+      .setName("Show tooltips")
+      .setDesc("Display hover text on icons and buttons")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.showTooltips)
+          .onChange(async (value) => {
+            this.plugin.settings.showTooltips = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
     // ── Chat History ──
     containerEl.createEl("h3", { text: "Chat History" });
