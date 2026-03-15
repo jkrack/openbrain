@@ -7,12 +7,14 @@ import { VaultIndex } from "./vaultIndex";
 import { initVault } from "./initVault";
 import { configure as configureObsidianCli } from "./obsidianCli";
 import { encrypt, decrypt } from "./secureStorage";
+import { OpenClawNode } from "./openclawNode";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
   skills: Skill[] = [];
   vaultIndex: VaultIndex | null = null;
   private statusBarEl: HTMLElement | null = null;
+  private openclawNode: OpenClawNode | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -35,6 +37,12 @@ export default class OpenBrainPlugin extends Plugin {
       await initVault(this.app, this.settings);
       this.vaultIndex = new VaultIndex(this.app);
       this.refreshViews();
+
+      // Connect to OpenClaw gateway if enabled
+      if (this.settings.openclawEnabled) {
+        this.openclawNode = new OpenClawNode(this.app, this.settings);
+        this.openclawNode.connect();
+      }
     });
 
     // Keep vault index updated
@@ -299,7 +307,7 @@ export default class OpenBrainPlugin extends Plugin {
   }
 
   onunload() {
-    // Don't detach leaves in onunload per Obsidian plugin guidelines
+    this.openclawNode?.disconnect();
   }
 }
 

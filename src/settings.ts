@@ -23,6 +23,8 @@ export interface OpenBrainSettings {
   dailyNoteFormat: string;
   obsidianCliPath: string;
   onboardingComplete: boolean;
+  openclawEnabled: boolean;
+  openclawGatewayUrl: string;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -47,6 +49,8 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   dailyNoteFormat: "YYYY-MM-DD",
   obsidianCliPath: "obsidian",
   onboardingComplete: false,
+  openclawEnabled: false,
+  openclawGatewayUrl: "ws://127.0.0.1:18789",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -372,6 +376,40 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           this.app.workspace.openLinkText(basePath, "");
         })
       );
+
+    // ── OpenClaw ──
+    containerEl.createEl("h3", { text: "OpenClaw" });
+
+    new Setting(containerEl)
+      .setName("Enable OpenClaw integration")
+      .setDesc(
+        "Connect to an OpenClaw gateway to access your vault from any messaging channel " +
+        "(WhatsApp, Slack, Telegram, etc.). Requires OpenClaw running locally."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.openclawEnabled)
+          .onChange(async (value) => {
+            this.plugin.settings.openclawEnabled = value;
+            await this.plugin.saveSettings();
+            this.display(); // Re-render to show/hide URL field
+          })
+      );
+
+    if (this.plugin.settings.openclawEnabled) {
+      new Setting(containerEl)
+        .setName("Gateway URL")
+        .setDesc("WebSocket URL of your OpenClaw gateway. Default: ws://127.0.0.1:18789")
+        .addText((text) =>
+          text
+            .setPlaceholder("ws://127.0.0.1:18789")
+            .setValue(this.plugin.settings.openclawGatewayUrl)
+            .onChange(async (value) => {
+              this.plugin.settings.openclawGatewayUrl = value || "ws://127.0.0.1:18789";
+              await this.plugin.saveSettings();
+            })
+        );
+    }
   }
 
   private async renderSttStatus(el: HTMLElement) {
