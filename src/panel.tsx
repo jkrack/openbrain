@@ -329,7 +329,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         const currentSkillId = activeSkillIdRef.current;
         const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
         const section = skill?.dailyNoteSection || "Capture";
-        linkInDailyNote(app, path, section, meta.title).catch(() => {});
+        linkInDailyNote(app, path, section, meta.title, settings).catch(() => {});
       }
     }, 500);
 
@@ -737,7 +737,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     if (created) {
       setPersonNotePath(created);
       // Link the 1:1 note in today's daily note under Meetings
-      linkInDailyNote(app, created, "Meetings", `1:1 — ${person.name}`).catch(() => {});
+      linkInDailyNote(app, created, "Meetings", `1:1 — ${person.name}`, settings).catch(() => {});
     }
 
     // Build file references: person profile + recent 1:1 notes

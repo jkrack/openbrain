@@ -1,5 +1,6 @@
 import { App, TFile, TFolder, Notice, moment } from "obsidian";
 import { Message } from "./claude";
+import { OpenBrainSettings } from "./settings";
 import { createFromTemplate } from "./templates";
 import * as cli from "./obsidianCli";
 
@@ -314,48 +315,26 @@ export async function linkInDailyNote(
   app: App,
   filePath: string,
   section: string,
-  displayTitle?: string
+  displayTitle?: string,
+  settings?: OpenBrainSettings
 ): Promise<void> {
   const linkTarget = filePath.replace(/\.md$/, "");
   const link = displayTitle
     ? `- [[${linkTarget}|${displayTitle}]]`
     : `- [[${linkTarget}]]`;
 
-  // Try Obsidian CLI first
-  if (cli.isAvailable()) {
-    // Check if daily note exists, create from template if not
-    const existing = cli.dailyRead();
-    if (existing === null) {
-      // Create daily note from template using vault API (CLI doesn't support our custom templates)
-      const dailyPath = getDailyPath(app);
-      await createFromTemplate(app, "Daily Note.md", dailyPath);
-    }
-
-    // Check for duplicates
-    const content = cli.dailyRead();
-    if (content && content.includes(`[[${linkTarget}`)) return;
-
-    // Append the link under the section
-    // Use daily:append with a section-targeted format
-    cli.dailyAppend(`\n${link}`);
-
-    // If we need section targeting, fall through to vault API
-    // (Obsidian CLI daily:append appends to end, not to a section)
-    // For now, use vault API for section-specific insertion
-    return linkInDailyNoteVaultApi(app, linkTarget, link, section);
-  }
-
-  return linkInDailyNoteVaultApi(app, linkTarget, link, section);
+  return linkInDailyNoteVaultApi(app, linkTarget, link, section, settings);
 }
 
-/** Vault API fallback for section-specific daily note linking. */
+/** Vault API for section-specific daily note linking. */
 async function linkInDailyNoteVaultApi(
   app: App,
   linkTarget: string,
   link: string,
-  section: string
+  section: string,
+  settings?: OpenBrainSettings
 ): Promise<void> {
-  const dailyPath = getDailyPath(app);
+  const dailyPath = getDailyPath(app, settings);
   let file = app.vault.getAbstractFileByPath(dailyPath);
 
   if (!(file instanceof TFile)) {
@@ -391,8 +370,21 @@ async function linkInDailyNoteVaultApi(
   }
 }
 
-function getDailyPath(app: App): string {
-  // Try Obsidian CLI first
+function getDailyPath(app: App, settings?: OpenBrainSettings): string {
+  // Use OpenBrain settings if configured
+  if (settings?.dailyNoteFolder) {
+    const now = moment();
+    // Resolve date variables in folder path
+    const folder = settings.dailyNoteFolder
+      .replace(/\{\{YYYY\}\}/g, now.format("YYYY"))
+      .replace(/\{\{MM\}\}/g, now.format("MM"))
+      .replace(/\{\{DD\}\}/g, now.format("DD"));
+    const format = settings.dailyNoteFormat || "YYYY-MM-DD";
+    const filename = now.format(format);
+    return `${folder}/${filename}.md`;
+  }
+
+  // Try Obsidian CLI
   const cliPath = cli.dailyPath();
   if (cliPath) return cliPath;
 
@@ -416,6 +408,7 @@ function getDailyPath(app: App): string {
     return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
   }
 
+  // Default
   return `${moment().format("YYYY-MM-DD")}.md`;
 }
 

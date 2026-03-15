@@ -19,6 +19,8 @@ export interface OpenBrainSettings {
   lastChatPath: string;
   includeRecentChats: boolean;
   showTooltips: boolean;
+  dailyNoteFolder: string;
+  dailyNoteFormat: string;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -39,6 +41,8 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   lastChatPath: "",
   includeRecentChats: false,
   showTooltips: true, // Default ON for new users
+  dailyNoteFolder: "0. Daily/{{YYYY}}/{{MM}}",
+  dailyNoteFormat: "YYYY-MM-DD",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -192,6 +196,38 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.skillsFolder)
           .onChange(async (value) => {
             this.plugin.settings.skillsFolder = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Daily note folder")
+      .setDesc(
+        "Where daily notes are created. Supports date variables: {{YYYY}}, {{MM}}, {{DD}}. " +
+        "Example: 0. Daily/{{YYYY}}/{{MM}} creates notes like 0. Daily/2026/03/2026-03-15.md"
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("0. Daily/{{YYYY}}/{{MM}}")
+          .setValue(this.plugin.settings.dailyNoteFolder)
+          .onChange(async (value) => {
+            this.plugin.settings.dailyNoteFolder = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Daily note filename format")
+      .setDesc(
+        "Date format for the daily note filename (without .md). Uses moment.js format tokens: " +
+        "YYYY (year), MM (month), DD (day), ddd (short day name)."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("YYYY-MM-DD")
+          .setValue(this.plugin.settings.dailyNoteFormat)
+          .onChange(async (value) => {
+            this.plugin.settings.dailyNoteFormat = value;
             await this.plugin.saveSettings();
           })
       );
