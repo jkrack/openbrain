@@ -19,6 +19,7 @@ export interface Skill {
   autoPrompt?: string;
   trigger?: string;
   postActions: PostAction[];
+  dailyNoteSection?: string;
   systemPrompt: string;
   filePath: string;
 }
@@ -73,6 +74,7 @@ export function parseSkillFile(content: string, filePath: string): Skill | null 
     autoPrompt: frontmatter.auto_prompt,
     trigger: frontmatter.trigger,
     postActions,
+    dailyNoteSection: frontmatter.daily_note_section,
     systemPrompt: body,
     filePath,
   };

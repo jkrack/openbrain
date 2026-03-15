@@ -1,4 +1,4 @@
-import { App, TFile, TFolder, Notice } from "obsidian";
+import { App, TFile, TFolder, Notice, moment } from "obsidian";
 import { Message } from "./claude";
 
 // ── Interfaces ──────────────────────────────────────────────────────────
@@ -292,9 +292,103 @@ export async function initChatFolder(app: App, folder: string): Promise<void> {
   }
 
   // Create Base file if missing (never overwrite).
-  // Use adapter.write() since vault.create() may reject non-.md extensions.
+  // Use adapter.exists() + adapter.write() since vault API doesn't handle .base files.
   const basePath = `${folder}/Chat History.base`;
-  if (!app.vault.getAbstractFileByPath(basePath)) {
-    await (app.vault.adapter as any).write(basePath, BASE_CONTENT);
+  const adapter = app.vault.adapter as any;
+  if (adapter.exists && !(await adapter.exists(basePath))) {
+    await adapter.write(basePath, BASE_CONTENT);
   }
+}
+
+// ── 9. linkInDailyNote ─────────────────────────────────────────────────
+
+/**
+ * Add a [[wikilink]] to a section of today's daily note.
+ * Creates the daily note if it doesn't exist.
+ * Skips if the link is already present (idempotent).
+ */
+export async function linkInDailyNote(
+  app: App,
+  filePath: string,
+  section: string,
+  displayTitle?: string
+): Promise<void> {
+  // Find today's daily note path using periodic-notes or core daily notes
+  const dailyPath = getDailyPath(app);
+
+  // Build the wikilink
+  const linkTarget = filePath.replace(/\.md$/, "");
+  const link = displayTitle
+    ? `- [[${linkTarget}|${displayTitle}]]`
+    : `- [[${linkTarget}]]`;
+
+  let file = app.vault.getAbstractFileByPath(dailyPath);
+
+  if (!(file instanceof TFile)) {
+    // Create the daily note with minimal structure
+    const dateStr = moment().format("YYYY-MM-DD (dddd)");
+    await app.vault.create(dailyPath, `# ${dateStr}\n`);
+    file = app.vault.getAbstractFileByPath(dailyPath);
+  }
+
+  if (!(file instanceof TFile)) return;
+
+  const content = await app.vault.read(file);
+
+  // Don't add duplicate links
+  if (content.includes(`[[${linkTarget}`)) return;
+
+  // Find the section and insert after it
+  const sectionRegex = new RegExp(`^##\\s+\\**${escapeRegex(section)}\\**\\s*$`, "m");
+  const match = content.match(sectionRegex);
+
+  if (match && match.index !== undefined) {
+    // Find the end of the section heading line
+    const insertPos = match.index + match[0].length;
+    const before = content.slice(0, insertPos);
+    const after = content.slice(insertPos);
+
+    // Insert link after the heading (and any --- separator)
+    const separatorMatch = after.match(/^\n---\n/);
+    if (separatorMatch) {
+      const updated = before + "\n---\n" + link + "\n" + after.slice(separatorMatch[0].length);
+      await app.vault.modify(file, updated);
+    } else {
+      const updated = before + "\n" + link + "\n" + after;
+      await app.vault.modify(file, updated);
+    }
+  } else {
+    // Section not found — append to end
+    const updated = content.trimEnd() + `\n\n## ${section}\n${link}\n`;
+    await app.vault.modify(file, updated);
+  }
+}
+
+function getDailyPath(app: App): string {
+  // Check periodic-notes plugin first
+  const periodicNotes = (app as any).plugins?.plugins?.["periodic-notes"];
+  if (periodicNotes?.settings?.daily?.enabled) {
+    const daily = periodicNotes.settings.daily;
+    const folder = daily.folder || "";
+    const format = daily.format || "YYYY-MM-DD";
+    const dateStr = moment().format(format);
+    return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+  }
+
+  // Check core daily-notes plugin
+  const dailyNotes = (app as any).internalPlugins?.plugins?.["daily-notes"];
+  if (dailyNotes?.enabled) {
+    const config = dailyNotes.instance?.options || {};
+    const folder = config.folder || "";
+    const format = config.format || "YYYY-MM-DD";
+    const dateStr = moment().format(format);
+    return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+  }
+
+  // Default
+  return `${moment().format("YYYY-MM-DD")}.md`;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

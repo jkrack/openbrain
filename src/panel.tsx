@@ -14,6 +14,7 @@ import {
   generateChatTitle,
   generateChatFilename,
   listRecentChats,
+  linkInDailyNote,
 } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 
@@ -251,6 +252,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       if (!currentPath) {
         setChatFilePath(path);
         onChatPathChange?.(path);
+
+        // Link new chat in today's daily note
+        const currentSkillId = activeSkillIdRef.current;
+        const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
+        const section = skill?.dailyNoteSection || "Capture";
+        linkInDailyNote(app, path, section, meta.title).catch(() => {});
       }
     }, 500);
 
