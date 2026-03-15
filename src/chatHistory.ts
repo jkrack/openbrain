@@ -170,10 +170,17 @@ export async function saveChat(
   try {
     const content = serializeChat(messages, meta);
 
-    // Create parent folder if missing
+    // Create parent folders if missing
     const folderPath = path.substring(0, path.lastIndexOf("/"));
     if (folderPath && !app.vault.getAbstractFileByPath(folderPath)) {
-      await app.vault.createFolder(folderPath);
+      const parts = folderPath.split("/");
+      let current = "";
+      for (const part of parts) {
+        current = current ? `${current}/${part}` : part;
+        if (!app.vault.getAbstractFileByPath(current)) {
+          await app.vault.createFolder(current);
+        }
+      }
     }
 
     const existing = app.vault.getAbstractFileByPath(path);
@@ -272,9 +279,16 @@ views:
 `;
 
 export async function initChatFolder(app: App, folder: string): Promise<void> {
-  // Create folder if missing
+  // Create folder (and parents) if missing
   if (!app.vault.getAbstractFileByPath(folder)) {
-    await app.vault.createFolder(folder);
+    const parts = folder.split("/");
+    let current = "";
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      if (!app.vault.getAbstractFileByPath(current)) {
+        await app.vault.createFolder(current);
+      }
+    }
   }
 
   // Create Base file if missing (never overwrite)

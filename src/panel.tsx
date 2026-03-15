@@ -103,7 +103,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [activeSkillId, setActiveSkillId] = useState<string | null>(null);
   const [showSkillMenu, setShowSkillMenu] = useState(false);
-  const [chatFilePath, setChatFilePath] = useState<string | null>(null);
+  const [chatFilePath, setChatFilePathState] = useState<string | null>(null);
+  const chatFilePathRef = useRef<string | null>(null);
+  const setChatFilePath = (p: string | null) => {
+    chatFilePathRef.current = p;
+    setChatFilePathState(p);
+  };
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justLoadedRef = useRef(false);
@@ -222,9 +227,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     debouncedSaveRef.current = setTimeout(async () => {
       const meta = buildMeta();
       const folder = settings.chatFolder || "OpenBrain/chats";
-      const path = chatFilePath ?? `${folder}/${generateChatFilename()}`;
+      const currentPath = chatFilePathRef.current;
+      const path = currentPath ?? `${folder}/${generateChatFilename()}`;
       await saveChat(app, path, messages, meta);
-      if (!chatFilePath) {
+      if (!currentPath) {
         setChatFilePath(path);
         onChatPathChange?.(path);
       }
@@ -266,9 +272,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     }
     const meta = buildMeta();
     const folder = settings.chatFolder || "OpenBrain/chats";
-    const path = chatFilePath ?? `${folder}/${generateChatFilename()}`;
+    const currentPath = chatFilePathRef.current;
+    const path = currentPath ?? `${folder}/${generateChatFilename()}`;
     await saveChat(app, path, messages, meta);
-    if (!chatFilePath) {
+    if (!currentPath) {
       setChatFilePath(path);
       onChatPathChange?.(path);
     }
