@@ -1,6 +1,6 @@
 # OpenBrain
 
-AI-powered vault assistant for [Obsidian](https://obsidian.md). Chat with Claude about your notes, record voice memos, run structured workflows, and manage your daily work — all from a side panel.
+AI-powered vault assistant for [Obsidian](https://obsidian.md). Chat with Claude about your notes, record voice memos, run structured workflows, and manage your daily work — all from a side panel. Connects to [OpenClaw](https://github.com/openclaw/openclaw) to access your vault from any messaging channel.
 
 ## Features
 
