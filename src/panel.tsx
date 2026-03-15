@@ -772,7 +772,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     }
   };
 
-  // Handle person selection — create 1:1 note and inject context
+  // Handle person selection — create 1:1 note, load context, send opening message
   const selectPerson = async (person: PersonProfile) => {
     setSelectedPerson(person);
     setShowPersonPicker(false);
@@ -786,20 +786,30 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     });
     if (created) setPersonNotePath(created);
 
-    // Load recent 1:1 context
+    // Build file references: person profile + recent 1:1 notes
+    const filesToReference = [person.filePath];
     const recentNotes = await getRecentOneOnOnes(app, person.name);
-    if (recentNotes.length > 0) {
-      const contextSuffix = "\n\n--- Recent 1:1 History ---\n" + recentNotes.join("\n\n");
-      // Attach as a file reference so Claude reads it
-      setAttachedFiles((prev) => {
-        const newFiles = [...prev];
-        // Add the person's profile
-        if (!newFiles.includes(person.filePath)) newFiles.push(person.filePath);
-        return newFiles;
-      });
+
+    // Also reference the recent 1:1 note files directly
+    const recentFolder = getPersonMeetingFolder(person.name);
+    const recentFiles = app.vault.getMarkdownFiles()
+      .filter((f) => f.path.startsWith(recentFolder + "/"))
+      .sort((a, b) => b.stat.mtime - a.stat.mtime)
+      .slice(0, 3);
+    for (const f of recentFiles) {
+      if (!filesToReference.includes(f.path)) filesToReference.push(f.path);
     }
 
-    setTimeout(() => inputRef.current?.focus(), 0);
+    // Auto-send opening message with context
+    const openingPrompt = `Starting 1:1 with ${person.name}.` +
+      `\n\nReferenced files (read these before responding):\n` +
+      filesToReference.map((p) => `- ${p}`).join("\n") +
+      `\n\nPlease review ${person.name}'s profile and our recent 1:1 notes. ` +
+      `Summarize any open action items from past sessions, note their current projects and focus areas, ` +
+      `and suggest topics for today's conversation.`;
+
+    // Send the opening message through sendMessage
+    sendMessage(openingPrompt);
   };
 
   const handleMicClick = useCallback(async () => {
