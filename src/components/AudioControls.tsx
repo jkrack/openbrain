@@ -37,15 +37,36 @@ export function AudioControls({
       {isRecording && (
         <div className="ca-waveform">
           <span className="ca-rec-dot" />
-          <div className="ca-bars">
-            {recorder.waveformData.map((v, i) => (
-              <div
-                key={i}
-                className="ca-bar"
-                style={{ height: `${Math.max(3, v * 32)}px` }}
-              />
-            ))}
-          </div>
+          <svg className="ca-wave-svg" viewBox="0 0 200 40" preserveAspectRatio="none">
+            <polyline
+              className="ca-wave-line"
+              fill="none"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              points={recorder.waveformData
+                .map((v, i) => {
+                  const x = (i / (recorder.waveformData.length - 1)) * 200;
+                  const y = 20 - v * 16 + (20 - 20); // center line ± amplitude
+                  return `${x},${y}`;
+                })
+                .join(" ")}
+            />
+            <polyline
+              className="ca-wave-line ca-wave-line-mirror"
+              fill="none"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              points={recorder.waveformData
+                .map((v, i) => {
+                  const x = (i / (recorder.waveformData.length - 1)) * 200;
+                  const y = 20 + v * 16;
+                  return `${x},${y}`;
+                })
+                .join(" ")}
+            />
+          </svg>
           <span className="ca-rec-time">
             {formatDuration(recorder.duration)}
             {recorder.segmentCount > 0 && ` (${recorder.segmentCount + 1} segments)`}

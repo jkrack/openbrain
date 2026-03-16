@@ -437,21 +437,18 @@
   50% { opacity: 0.4; }
 }
 
-.ca-bars {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+/* Fluid waveform */
+.ca-wave-svg {
   flex: 1;
-  height: 32px;
+  height: 36px;
 }
-
-.ca-bar {
-  flex: 1;
-  background: var(--interactive-accent);
-  border-radius: 2px;
-  opacity: 0.7;
-  min-height: 3px;
-  transition: height 0.05s ease;
+.ca-wave-line {
+  stroke: var(--interactive-accent);
+  opacity: 0.8;
+  transition: points 0.08s ease;
+}
+.ca-wave-line-mirror {
+  opacity: 0.3;
 }
 
 .ca-rec-time {
