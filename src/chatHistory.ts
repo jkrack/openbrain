@@ -51,7 +51,7 @@ export function generateChatTitle(messages: Message[]): string {
   const content = firstUser.content.trim();
 
   // Voice message fallback
-  if (!content || content.startsWith("\uD83C\uDFA4")) {
+  if (!content || content.startsWith("\uD83C\uDFA4") || content.startsWith("\uD83C\uDF99")) {
     const d = firstUser.timestamp instanceof Date ? firstUser.timestamp : new Date();
     return `Voice chat \u2014 ${formatDate(d)}`;
   }
