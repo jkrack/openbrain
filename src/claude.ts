@@ -139,6 +139,7 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
   // Parse streaming JSON output
   let buffer = "";
   let resultSessionId: string | undefined;
+  let receivedDeltas = false;
 
   proc.stdout.on("data", (data: Buffer) => {
     buffer += data.toString();
@@ -155,11 +156,12 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
           parsed.type === "content_block_delta" &&
           parsed.delta?.type === "text_delta"
         ) {
+          receivedDeltas = true;
           opts.onChunk(parsed.delta.text);
         }
 
         // Assistant message with full content (non-streaming fallback)
-        if (parsed.type === "assistant" && parsed.message?.content) {
+        if (!receivedDeltas && parsed.type === "assistant" && parsed.message?.content) {
           for (const block of parsed.message.content) {
             if (block.type === "text") {
               opts.onChunk(block.text);

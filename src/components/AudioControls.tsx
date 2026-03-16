@@ -1,5 +1,6 @@
 import React from "react";
 import { AudioRecorderResult } from "../useAudioRecorder";
+import { ObsidianIcon } from "./ObsidianIcon";
 
 export interface AudioControlsProps {
   isRecording: boolean;
@@ -74,10 +75,10 @@ export function AudioControls({
               onClick={onToggleAudioPrompt}
               aria-label={tip("Add instructions")}
             >
-              {"\u270E"}
+              <ObsidianIcon name="pencil" />
             </button>
             <button className="ca-icon-btn" onClick={recorder.clearAudio} aria-label={tip("Discard")}>
-              {"\u2715"}
+              <ObsidianIcon name="x" />
             </button>
             <button className="ca-send-btn" onClick={onSendAudio} disabled={isStreaming}>
               Send
@@ -95,7 +96,7 @@ export function AudioControls({
             onClick={() => recorder.clearError()}
             aria-label={tip("Dismiss")}
           >
-            {"\u2715"}
+            <ObsidianIcon name="x" />
           </button>
         </div>
       )}

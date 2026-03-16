@@ -3,6 +3,7 @@ import { Message } from "../claude";
 import { Skill } from "../skills";
 import { PersonProfile } from "../people";
 import { App, Component, MarkdownRenderer } from "obsidian";
+import { ObsidianIcon } from "./ObsidianIcon";
 
 const MESSAGES_PER_PAGE = 50;
 
@@ -45,7 +46,7 @@ function CopyButton({ content }: { content: string }) {
       onClick={handleCopy}
       title={copied ? "Copied!" : "Copy as markdown"}
     >
-      {copied ? "\u2713" : "\u29C9"}
+      <ObsidianIcon name={copied ? "check" : "copy"} />
     </button>
   );
 }

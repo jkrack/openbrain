@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 import { Skill } from "../skills";
 import { VaultIndex } from "../vaultIndex";
+import { ObsidianIcon } from "./ObsidianIcon";
 
 export interface InputAreaProps {
   input: string;
@@ -16,7 +17,9 @@ export interface InputAreaProps {
   onSkillActivate: (skill: Skill) => void;
   showTooltips: boolean;
   placeholder?: string;
-  children?: React.ReactNode;
+  onMicClick: () => void;
+  micState: "idle" | "recording" | "processing";
+  isSendDisabled: boolean;
 }
 
 export function InputArea({
@@ -33,7 +36,9 @@ export function InputArea({
   onSkillActivate,
   showTooltips,
   placeholder,
-  children,
+  onMicClick,
+  micState,
+  isSendDisabled,
 }: InputAreaProps) {
   // @ mention state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -189,6 +194,10 @@ export function InputArea({
     ]
   );
 
+  // Mic icon based on state
+  const micIconName = micState === "processing" ? "loader" : micState === "recording" ? "square" : "mic";
+  const micLabel = micState === "recording" ? "Stop recording" : "Record voice message";
+
   return (
     <>
       {/* Attached files from @ mentions */}
@@ -198,15 +207,15 @@ export function InputArea({
             <span key={p} className="ca-attached-file">
               {p.split("/").pop()?.replace(".md", "") ?? p}
               <button className="ca-attached-remove" onClick={() => removeAttachedFile(p)}>
-                \u2715
+                <ObsidianIcon name="x" />
               </button>
             </span>
           ))}
         </div>
       )}
 
-      {/* Input row */}
-      <div className="ca-input-row">
+      {/* Unified input card */}
+      <div className="ca-input-card">
         <div className="ca-input-wrapper">
           <textarea
             ref={inputRef}
@@ -253,7 +262,30 @@ export function InputArea({
             </div>
           )}
         </div>
-        {children}
+
+        {/* Toolbar row */}
+        <div className="ca-input-toolbar">
+          <div className="ca-toolbar-left">
+            <button
+              className={`ca-mic-btn ${micState === "recording" ? "recording" : ""} ${micState === "processing" ? "processing" : ""}`}
+              onClick={onMicClick}
+              disabled={isStreaming || micState === "processing"}
+              aria-label={tip(micLabel)}
+            >
+              <ObsidianIcon name={micIconName} />
+            </button>
+          </div>
+          <div className="ca-toolbar-right">
+            <button
+              className="ca-send-btn"
+              onClick={onSend}
+              disabled={isSendDisabled}
+              aria-label={tip("Send message")}
+            >
+              <ObsidianIcon name="arrow-up" />
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );

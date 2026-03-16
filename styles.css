@@ -583,23 +583,28 @@
   background: var(--background-modifier-hover);
 }
 
-.ca-input-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  padding: 10px 12px;
-  border-top: 1px solid var(--background-modifier-border);
+/* Unified input card */
+.ca-input-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+  margin: 8px 12px 10px;
   flex-shrink: 0;
+  transition: border-color 0.15s;
+}
+
+.ca-input-card:focus-within {
+  border-color: var(--interactive-accent);
 }
 
 .ca-input {
   width: 100%;
   resize: none;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  padding: 7px 10px;
+  border: none;
+  border-radius: 8px 8px 0 0;
+  padding: 10px 12px;
   font-size: 13px;
-  background: var(--background-secondary);
+  background: transparent;
   color: var(--text-normal);
   line-height: 1.4;
   max-height: 120px;
@@ -609,25 +614,38 @@
 
 .ca-input:focus {
   outline: none;
-  border-color: var(--interactive-accent);
 }
 
 .ca-input:disabled {
   opacity: 0.5;
 }
 
+/* Toolbar below textarea */
+.ca-input-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px 8px;
+}
+
+.ca-toolbar-left,
+.ca-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .ca-mic-btn {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid var(--background-modifier-border);
+  border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
   flex-shrink: 0;
   transition: all 0.15s;
 }
@@ -637,30 +655,36 @@
   color: var(--text-normal);
 }
 
+.ca-mic-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .ca-mic-btn.recording {
   background: #e54;
-  border-color: #e54;
   color: white;
   animation: ca-pulse 1s ease-in-out infinite;
 }
 
 .ca-mic-btn.processing {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .ca-send-btn {
+  width: 32px;
   height: 32px;
-  padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 50%;
   border: none;
   background: var(--interactive-accent);
   color: var(--text-on-accent);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   transition: opacity 0.15s;
+  padding: 0;
 }
 
 .ca-send-btn:disabled {
@@ -670,6 +694,12 @@
 
 .ca-send-btn:hover:not(:disabled) {
   opacity: 0.85;
+}
+
+/* Icon sizing */
+.ca-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 /* Markdown rendering in assistant messages */

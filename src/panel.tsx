@@ -1144,24 +1144,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         onSkillActivate={handleSkillActivate}
         showTooltips={settings.showTooltips}
         placeholder={isRecording ? "Recording..." : activeSkill?.autoPrompt ? "Press enter to run..." : "Ask anything... (@ to reference a file)"}
-      >
-        <button
-          className={`ca-mic-btn ${isRecording ? "recording" : ""} ${recorder.state === "processing" ? "processing" : ""}`}
-          onClick={handleMicClick}
-          disabled={isStreaming || recorder.state === "processing"}
-          aria-label={tip(isRecording ? "Stop recording" : "Record voice message")}
-        >
-          {recorder.state === "processing" ? "…" : isRecording ? "■" : "⏺"}
-        </button>
-        <button
-          className="ca-send-btn"
-          onClick={handleSend}
-          disabled={isStreaming || isRecording || !input.trim()}
-          aria-label={tip("Send message")}
-        >
-          ↑
-        </button>
-      </InputArea>
+        onMicClick={handleMicClick}
+        micState={recorder.state === "processing" ? "processing" : isRecording ? "recording" : "idle"}
+        isSendDisabled={isStreaming || isRecording || !input.trim()}
+      />
     </div>
   );
 }
