@@ -3,6 +3,7 @@ import { Message } from "./claude";
 import { OpenBrainSettings } from "./settings";
 import { createFromTemplate } from "./templates";
 import * as cli from "./obsidianCli";
+import { startTimer } from "./perf";
 
 // ── Interfaces ──────────────────────────────────────────────────────────
 
@@ -170,6 +171,7 @@ export async function saveChat(
   messages: Message[],
   meta: ChatMeta
 ): Promise<string> {
+  const done = startTimer("chat-save", { messages: messages.length });
   try {
     const content = serializeChat(messages, meta);
 
@@ -193,8 +195,10 @@ export async function saveChat(
       await app.vault.create(path, content);
     }
 
+    done();
     return path;
   } catch (err: unknown) {
+    done();
     const message = err instanceof Error ? err.message : String(err);
     new Notice(`Failed to save chat: ${message}`);
     throw err;

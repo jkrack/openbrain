@@ -1,6 +1,7 @@
 import { OpenBrainSettings } from "./settings";
 import { spawn, execSync, ChildProcess } from "child_process";
 import { requestUrl } from "obsidian";
+import { startTimer } from "./perf";
 
 export interface Message {
   id: string;
@@ -138,6 +139,8 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
   proc.stdin.end();
 
   // Parse streaming JSON output
+  const doneSpawn = startTimer("cli-spawn-to-first-token");
+  const doneTotal = startTimer("cli-total-response");
   let buffer = "";
   let resultSessionId: string | undefined;
   let receivedDeltas = false;
@@ -158,6 +161,7 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
           parsed.type === "content_block_delta" &&
           delta?.type === "text_delta"
         ) {
+          if (!receivedDeltas) doneSpawn(); // first token received
           receivedDeltas = true;
           opts.onChunk(delta.text as string);
         }
@@ -186,7 +190,7 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
   });
 
   let settled = false;
-  const settle = () => { settled = true; };
+  const settle = () => { settled = true; doneTotal(); };
 
   proc.on("close", (code) => {
     if (settled) return;

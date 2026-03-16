@@ -1,4 +1,5 @@
 import { App } from "obsidian";
+import { startTimer } from "./perf";
 
 /**
  * Smart context: automatically find vault notes relevant to the user's message.
@@ -52,8 +53,9 @@ export function findRelevantFiles(
   message: string,
   limit = 5
 ): string[] {
+  const done = startTimer("smart-context", { messageLength: message.length });
   const keywords = extractKeywords(message);
-  if (keywords.length === 0) return [];
+  if (keywords.length === 0) { done(); return []; }
 
   // Take top 5 keywords to avoid too many searches
   const searchTerms = keywords.slice(0, 5);
@@ -101,10 +103,12 @@ export function findRelevantFiles(
   }
 
   // Sort by score descending, return top N paths
-  return Array.from(fileScores.entries())
+  const results = Array.from(fileScores.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([path]) => path);
+  done();
+  return results;
 }
 
 /**

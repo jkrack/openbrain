@@ -8,6 +8,7 @@ import { initVault } from "./initVault";
 import { configure as configureObsidianCli } from "./obsidianCli";
 import { encrypt, decrypt } from "./secureStorage";
 import { OpenClawNode } from "./openclawNode";
+import { logSummary as logPerfSummary } from "./perf";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -154,6 +155,15 @@ export default class OpenBrainPlugin extends Plugin {
       name: "Quick capture to daily note",
       callback: () => {
         new QuickCaptureModal(this.app, this.settings).open();
+      },
+    });
+
+    this.addCommand({
+      id: "perf-summary",
+      name: "Show performance summary",
+      callback: () => {
+        logPerfSummary();
+        new Notice("Performance summary logged to console (Cmd+Opt+I)");
       },
     });
 
