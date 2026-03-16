@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "minAppVersion": "1.7.0",
   "description": "AI-powered vault assistant with chat, voice recording, skills, daily note integration, and knowledge management.",
-  "author": "James Lane",
-  "authorUrl": "https://github.com/jlane",
+  "author": "jkrack",
+  "authorUrl": "https://github.com/jkrack",
   "isDesktopOnly": true
 }
