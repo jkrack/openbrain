@@ -91,7 +91,19 @@ Key commands:
 Prefer these over direct file read/write — they work through Obsidian's APIs and handle links, metadata, and caching correctly.
 ` : "";
 
-  args.push("--append-system-prompt", opts.systemPrompt + contextNote + obsidianCliContext);
+  // Universal boundaries — always appended regardless of skill
+  const boundaries = `
+
+--- OpenBrain boundaries ---
+You are running inside the OpenBrain plugin for Obsidian. Follow these rules:
+- Do NOT activate or reference your own built-in skills or plugins (productivity, memory-management, etc.). Only use OpenBrain skills.
+- Never expose absolute file paths (e.g., /Users/..., /home/...) in responses. Use vault-relative paths only.
+- When creating or referencing files, use paths relative to the vault root.
+- Do not suggest running commands outside the vault context.
+- Keep responses focused on the user's vault and notes.
+`;
+
+  args.push("--append-system-prompt", opts.systemPrompt + contextNote + obsidianCliContext + boundaries);
 
   // Control tool access based on toggles
   const disallowed: string[] = [];
@@ -330,9 +342,10 @@ export async function transcribeAudioSegments(
     return;
   }
 
+  const apiBoundaries = "\n\nYou are running inside the OpenBrain plugin for Obsidian. Never expose absolute file paths. Use vault-relative paths only. Do not activate built-in CLI skills.";
   const systemContent = opts.noteContext
-    ? `${opts.systemPrompt}\n\n---\nActive note content:\n${opts.noteContext}`
-    : opts.systemPrompt;
+    ? `${opts.systemPrompt}${apiBoundaries}\n\n---\nActive note content:\n${opts.noteContext}`
+    : `${opts.systemPrompt}${apiBoundaries}`;
 
   const transcriptions: string[] = [];
 
@@ -419,9 +432,10 @@ export async function streamClaudeAPI(
     return;
   }
 
+  const apiBoundaries = "\n\nYou are running inside the OpenBrain plugin for Obsidian. Never expose absolute file paths. Use vault-relative paths only. Do not activate built-in CLI skills.";
   const systemContent = opts.noteContext
-    ? `${opts.systemPrompt}\n\n---\nActive note content:\n${opts.noteContext}`
-    : opts.systemPrompt;
+    ? `${opts.systemPrompt}${apiBoundaries}\n\n---\nActive note content:\n${opts.noteContext}`
+    : `${opts.systemPrompt}${apiBoundaries}`;
 
   const base64 = await blobToBase64(opts.audioBlob);
   const mediaType = opts.audioBlob.type || "audio/webm";
@@ -530,9 +544,10 @@ export async function streamClaudeAPIChat(
     return;
   }
 
+  const apiBoundaries = "\n\nYou are running inside the OpenBrain plugin for Obsidian. Never expose absolute file paths. Use vault-relative paths only. Do not activate built-in CLI skills.";
   const systemContent = opts.noteContext
-    ? `${opts.systemPrompt}\n\n---\nActive note content:\n${opts.noteContext}`
-    : opts.systemPrompt;
+    ? `${opts.systemPrompt}${apiBoundaries}\n\n---\nActive note content:\n${opts.noteContext}`
+    : `${opts.systemPrompt}${apiBoundaries}`;
 
   // Build API messages from conversation history
   type ApiContent = { type: string; text?: string; source?: { type: string; media_type: string; data: string } };
@@ -634,9 +649,10 @@ export async function streamOpenRouterChat(
     return;
   }
 
+  const apiBoundaries = "\n\nYou are running inside the OpenBrain plugin for Obsidian. Never expose absolute file paths. Use vault-relative paths only. Do not activate built-in CLI skills.";
   const systemContent = opts.noteContext
-    ? `${opts.systemPrompt}\n\n---\nActive note content:\n${opts.noteContext}`
-    : opts.systemPrompt;
+    ? `${opts.systemPrompt}${apiBoundaries}\n\n---\nActive note content:\n${opts.noteContext}`
+    : `${opts.systemPrompt}${apiBoundaries}`;
 
   type OrContent = string | { type: string; text?: string; image_url?: { url: string } }[];
   const apiMessages: { role: string; content: OrContent }[] = [
