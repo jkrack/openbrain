@@ -444,7 +444,7 @@ function copyGlob(
 function rmrf(path: string): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile("rm", ["-rf", path], (err) => {
-      if (err) reject(err);
+      if (err) reject(new Error(`rm -rf failed: ${err.message}`));
       else resolve();
     });
   });

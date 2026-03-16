@@ -81,6 +81,7 @@ export class OpenBrainView extends ItemView {
     }
   };
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- base class requires Promise<void> return type
   async onOpen() {
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
@@ -115,6 +116,7 @@ export class OpenBrainView extends ItemView {
     );
   }
 
+  // eslint-disable-next-line @typescript-eslint/require-await -- base class requires Promise<void> return type
   async onClose() {
     this.root?.unmount();
     this.root = null;

@@ -68,7 +68,7 @@ export default class OpenBrainPlugin extends Plugin {
     );
 
     this.addRibbonIcon("brain", "OpenBrain", () => {
-      this.activateView();
+      void this.activateView();
     });
 
     // Status bar item
@@ -79,7 +79,7 @@ export default class OpenBrainPlugin extends Plugin {
     this.addCommand({
       id: "open-panel",
       name: "Open panel",
-      callback: () => this.activateView(),
+      callback: () => void this.activateView(),
     });
 
     this.addCommand({
@@ -88,7 +88,7 @@ export default class OpenBrainPlugin extends Plugin {
       editorCallback: (editor) => {
         const selection = editor.getSelection();
         if (selection) {
-          this.activateView(selection);
+          void this.activateView(selection);
         }
       },
     });
@@ -103,7 +103,7 @@ export default class OpenBrainPlugin extends Plugin {
           view.toggleRecording();
         } else {
           // Open the panel first, then toggle
-          this.activateView();
+          void this.activateView();
         }
       },
     });
@@ -113,7 +113,7 @@ export default class OpenBrainPlugin extends Plugin {
       name: "Open chat history",
       callback: () => {
         const basePath = `${this.settings.chatFolder}/Chat History.base`;
-        this.app.workspace.openLinkText(basePath, "");
+        void this.app.workspace.openLinkText(basePath, "");
       },
     });
 
@@ -448,7 +448,7 @@ class ChatSearchModal extends Modal {
       row.createSpan({ text: match.title, cls: "ca-chat-search-title" });
       row.createSpan({ text: match.skill, cls: "ca-chat-search-skill" });
       row.addEventListener("click", () => {
-        this.app.workspace.openLinkText(match.file.path, "");
+        void this.app.workspace.openLinkText(match.file.path, "");
         this.close();
       });
     }
@@ -478,7 +478,7 @@ class ChatSearchModal extends Modal {
       row.createSpan({ text: match.title, cls: "ca-chat-search-title" });
       row.createSpan({ text: `...${match.snippet}...`, cls: "ca-chat-search-snippet" });
       row.addEventListener("click", () => {
-        this.app.workspace.openLinkText(match.file.path, "");
+        void this.app.workspace.openLinkText(match.file.path, "");
         this.close();
       });
     }

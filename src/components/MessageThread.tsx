@@ -14,7 +14,7 @@ function MarkdownBlock({ markdown, app, component }: { markdown: string; app: Ap
     const el = elRef.current;
     if (!el) return;
     el.empty();
-    MarkdownRenderer.render(app, markdown, el, "", component);
+    void MarkdownRenderer.render(app, markdown, el, "", component);
   }, [markdown]);
 
   return <div ref={elRef} className="ca-markdown" />;

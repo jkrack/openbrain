@@ -349,7 +349,7 @@ export async function runSkillInBackground(
         new Notice(`OpenBrain: ${skill.name} failed — ${err}`, 8000);
         resolve();
       },
-      onDone: async () => {
+      onDone: () => { void (async () => {
         if (response.trim() && skill.postActions.length > 0) {
           const results = await executePostActions(app, skill.postActions, response);
           const failures = results.filter((r) => !r.success);
@@ -362,7 +362,7 @@ export async function runSkillInBackground(
           new Notice(`OpenBrain: ${skill.name} complete`, 3000);
         }
         resolve();
-      },
+      })(); },
     });
   });
 }

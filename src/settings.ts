@@ -85,7 +85,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("claude")
           .setValue(this.plugin.settings.claudePath)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.claudePath = value;
             await this.plugin.saveSettings();
             // Validate the path
@@ -99,7 +99,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             } catch { /* expected — CLI may not be installed */
               new Notice("Claude Code CLI not found at this path.");
             }
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -112,10 +112,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("obsidian")
           .setValue(this.plugin.settings.obsidianCliPath)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.obsidianCliPath = value || "obsidian";
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -129,10 +129,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("sk-ant-...")
           .setValue(this.plugin.settings.apiKey)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.apiKey = value;
             await this.plugin.saveSettings();
-          });
+          })(); });
         text.inputEl.type = "password";
         text.inputEl.autocomplete = "off";
         return text;
@@ -147,10 +147,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           .addOption("claude-sonnet-4-20250514", "Claude Sonnet 4")
           .addOption("claude-opus-4-20250514", "Claude Opus 4")
           .setValue(this.plugin.settings.model)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.model = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     // ── Chat Mode Provider ──
@@ -164,11 +164,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           .addOption("anthropic", "Anthropic (Claude)")
           .addOption("openrouter", "OpenRouter (any model)")
           .setValue(this.plugin.settings.chatProvider)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.chatProvider = value as "anthropic" | "openrouter";
             await this.plugin.saveSettings();
             this.display();
-          })
+          })(); })
       );
 
     if (this.plugin.settings.chatProvider === "openrouter") {
@@ -179,10 +179,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           text
             .setPlaceholder("sk-or-...")
             .setValue(this.plugin.settings.openrouterApiKey)
-            .onChange(async (value) => {
+            .onChange((value) => { void (async () => {
               this.plugin.settings.openrouterApiKey = value;
               await this.plugin.saveSettings();
-            });
+            })(); });
           text.inputEl.type = "password";
           text.inputEl.autocomplete = "off";
           return text;
@@ -198,10 +198,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           text
             .setPlaceholder("anthropic/claude-sonnet-4-20250514")
             .setValue(this.plugin.settings.openrouterModel)
-            .onChange(async (value) => {
+            .onChange((value) => { void (async () => {
               this.plugin.settings.openrouterModel = value;
               await this.plugin.saveSettings();
-            })
+            })(); })
         );
     }
 
@@ -214,10 +214,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.includeActiveNote)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.includeActiveNote = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -226,10 +226,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.transcribeOnStop)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.transcribeOnStop = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -238,10 +238,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addTextArea((text) =>
         text
           .setValue(this.plugin.settings.systemPrompt)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.systemPrompt = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     // ── Permissions ──
@@ -261,10 +261,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.allowVaultWrite)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.allowVaultWrite = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -277,10 +277,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.allowCliExec)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.allowCliExec = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     // ── Folders ──
@@ -293,10 +293,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("OpenBrain/skills")
           .setValue(this.plugin.settings.skillsFolder)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.skillsFolder = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -309,10 +309,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("0. Daily/{{YYYY}}/{{MM}}")
           .setValue(this.plugin.settings.dailyNoteFolder)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.dailyNoteFolder = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -325,10 +325,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("YYYY-MM-DD")
           .setValue(this.plugin.settings.dailyNoteFormat)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.dailyNoteFormat = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     // --- Local Speech-to-Text Section ---
@@ -343,11 +343,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.useLocalStt)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.useLocalStt = value;
             await this.plugin.saveSettings();
             this.display(); // Re-render to show/hide STT options
-          })
+          })(); })
       );
 
     if (this.plugin.settings.useLocalStt) {
@@ -360,10 +360,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           text
             .setPlaceholder("~/.openbrain")
             .setValue(this.plugin.settings.sttHomePath)
-            .onChange(async (value) => {
+            .onChange((value) => { void (async () => {
               this.plugin.settings.sttHomePath = value;
               await this.plugin.saveSettings();
-            })
+            })(); })
         );
 
       // Installation status + install button
@@ -391,10 +391,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.showTooltips)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.showTooltips = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     // ── Chat History ──
@@ -407,10 +407,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         text
           .setPlaceholder("OpenBrain/chats")
           .setValue(this.plugin.settings.chatFolder)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.chatFolder = value || "OpenBrain/chats";
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -419,10 +419,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.includeRecentChats)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.includeRecentChats = value;
             await this.plugin.saveSettings();
-          })
+          })(); })
       );
 
     new Setting(containerEl)
@@ -447,11 +447,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.openclawEnabled)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.openclawEnabled = value;
             await this.plugin.saveSettings();
             this.display(); // Re-render to show/hide URL field
-          })
+          })(); })
       );
 
     if (this.plugin.settings.openclawEnabled) {
@@ -462,10 +462,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           text
             .setPlaceholder("ws://127.0.0.1:18789")
             .setValue(this.plugin.settings.openclawGatewayUrl)
-            .onChange(async (value) => {
+            .onChange((value) => { void (async () => {
               this.plugin.settings.openclawGatewayUrl = value || "ws://127.0.0.1:18789";
               await this.plugin.saveSettings();
-            })
+            })(); })
         );
     }
   }
@@ -542,10 +542,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
         drop
           .setValue(this.plugin.settings.audioDeviceId)
-          .onChange(async (value) => {
+          .onChange((value) => { void (async () => {
             this.plugin.settings.audioDeviceId = value;
             await this.plugin.saveSettings();
-          });
+          })(); });
       });
     } catch { /* expected — microphone permission may not be granted */
       setting.setDesc(

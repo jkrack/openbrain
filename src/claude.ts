@@ -448,7 +448,7 @@ export async function streamClaudeAPI(
   ];
 
   try {
-    // requestUrl does not support streaming responses required for real-time chat
+    // eslint-disable-next-line no-restricted-globals -- requestUrl does not support streaming responses needed for real-time chat
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -552,7 +552,7 @@ export async function streamClaudeAPIChat(
   });
 
   try {
-    // requestUrl does not support streaming responses required for real-time chat
+    // eslint-disable-next-line no-restricted-globals -- requestUrl does not support streaming responses needed for real-time chat
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -655,7 +655,7 @@ export async function streamOpenRouterChat(
   }
 
   try {
-    // requestUrl does not support streaming responses required for real-time chat
+    // eslint-disable-next-line no-restricted-globals -- requestUrl does not support streaming responses needed for real-time chat
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {

@@ -191,7 +191,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
   // Handle image paste (Cmd+V)
   useEffect(() => {
-    const handlePaste = async (e: ClipboardEvent) => {
+    const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
       if (!items) return;
 
@@ -280,7 +280,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
     if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
 
-    debouncedSaveRef.current = setTimeout(async () => {
+    debouncedSaveRef.current = setTimeout(() => { void (async () => {
       const meta = buildMeta();
       const folder = settings.chatFolder || "OpenBrain/chats";
       const currentPath = chatFilePathRef.current;
@@ -297,7 +297,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         const section = skill?.dailyNoteSection || "Capture";
         void linkInDailyNote(app, path, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
       }
-    }, 500);
+    })(); }, 500);
 
     return () => {
       if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
@@ -565,7 +565,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                 if (!abortRef.current) appendAssistantChunk(analysisId, chunk);
               },
               onError: callbacks.onError,
-              onDone: async (newSessionId?: string) => {
+              onDone: (newSessionId?: string) => { void (async () => {
                 setIsStreaming(false);
                 procRef.current = null;
                 if (newSessionId) setSessionId(newSessionId);
@@ -573,7 +573,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                 setAudioPrompt("");
                 setShowAudioPrompt(false);
                 await runPostActions();
-              },
+              })(); },
             });
             procRef.current = proc;
           } else {
@@ -614,7 +614,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
               );
             }
           },
-          onDone: audioDone,
+          onDone: () => void audioDone(),
         });
       } else if (hasAudioInput) {
         // --- Existing single-segment API path ---
@@ -625,7 +625,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           noteContext,
           audioBlob: audioSegments[0],
           audioPrompt: audioPrompt || "Transcribe this audio. If there are action items or key points, note them after the transcription.",
-          onDone: audioDone,
+          onDone: () => void audioDone(),
         });
       } else if (chatMode === "chat") {
         // --- Chat mode ---
@@ -709,7 +709,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             allowWrite: false,
             allowCli: false,
             vaultPath,
-            onDone: async (newSessionId?: string) => {
+            onDone: (newSessionId?: string) => {
               setIsStreaming(false);
               procRef.current = null;
               if (newSessionId) setSessionId(newSessionId);
@@ -753,7 +753,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           allowWrite: effectiveWrite,
           allowCli: effectiveCli,
           vaultPath,
-          onDone: async (newSessionId?: string) => {
+          onDone: (newSessionId?: string) => { void (async () => {
             setIsStreaming(false);
             procRef.current = null;
             if (newSessionId) setSessionId(newSessionId);
@@ -761,7 +761,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             setAudioPrompt("");
             setShowAudioPrompt(false);
             await runPostActions();
-          },
+          })(); },
         });
         procRef.current = proc;
       }
@@ -845,7 +845,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
   // Keep a ref to handleMicClick so the toggle registration can use it
   const handleMicClickRef = useRef<(() => void) | null>(null);
-  handleMicClickRef.current = handleMicClick;
+  handleMicClickRef.current = () => void handleMicClick();
 
   const handleSendAudio = () => {
     if (recorder.audioSegments.length > 0) {
@@ -877,7 +877,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       const currentSkillId = activeSkillIdRef.current;
       const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
       const section = skill?.dailyNoteSection || "Capture";
-      linkInDailyNote(app, chatFilePath, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
+      void linkInDailyNote(app, chatFilePath, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
 
       // Extract action items and add to daily note
       extractActionItems(messages, settings);
