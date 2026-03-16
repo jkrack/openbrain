@@ -170,26 +170,32 @@ export default class OpenBrainPlugin extends Plugin {
 
     // Reload skills when files change in skills folder
     this.registerEvent(
-      this.app.vault.on("modify", async (file) => {
+      this.app.vault.on("modify", (file) => {
         if (file.path.startsWith(this.settings.skillsFolder)) {
-          this.skills = await loadSkills(this.app, this.settings.skillsFolder);
-          this.refreshViews();
+          void (async () => {
+            this.skills = await loadSkills(this.app, this.settings.skillsFolder);
+            this.refreshViews();
+          })();
         }
       })
     );
     this.registerEvent(
-      this.app.vault.on("create", async (file) => {
+      this.app.vault.on("create", (file) => {
         if (file.path.startsWith(this.settings.skillsFolder)) {
-          this.skills = await loadSkills(this.app, this.settings.skillsFolder);
-          this.refreshViews();
+          void (async () => {
+            this.skills = await loadSkills(this.app, this.settings.skillsFolder);
+            this.refreshViews();
+          })();
         }
       })
     );
     this.registerEvent(
-      this.app.vault.on("delete", async (file) => {
+      this.app.vault.on("delete", (file) => {
         if (file.path.startsWith(this.settings.skillsFolder)) {
-          this.skills = await loadSkills(this.app, this.settings.skillsFolder);
-          this.refreshViews();
+          void (async () => {
+            this.skills = await loadSkills(this.app, this.settings.skillsFolder);
+            this.refreshViews();
+          })();
         }
       })
     );
