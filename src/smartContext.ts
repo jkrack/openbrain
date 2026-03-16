@@ -1,5 +1,4 @@
 import { App } from "obsidian";
-import * as cli from "./obsidianCli";
 
 /**
  * Smart context: automatically find vault notes relevant to the user's message.
@@ -60,28 +59,10 @@ export function findRelevantFiles(
   const searchTerms = keywords.slice(0, 5);
 
   // Score files by how many search terms they match
+  // Uses in-memory metadataCache to avoid spawning CLI processes
   const fileScores = new Map<string, number>();
 
-  // Try Obsidian CLI search first (fast, full-text)
-  if (cli.isAvailable()) {
-    for (const term of searchTerms) {
-      const result = cli.search(term);
-      if (!result) continue;
-
-      // Parse CLI output — typically one file path per line
-      const lines = result.split("\n").filter(Boolean);
-      for (const line of lines) {
-        const path = line.trim();
-        if (!path.endsWith(".md")) continue;
-        // Skip chat files and templates
-        if (path.includes("OpenBrain/chats/") || path.includes("OpenBrain/templates/")) continue;
-        fileScores.set(path, (fileScores.get(path) || 0) + 1);
-      }
-    }
-  }
-
-  // Fallback: search via metadataCache if CLI not available
-  if (fileScores.size === 0) {
+  {
     const allFiles = app.vault.getMarkdownFiles();
     for (const file of allFiles) {
       if (file.path.includes("OpenBrain/chats/") || file.path.includes("OpenBrain/templates/")) continue;
@@ -106,26 +87,13 @@ export function findRelevantFiles(
     }
   }
 
-  // Also check backlinks for any directly mentioned files
-  if (cli.isAvailable()) {
+  // Boost files whose basename exactly matches a keyword (person, project names)
+  {
+    const allFiles = app.vault.getMarkdownFiles();
     for (const term of searchTerms) {
-      // Look for notes whose basename matches a keyword (likely a person, project, etc.)
-      const allFiles = app.vault.getMarkdownFiles();
       for (const file of allFiles) {
         if (file.basename.toLowerCase() === term) {
-          // Boost this file significantly
           fileScores.set(file.path, (fileScores.get(file.path) || 0) + 5);
-
-          // Also find its backlinks
-          const links = cli.backlinks(file.path);
-          if (links) {
-            for (const line of links.split("\n").filter(Boolean)) {
-              const path = line.trim();
-              if (path.endsWith(".md") && !path.includes("OpenBrain/chats/")) {
-                fileScores.set(path, (fileScores.get(path) || 0) + 2);
-              }
-            }
-          }
           break;
         }
       }

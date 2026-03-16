@@ -1,10 +1,12 @@
 import { execSync } from "child_process";
 
 let cliPath = "obsidian";
+let availableCache: boolean | null = null;
 
 /** Set the Obsidian CLI path from settings. */
 export function configure(path: string): void {
   cliPath = path || "obsidian";
+  availableCache = null; // reset cache on config change
 }
 
 /**
@@ -143,5 +145,7 @@ export function backlinks(file: string): string | null {
 
 /** Check if the Obsidian CLI is available. */
 export function isAvailable(): boolean {
-  return exec("version") !== null;
+  if (availableCache !== null) return availableCache;
+  availableCache = exec("version") !== null;
+  return availableCache;
 }

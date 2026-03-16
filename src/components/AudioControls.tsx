@@ -47,7 +47,8 @@ export function AudioControls({
               points={recorder.waveformData
                 .map((v, i) => {
                   const x = (i / (recorder.waveformData.length - 1)) * 200;
-                  const y = 20 - v * 16 + (20 - 20); // center line ± amplitude
+                  const amp = Math.min(v * 48, 18); // larger amplitude, capped
+                  const y = 20 - amp;
                   return `${x},${y}`;
                 })
                 .join(" ")}
@@ -61,7 +62,8 @@ export function AudioControls({
               points={recorder.waveformData
                 .map((v, i) => {
                   const x = (i / (recorder.waveformData.length - 1)) * 200;
-                  const y = 20 + v * 16;
+                  const amp = Math.min(v * 48, 18);
+                  const y = 20 + amp;
                   return `${x},${y}`;
                 })
                 .join(" ")}
