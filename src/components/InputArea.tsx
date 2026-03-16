@@ -51,7 +51,6 @@ export function InputArea({
   const [slashIndex, setSlashIndex] = useState(0);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
-
   const tip = (text: string) => (showTooltips ? text : undefined);
 
   // Detect @ mentions and / commands from input

@@ -24,26 +24,15 @@ function CopyButton({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = content;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }, [content]);
 
   return (
     <button
       className={`ca-copy-btn ${copied ? "copied" : ""}`}
-      onClick={handleCopy}
+      onClick={() => void handleCopy()}
       title={copied ? "Copied!" : "Copy as markdown"}
     >
       <ObsidianIcon name={copied ? "check" : "copy"} />

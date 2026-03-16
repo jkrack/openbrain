@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
+import { execSync } from "child_process";
 import OpenBrainPlugin from "./main";
 
 export interface OpenBrainSettings {
@@ -72,7 +73,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     // ── Setup ──
-    containerEl.createEl("h3", { text: "Setup" });
+    new Setting(containerEl).setName("Setup").setHeading();
 
     new Setting(containerEl)
       .setName("Claude Code CLI")
@@ -89,14 +90,13 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
             // Validate the path
             try {
-              const { execSync } = require("child_process");
               const home = process.env.HOME || "";
               const env = {
                 ...process.env,
                 PATH: ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`, `${home}/.nvm/versions/node`, process.env.PATH].filter(Boolean).join(":"),
               };
               execSync(`${value || "claude"} --version`, { timeout: 5000, encoding: "utf-8", env });
-            } catch {
+            } catch { /* expected — CLI may not be installed */
               new Notice("Claude Code CLI not found at this path.");
             }
           })
@@ -154,7 +154,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     // ── Chat Mode Provider ──
-    containerEl.createEl("h3", { text: "Chat mode" });
+    new Setting(containerEl).setName("Chat mode").setHeading();
 
     new Setting(containerEl)
       .setName("Provider")
@@ -206,7 +206,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     }
 
     // ── Behavior ──
-    containerEl.createEl("h3", { text: "Behavior" });
+    new Setting(containerEl).setName("Behavior").setHeading();
 
     new Setting(containerEl)
       .setName("Include active note as context")
@@ -245,7 +245,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     // ── Permissions ──
-    containerEl.createEl("h3", { text: "Permissions" });
+    new Setting(containerEl).setName("Permissions").setHeading();
     containerEl.createEl("p", {
       text: "These control what Claude can do. Start with both off and enable as needed.",
       cls: "setting-item-description",
@@ -284,7 +284,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     // ── Folders ──
-    containerEl.createEl("h3", { text: "Folders" });
+    new Setting(containerEl).setName("Folders").setHeading();
 
     new Setting(containerEl)
       .setName("Skills folder")
@@ -332,7 +332,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     // --- Local Speech-to-Text Section ---
-    containerEl.createEl("h3", { text: "Local Speech-to-Text" });
+    new Setting(containerEl).setName("Local speech-to-text").setHeading();
 
     new Setting(containerEl)
       .setName("Use local transcription")
@@ -373,7 +373,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     }
 
     // --- Audio Input Section ---
-    containerEl.createEl("h3", { text: "Audio Input" });
+    new Setting(containerEl).setName("Audio input").setHeading();
 
     const micSetting = new Setting(containerEl)
       .setName("Microphone")
@@ -383,7 +383,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     this.populateMicDropdown(micSetting);
 
     // ── Interface ──
-    containerEl.createEl("h3", { text: "Interface" });
+    new Setting(containerEl).setName("Interface").setHeading();
 
     new Setting(containerEl)
       .setName("Show tooltips")
@@ -398,7 +398,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     // ── Chat History ──
-    containerEl.createEl("h3", { text: "Chat History" });
+    new Setting(containerEl).setName("Chat history").setHeading();
 
     new Setting(containerEl)
       .setName("Chat folder")
@@ -436,7 +436,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     // ── OpenClaw ──
-    containerEl.createEl("h3", { text: "OpenClaw" });
+    new Setting(containerEl).setName("OpenClaw").setHeading();
 
     new Setting(containerEl)
       .setName("Enable OpenClaw integration")
@@ -507,18 +507,20 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
             // Re-render to show updated status
             this.display();
-          } catch (err: any) {
-            progressEl.setText(`Installation failed: ${err.message}`);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            progressEl.setText(`Installation failed: ${message}`);
             progressEl.addClass("ca-stt-missing");
             installBtn.disabled = false;
             installBtn.setText("Retry installation");
           }
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       el.empty();
+      const message = err instanceof Error ? err.message : String(err);
       el.createSpan({
-        text: `Error checking installation: ${err.message}`,
+        text: `Error checking installation: ${message}`,
         cls: "ca-stt-missing",
       });
     }
@@ -545,7 +547,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
       });
-    } catch {
+    } catch { /* expected — microphone permission may not be granted */
       setting.setDesc(
         "Could not enumerate audio devices. Grant microphone permission first."
       );

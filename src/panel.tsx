@@ -6,7 +6,7 @@ import { Skill, executePostActions } from "./skills";
 import { transcribeBlob, transcribeSegments } from "./stt";
 import { RecordingStatus } from "./view";
 import { App, Component, Notice } from "obsidian";
-import { ChildProcess } from "child_process";
+import { execSync, ChildProcess } from "child_process";
 import {
   ChatMeta,
   saveChat,
@@ -19,7 +19,7 @@ import {
 } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 import { buildSmartContext } from "./smartContext";
-import { PersonProfile, loadPeople, getRecentOneOnOnes, getPersonMeetingFolder } from "./people";
+import { PersonProfile, loadPeople, getPersonMeetingFolder } from "./people";
 import { createFromTemplate } from "./templates";
 import { ChatHeader } from "./components/ChatHeader";
 import { PersonPicker } from "./components/PersonPicker";
@@ -42,6 +42,13 @@ interface PanelProps {
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+/** Obsidian's internal settings API — not publicly typed. */
+interface ObsidianSettingsApi {
+  open: () => void;
+  openTabById: (id: string) => void;
+  pluginTabs?: { id: string; plugin?: { settings: Record<string, unknown>; saveSettings: () => void } }[];
 }
 
 interface SetupStatus {
@@ -84,7 +91,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const [showPersonPicker, setShowPersonPicker] = useState(false);
   const [people, setPeople] = useState<PersonProfile[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<PersonProfile | null>(null);
-  const [personNotePath, setPersonNotePath] = useState<string | null>(null);
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
@@ -95,7 +101,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const activeSkillIdRef = useRef(activeSkillId);
   activeSkillIdRef.current = activeSkillId;
 
-  const vaultPath = (app.vault.adapter as any).basePath as string | undefined;
+  const vaultPath = (app.vault.adapter as unknown as { basePath?: string }).basePath;
 
   const threadRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<boolean>(false);
@@ -103,9 +109,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const responseRef = useRef<string>("");
 
   const recorder = useAudioRecorder();
-
-  // Tooltip helper — returns title prop only if tooltips enabled
-  const tip = (text: string) => settings.showTooltips ? text : undefined;
 
   const activeSkill = skills.find((s) => s.id === activeSkillId) || null;
 
@@ -120,7 +123,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const [setupDismissed, setSetupDismissed] = useState(false);
   useEffect(() => {
     const check = () => {
-      const { execSync } = require("child_process");
       const home = process.env.HOME || "";
       const extraPaths = [
         "/usr/local/bin",
@@ -138,13 +140,13 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         const claudePath = settings.claudePath || "claude";
         execSync(`${claudePath} --version`, { timeout: 5000, encoding: "utf-8", env });
         claudeCli = true;
-      } catch {}
+      } catch { /* expected — CLI may not be installed */ }
 
       let obsidianCli = false;
       try {
         execSync("obsidian version", { timeout: 5000, encoding: "utf-8", env });
         obsidianCli = true;
-      } catch {}
+      } catch { /* expected — CLI may not be installed */ }
 
       setSetupStatus({ claudeCli, obsidianCli, apiKey: !!settings.apiKey });
     };
@@ -293,7 +295,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         const currentSkillId = activeSkillIdRef.current;
         const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
         const section = skill?.dailyNoteSection || "Capture";
-        linkInDailyNote(app, path, section, meta.title, settings).catch(() => {});
+        linkInDailyNote(app, path, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
       }
     }, 500);
 
@@ -306,7 +308,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   useEffect(() => {
     if (!loadChatRequest) return;
 
-    (async () => {
+    void (async () => {
       const chatFile = await loadChat(app, loadChatRequest.path);
       if (chatFile) {
         justLoadedRef.current = true;
@@ -326,7 +328,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
   // Manual save handler
   // Extract action items from conversation and add to daily note
-  const extractActionItems = async (msgs: Message[], s: OpenBrainSettings) => {
+  const extractActionItems = (msgs: Message[], s: OpenBrainSettings) => {
     if (msgs.length < 2) return;
 
     // Look for action items in assistant messages
@@ -345,7 +347,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     const unique = [...new Set(items)];
     const taskBlock = unique.join("\n");
 
-    appendToDailySection(app, taskBlock, "Capture", s).catch(() => {});
+    appendToDailySection(app, taskBlock, "Capture", s).catch(() => { /* expected — best-effort daily note update */ });
   };
 
   // Recent chat context injection helper
@@ -582,9 +584,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             setAudioPrompt("");
             setShowAudioPrompt(false);
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const errMessage = err instanceof Error ? err.message : String(err);
           callbacks.onError(
-            `Local transcription failed: ${err.message}\n` +
+            `Local transcription failed: ${errMessage}\n` +
               "Check that sherpa-onnx is installed via Settings > OpenBrain."
           );
           recorder.clearAudio();
@@ -781,7 +784,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       setShowPersonPicker(true);
     } else {
       setSelectedPerson(null);
-      setPersonNotePath(null);
     }
   };
 
@@ -799,14 +801,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     });
     if (!mountedRef.current) return;
     if (created) {
-      setPersonNotePath(created);
       // Link the 1:1 note in today's daily note under Meetings
-      linkInDailyNote(app, created, "Meetings", `1:1 — ${person.name}`, settings).catch(() => {});
+      linkInDailyNote(app, created, "Meetings", `1:1 — ${person.name}`, settings).catch(() => { /* expected — daily note may not exist */ });
     }
 
     // Build file references: person profile + recent 1:1 notes
     const filesToReference = [person.filePath];
-    const recentNotes = await getRecentOneOnOnes(app, person.name);
     if (!mountedRef.current) return;
 
     // Also reference the recent 1:1 note files directly
@@ -847,9 +847,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const handleMicClickRef = useRef<(() => void) | null>(null);
   handleMicClickRef.current = handleMicClick;
 
-  const handleSendAudio = async () => {
+  const handleSendAudio = () => {
     if (recorder.audioSegments.length > 0) {
-      sendMessage(audioPrompt || "Voice message", recorder.audioSegments);
+      void sendMessage(audioPrompt || "Voice message", recorder.audioSegments);
     }
   };
 
@@ -877,7 +877,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       const currentSkillId = activeSkillIdRef.current;
       const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
       const section = skill?.dailyNoteSection || "Capture";
-      linkInDailyNote(app, chatFilePath, section, meta.title, settings).catch(() => {});
+      linkInDailyNote(app, chatFilePath, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
 
       // Extract action items and add to daily note
       extractActionItems(messages, settings);
@@ -892,7 +892,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     }
     setIsStreaming(false);
     setSelectedPerson(null);
-    setPersonNotePath(null);
     setShowPersonPicker(false);
     onChatPathChange?.(null);
   };
@@ -940,7 +939,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         onToggleCli={() => setAllowCli((v) => !v)}
         onNewChat={clearConversation}
         onOpenSettings={() => {
-          const setting = (app as any).setting;
+          const setting = (app as unknown as { setting?: ObsidianSettingsApi }).setting;
           if (setting) {
             setting.open();
             setting.openTabById("open-brain");
@@ -977,7 +976,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
               className="ca-setup-link"
               onClick={(e) => {
                 e.preventDefault();
-                const setting = (app as any).setting;
+                const setting = (app as unknown as { setting?: ObsidianSettingsApi }).setting;
                 if (setting) { setting.open(); setting.openTabById("open-brain"); }
               }}
             >settings</a>.
@@ -1041,7 +1040,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                       className="ca-setup-link"
                       onClick={(e) => {
                         e.preventDefault();
-                        const setting = (app as any).setting;
+                        const setting = (app as unknown as { setting?: ObsidianSettingsApi }).setting;
                         if (setting) { setting.open(); setting.openTabById("open-brain"); }
                       }}
                     >settings</a>.
@@ -1072,8 +1071,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                     setOnboardingDone(true);
                     settings.onboardingComplete = true;
                     // Persist via plugin settings
-                    const setting = (app as any).setting;
-                    const plugin = setting?.pluginTabs?.find((t: any) => t.id === "open-brain")?.plugin;
+                    const setting = (app as unknown as { setting?: ObsidianSettingsApi }).setting;
+                    const plugin = setting?.pluginTabs?.find((t) => t.id === "open-brain")?.plugin;
                     if (plugin) {
                       plugin.settings.onboardingComplete = true;
                       plugin.saveSettings();

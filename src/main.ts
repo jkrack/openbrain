@@ -1,8 +1,8 @@
-import { Plugin, TFile, WorkspaceLeaf, Modal, Notice } from "obsidian";
+import { App, Plugin, TFile, WorkspaceLeaf, Modal, Notice, Setting } from "obsidian";
 import { OpenBrainView, OPEN_BRAIN_VIEW_TYPE, RecordingStatus } from "./view";
 import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./settings";
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
-import { appendToDailySection, parseChat } from "./chatHistory";
+import { appendToDailySection } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 import { initVault } from "./initVault";
 import { configure as configureObsidianCli } from "./obsidianCli";
@@ -77,14 +77,14 @@ export default class OpenBrainPlugin extends Plugin {
     this.updateStatusBar({ recording: false, transcribing: false, duration: 0 });
 
     this.addCommand({
-      id: "open-brain",
-      name: "Open OpenBrain panel",
+      id: "open-panel",
+      name: "Open panel",
       callback: () => this.activateView(),
     });
 
     this.addCommand({
-      id: "open-brain-with-selection",
-      name: "Send selection to OpenBrain",
+      id: "send-selection",
+      name: "Send selection to panel",
       editorCallback: (editor) => {
         const selection = editor.getSelection();
         if (selection) {
@@ -135,7 +135,7 @@ export default class OpenBrainPlugin extends Plugin {
             this.app.workspace.revealLeaf(leaves[0]);
           }
         } else {
-          this.activateView().then(() => {
+          void this.activateView().then(() => {
             const newLeaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
             if (newLeaves.length > 0) {
               const view = newLeaves[0].view;
@@ -209,11 +209,13 @@ export default class OpenBrainPlugin extends Plugin {
         if (triggered.length === 0) return;
 
         // Wait for Templater to process the template
-        setTimeout(async () => {
-          const noteContent = await this.app.vault.read(file);
-          for (const skill of triggered) {
-            await runSkillInBackground(this.app, this.settings, skill, noteContent);
-          }
+        setTimeout(() => {
+          void (async () => {
+            const noteContent = await this.app.vault.read(file);
+            for (const skill of triggered) {
+              await runSkillInBackground(this.app, this.settings, skill, noteContent);
+            }
+          })();
         }, 3000);
       })
     );
@@ -223,7 +225,7 @@ export default class OpenBrainPlugin extends Plugin {
     const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
     for (const leaf of leaves) {
       if (leaf.view instanceof OpenBrainView) {
-        const view = leaf.view as OpenBrainView;
+        const view = leaf.view;
         view.updateSkills(this.skills);
         view.vaultIndex = this.vaultIndex;
         view.rerender();
@@ -234,7 +236,7 @@ export default class OpenBrainPlugin extends Plugin {
   private getActiveOpenBrainView(): OpenBrainView | null {
     const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
     if (leaves.length > 0 && leaves[0].view instanceof OpenBrainView) {
-      return leaves[0].view as OpenBrainView;
+      return leaves[0].view;
     }
     return null;
   }
@@ -283,7 +285,7 @@ export default class OpenBrainPlugin extends Plugin {
     if (leaf) {
       workspace.revealLeaf(leaf);
       if (initialPrompt && leaf.view instanceof OpenBrainView) {
-        (leaf.view as OpenBrainView).setInitialPrompt(initialPrompt);
+        leaf.view.setInitialPrompt(initialPrompt);
       }
     }
   }
@@ -322,7 +324,7 @@ export default class OpenBrainPlugin extends Plugin {
 class QuickCaptureModal extends Modal {
   private settings: OpenBrainSettings;
 
-  constructor(app: any, settings: OpenBrainSettings) {
+  constructor(app: App, settings: OpenBrainSettings) {
     super(app);
     this.settings = settings;
   }
@@ -353,15 +355,15 @@ class QuickCaptureModal extends Modal {
     input.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        submit();
+        void submit();
       }
     });
 
     const btnRow = contentEl.createDiv({ cls: "ca-quick-capture-actions" });
     const btn = btnRow.createEl("button", { text: "Capture", cls: "mod-cta" });
-    btn.addEventListener("click", submit);
+    btn.addEventListener("click", () => void submit());
 
-    const hint = btnRow.createEl("span", {
+    btnRow.createEl("span", {
       text: "Cmd+Enter to save",
       cls: "ca-quick-capture-hint",
     });
@@ -377,7 +379,7 @@ class QuickCaptureModal extends Modal {
 class ChatSearchModal extends Modal {
   private settings: OpenBrainSettings;
 
-  constructor(app: any, settings: OpenBrainSettings) {
+  constructor(app: App, settings: OpenBrainSettings) {
     super(app);
     this.settings = settings;
   }

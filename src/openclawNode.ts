@@ -15,7 +15,7 @@ interface InvokeRequest {
   method: "node.invoke";
   params: {
     command: string;
-    params: Record<string, any>;
+    params: Record<string, string>;
   };
 }
 
@@ -114,17 +114,12 @@ export class OpenClawNode {
 
       this.ws.onmessage = (event) => {
         try {
-          const msg = JSON.parse(event.data);
+          const msg = JSON.parse(event.data as string) as Record<string, unknown>;
           if (msg.method === "node.invoke") {
-            this.handleInvoke(msg);
+            void this.handleInvoke(msg as unknown as InvokeRequest);
           }
-          // Handle challenge if needed
-          if (msg.event === "connect.challenge") {
-            // Respond with node identity (no auth for localhost)
-          }
-        } catch {
-          // Ignore malformed messages
-        }
+          // Handle challenge if needed — no auth for localhost
+        } catch { /* expected — ignore malformed messages */ }
       };
 
       this.ws.onclose = () => {
@@ -133,9 +128,9 @@ export class OpenClawNode {
       };
 
       this.ws.onerror = () => {
-        // onclose will fire after this
+        /* expected — onclose will fire after this */
       };
-    } catch {
+    } catch { /* expected — WebSocket constructor may fail */
       this.scheduleReconnect();
     }
   }
@@ -165,7 +160,7 @@ export class OpenClawNode {
     }, this.reconnectDelay);
   }
 
-  private send(data: any): void {
+  private send(data: Record<string, unknown>): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
     }
@@ -173,13 +168,13 @@ export class OpenClawNode {
 
   private async handleInvoke(msg: InvokeRequest): Promise<void> {
     const { command, params } = msg.params;
-    let result: any;
+    let result: Record<string, unknown> | undefined;
     let error: string | null = null;
 
     try {
       result = await this.executeCommand(command, params);
-    } catch (e: any) {
-      error = e.message || "Command failed";
+    } catch (e: unknown) {
+      error = e instanceof Error ? e.message : "Command failed";
     }
 
     this.send({
@@ -191,7 +186,7 @@ export class OpenClawNode {
     });
   }
 
-  private async executeCommand(command: string, params: Record<string, any>): Promise<any> {
+  private async executeCommand(command: string, params: Record<string, string>): Promise<Record<string, unknown>> {
     switch (command) {
       case "vault.search": {
         if (!params.query) throw new Error("query required");
@@ -238,11 +233,12 @@ export class OpenClawNode {
       }
 
       case "vault.tasks": {
+        const taskFilter = (params.filter === "todo" || params.filter === "done") ? params.filter : undefined;
         if (params.file) {
-          const result = cli.tasks(params.file, params.filter);
+          const result = cli.tasks(params.file, taskFilter);
           return { tasks: result || "No tasks found" };
         }
-        const result = cli.dailyTasks(params.filter);
+        const result = cli.dailyTasks(taskFilter);
         return { tasks: result || "No tasks found" };
       }
 

@@ -1,5 +1,6 @@
 import { OpenBrainSettings } from "./settings";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, execSync, ChildProcess } from "child_process";
+import { requestUrl } from "obsidian";
 
 export interface Message {
   id: string;
@@ -149,21 +150,23 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        const parsed = JSON.parse(line);
+        const parsed: Record<string, unknown> = JSON.parse(line);
 
         // Text content deltas
+        const delta = parsed.delta as Record<string, unknown> | undefined;
         if (
           parsed.type === "content_block_delta" &&
-          parsed.delta?.type === "text_delta"
+          delta?.type === "text_delta"
         ) {
           receivedDeltas = true;
-          opts.onChunk(parsed.delta.text);
+          opts.onChunk(delta.text as string);
         }
 
         // Assistant message with full content (non-streaming fallback)
-        if (!receivedDeltas && parsed.type === "assistant" && parsed.message?.content) {
-          for (const block of parsed.message.content) {
-            if (block.type === "text") {
+        const message = parsed.message as Record<string, unknown> | undefined;
+        if (!receivedDeltas && parsed.type === "assistant" && message?.content) {
+          for (const block of message.content as { type: string; text?: string }[]) {
+            if (block.type === "text" && block.text) {
               opts.onChunk(block.text);
             }
           }
@@ -171,11 +174,9 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
 
         // Result event — contains session_id for continuation
         if (parsed.type === "result") {
-          resultSessionId = parsed.session_id;
+          resultSessionId = parsed.session_id as string;
         }
-      } catch {
-        // ignore malformed JSON lines
-      }
+      } catch { /* expected — ignore malformed JSON lines */ }
     }
   });
 
@@ -242,7 +243,6 @@ export async function summarizeChat(
   // Try Claude Code CLI with existing session
   if (sessionId) {
     try {
-      const { execSync } = require("child_process");
       const claudePath = settings.claudePath || "claude";
       const home = process.env.HOME || "";
       const env = { ...process.env };
@@ -255,7 +255,7 @@ export async function summarizeChat(
       );
       const summary = result.trim();
       if (summary && summary.length < 200) return summary;
-    } catch {}
+    } catch { /* expected — CLI may not be available */ }
   }
 
   // Fall back to API
@@ -267,7 +267,8 @@ export async function summarizeChat(
       }));
       lastMessages.push({ role: "user", content: prompt });
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await requestUrl({
+        url: "https://api.anthropic.com/v1/messages",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -282,12 +283,12 @@ export async function summarizeChat(
         }),
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        const text = result.content?.find((b: any) => b.type === "text")?.text;
+      if (response.status === 200) {
+        const result: { content?: { type: string; text?: string }[] } = response.json;
+        const text = result.content?.find((b) => b.type === "text")?.text;
         if (text && text.length < 200) return text.trim();
       }
-    } catch {}
+    } catch { /* expected — API may be unavailable */ }
   }
 
   return null;
@@ -343,7 +344,8 @@ export async function transcribeAudioSegments(
       : (opts.audioPrompt || "Please transcribe this audio. After transcribing, briefly summarize the key points or action items if any are present.");
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await requestUrl({
+        url: "https://api.anthropic.com/v1/messages",
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -370,20 +372,21 @@ export async function transcribeAudioSegments(
         }),
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        transcriptions.push(`[Segment ${i + 1} failed: ${err.error?.message || response.statusText}]`);
+      if (response.status !== 200) {
+        const err: { error?: { message?: string } } = response.json;
+        transcriptions.push(`[Segment ${i + 1} failed: ${err.error?.message || "API error"}]`);
         continue;
       }
 
-      const result = await response.json();
+      const result: { content?: { type: string; text?: string }[] } = response.json;
       const text = result.content
-        ?.filter((b: any) => b.type === "text")
-        .map((b: any) => b.text)
+        ?.filter((b) => b.type === "text")
+        .map((b) => b.text ?? "")
         .join("") || "";
       transcriptions.push(text);
-    } catch (err: any) {
-      transcriptions.push(`[Segment ${i + 1} failed: ${err.message}]`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      transcriptions.push(`[Segment ${i + 1} failed: ${message}]`);
     }
   }
 
@@ -445,6 +448,7 @@ export async function streamClaudeAPI(
   ];
 
   try {
+    // requestUrl does not support streaming responses required for real-time chat
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -462,8 +466,8 @@ export async function streamClaudeAPI(
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      opts.onError(`API error: ${err.error?.message || response.statusText}`);
+      const errBody: { error?: { message?: string } } = await response.json();
+      opts.onError(`API error: ${errBody.error?.message || response.statusText}`);
       return;
     }
 
@@ -489,23 +493,23 @@ export async function streamClaudeAPI(
           const data = line.slice(6).trim();
           if (data === "[DONE]") continue;
           try {
-            const parsed = JSON.parse(data);
+            const parsed: Record<string, unknown> = JSON.parse(data);
+            const delta = parsed.delta as Record<string, unknown> | undefined;
             if (
               parsed.type === "content_block_delta" &&
-              parsed.delta?.type === "text_delta"
+              delta?.type === "text_delta"
             ) {
-              opts.onChunk(parsed.delta.text);
+              opts.onChunk(delta.text as string);
             }
-          } catch {
-            // ignore parse errors
-          }
+          } catch { /* expected — ignore parse errors */ }
         }
       }
     }
 
     opts.onDone();
-  } catch (err: any) {
-    opts.onError(`Network error: ${err.message}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    opts.onError(`Network error: ${message}`);
   }
 }
 
@@ -527,10 +531,11 @@ export async function streamClaudeAPIChat(
     : opts.systemPrompt;
 
   // Build API messages from conversation history
+  type ApiContent = { type: string; text?: string; source?: { type: string; media_type: string; data: string } };
   const apiMessages = opts.messages.map((m) => {
     // For the last user message, attach images if present
     if (m === opts.messages[opts.messages.length - 1] && m.role === "user" && opts.images?.length) {
-      const content: any[] = [{ type: "text", text: m.content }];
+      const content: ApiContent[] = [{ type: "text", text: m.content }];
       for (const img of opts.images) {
         content.push({
           type: "image",
@@ -547,6 +552,7 @@ export async function streamClaudeAPIChat(
   });
 
   try {
+    // requestUrl does not support streaming responses required for real-time chat
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -564,8 +570,8 @@ export async function streamClaudeAPIChat(
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      opts.onError(`API error: ${err.error?.message || response.statusText}`);
+      const errBody: { error?: { message?: string } } = await response.json();
+      opts.onError(`API error: ${errBody.error?.message || response.statusText}`);
       return;
     }
 
@@ -591,23 +597,23 @@ export async function streamClaudeAPIChat(
           const data = line.slice(6).trim();
           if (data === "[DONE]") continue;
           try {
-            const parsed = JSON.parse(data);
+            const parsed: Record<string, unknown> = JSON.parse(data);
+            const delta = parsed.delta as Record<string, unknown> | undefined;
             if (
               parsed.type === "content_block_delta" &&
-              parsed.delta?.type === "text_delta"
+              delta?.type === "text_delta"
             ) {
-              opts.onChunk(parsed.delta.text);
+              opts.onChunk(delta.text as string);
             }
-          } catch {
-            // ignore parse errors
-          }
+          } catch { /* expected — ignore parse errors */ }
         }
       }
     }
 
     opts.onDone();
-  } catch (err: any) {
-    opts.onError(`Network error: ${err.message}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    opts.onError(`Network error: ${message}`);
   }
 }
 
@@ -628,13 +634,14 @@ export async function streamOpenRouterChat(
     ? `${opts.systemPrompt}\n\n---\nActive note content:\n${opts.noteContext}`
     : opts.systemPrompt;
 
-  const apiMessages: any[] = [
+  type OrContent = string | { type: string; text?: string; image_url?: { url: string } }[];
+  const apiMessages: { role: string; content: OrContent }[] = [
     { role: "system", content: systemContent },
   ];
 
   for (const m of opts.messages) {
     if (m === opts.messages[opts.messages.length - 1] && m.role === "user" && opts.images?.length) {
-      const content: any[] = [{ type: "text", text: m.content }];
+      const content: { type: string; text?: string; image_url?: { url: string } }[] = [{ type: "text", text: m.content }];
       for (const img of opts.images) {
         content.push({
           type: "image_url",
@@ -648,6 +655,7 @@ export async function streamOpenRouterChat(
   }
 
   try {
+    // requestUrl does not support streaming responses required for real-time chat
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -665,8 +673,8 @@ export async function streamOpenRouterChat(
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      opts.onError(`OpenRouter error: ${err.error?.message || response.statusText}`);
+      const errBody: { error?: { message?: string } } = await response.json();
+      opts.onError(`OpenRouter error: ${errBody.error?.message || response.statusText}`);
       return;
     }
 
@@ -692,18 +700,17 @@ export async function streamOpenRouterChat(
           const data = line.slice(6).trim();
           if (data === "[DONE]") continue;
           try {
-            const parsed = JSON.parse(data);
+            const parsed: { choices?: { delta?: { content?: string } }[] } = JSON.parse(data);
             const delta = parsed.choices?.[0]?.delta?.content;
             if (delta) opts.onChunk(delta);
-          } catch {
-            // ignore
-          }
+          } catch { /* expected — ignore parse errors */ }
         }
       }
     }
 
     opts.onDone();
-  } catch (err: any) {
-    opts.onError(`Network error: ${err.message}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    opts.onError(`Network error: ${message}`);
   }
 }

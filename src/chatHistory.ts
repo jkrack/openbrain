@@ -1,4 +1,4 @@
-import { App, TFile, TFolder, Notice, moment } from "obsidian";
+import { App, TFile, Notice, moment } from "obsidian";
 import { Message } from "./claude";
 import { OpenBrainSettings } from "./settings";
 import { createFromTemplate } from "./templates";
@@ -194,8 +194,9 @@ export async function saveChat(
     }
 
     return path;
-  } catch (err: any) {
-    new Notice(`Failed to save chat: ${err.message}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    new Notice(`Failed to save chat: ${message}`);
     throw err;
   }
 }
@@ -214,7 +215,7 @@ export async function loadChat(app: App, path: string): Promise<ChatFile | null>
       return null;
     }
     return result;
-  } catch {
+  } catch { /* expected — file may be unreadable or corrupt */
     return null;
   }
 }
@@ -297,9 +298,9 @@ export async function initChatFolder(app: App, folder: string): Promise<void> {
   // Create Base file if missing (never overwrite).
   // Use adapter.exists() + adapter.write() since vault API doesn't handle .base files.
   const basePath = `${folder}/Chat History.base`;
-  const adapter = app.vault.adapter as any;
+  const adapter = app.vault.adapter as { exists?: (path: string) => Promise<boolean>; write?: (path: string, data: string) => Promise<void> };
   if (adapter.exists && !(await adapter.exists(basePath))) {
-    await adapter.write(basePath, BASE_CONTENT);
+    await adapter.write?.(basePath, BASE_CONTENT);
   }
 }
 
@@ -434,20 +435,27 @@ function getDailyPath(app: App, settings?: OpenBrainSettings): string {
   const cliPath = cli.dailyPath();
   if (cliPath) return cliPath;
 
-  // Check periodic-notes plugin
-  const periodicNotes = (app as any).plugins?.plugins?.["periodic-notes"];
-  if (periodicNotes?.settings?.daily?.enabled) {
-    const daily = periodicNotes.settings.daily;
-    const folder = daily.folder || "";
-    const format = daily.format || "YYYY-MM-DD";
+  // Check periodic-notes plugin (internal API — not publicly typed)
+  const appRecord = app as unknown as Record<string, unknown>;
+  const periodicNotesPlugin = (appRecord.plugins as Record<string, unknown> | undefined);
+  const periodicPlugins = periodicNotesPlugin?.plugins as Record<string, Record<string, unknown>> | undefined;
+  const periodicNotes = periodicPlugins?.["periodic-notes"];
+  const periodicSettings = periodicNotes?.settings as Record<string, Record<string, unknown>> | undefined;
+  const dailySettings = periodicSettings?.daily;
+  if (dailySettings?.enabled) {
+    const folder = (dailySettings.folder as string) || "";
+    const format = (dailySettings.format as string) || "YYYY-MM-DD";
     const dateStr = moment().format(format);
     return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
   }
 
-  // Check core daily-notes plugin
-  const dailyNotes = (app as any).internalPlugins?.plugins?.["daily-notes"];
+  // Check core daily-notes plugin (internal API — not publicly typed)
+  const internalPlugins = appRecord.internalPlugins as Record<string, unknown> | undefined;
+  const internalPluginMap = internalPlugins?.plugins as Record<string, Record<string, unknown>> | undefined;
+  const dailyNotes = internalPluginMap?.["daily-notes"];
   if (dailyNotes?.enabled) {
-    const config = dailyNotes.instance?.options || {};
+    const instance = dailyNotes.instance as Record<string, unknown> | undefined;
+    const config = (instance?.options ?? {}) as Record<string, string>;
     const folder = config.folder || "";
     const format = config.format || "YYYY-MM-DD";
     const dateStr = moment().format(format);

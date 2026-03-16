@@ -122,9 +122,10 @@ export function useAudioRecorder(): AudioRecorderResult {
           stream = await navigator.mediaDevices.getUserMedia({
             audio: { deviceId: { exact: deviceId } },
           });
-        } catch (deviceErr: any) {
+        } catch (deviceErr: unknown) {
+          const errMessage = deviceErr instanceof Error ? deviceErr.message : String(deviceErr);
           console.warn(
-            `Mic device ${deviceId} unavailable (${deviceErr.message}), falling back to default mic`
+            `Mic device ${deviceId} unavailable (${errMessage}), falling back to default mic`
           );
           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
@@ -139,7 +140,7 @@ export function useAudioRecorder(): AudioRecorderResult {
       if (audioTracks.length === 0) {
         throw new Error("No audio tracks available from microphone");
       }
-      console.log(
+      console.debug(
         `Recording with mic: ${audioTracks[0].label || "Unknown"} (${audioTracks[0].readyState})`
       );
 
@@ -176,15 +177,16 @@ export function useAudioRecorder(): AudioRecorderResult {
       }, 1000);
 
       animFrameRef.current = requestAnimationFrame(updateWaveform);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to start recording:", err);
-      const msg = err.name === "NotAllowedError"
+      const errObj = err instanceof Error ? err : new Error(String(err));
+      const msg = errObj.name === "NotAllowedError"
         ? "Microphone permission denied. Grant access in System Settings > Privacy > Microphone."
-        : err.name === "NotFoundError"
+        : errObj.name === "NotFoundError"
         ? "No microphone found. Connect an audio input device."
-        : err.name === "OverconstrainedError"
+        : errObj.name === "OverconstrainedError"
         ? "Selected microphone not available. Try changing the device in Settings."
-        : `Microphone error: ${err.message}`;
+        : `Microphone error: ${errObj.message}`;
       setError(msg);
     }
   }, [updateWaveform, startRecorderOnStream, rotateSegment]);

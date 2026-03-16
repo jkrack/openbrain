@@ -30,7 +30,7 @@ export class OpenBrainView extends ItemView {
   currentChatPath: string | null = null;
   private loadNonce = 0;
   private loadChatRequest: LoadChatRequest | undefined;
-  plugin: any; // Set by main.ts when creating the view
+  plugin: { settings: { lastChatPath: string }; saveSettings: () => void } | null = null;
   vaultIndex: VaultIndex | null = null;
 
   constructor(leaf: WorkspaceLeaf, settings: OpenBrainSettings, skills: Skill[]) {
@@ -75,7 +75,7 @@ export class OpenBrainView extends ItemView {
 
   private handleChatPathChange = (path: string | null): void => {
     this.currentChatPath = path;
-    if (this.plugin?.settings) {
+    if (this.plugin) {
       this.plugin.settings.lastChatPath = path ?? "";
       this.plugin.saveSettings();
     }

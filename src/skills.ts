@@ -127,19 +127,26 @@ function extractTitle(response: string): string {
  * (community plugin), then falls back to built-in daily-notes config.
  */
 export function getDailyNotePath(app: App): string {
-  // Check periodic-notes plugin (community) first
-  const periodicNotes = (app as any).plugins?.plugins?.["periodic-notes"];
-  if (periodicNotes?.settings?.daily?.enabled) {
-    const daily = periodicNotes.settings.daily;
-    const folder = daily.folder || "";
-    const format = daily.format || "YYYY-MM-DD";
+  // Check periodic-notes plugin (community) first — internal API not publicly typed
+  const appRecord = app as unknown as Record<string, unknown>;
+  const pluginsObj = appRecord.plugins as Record<string, unknown> | undefined;
+  const pluginMap = pluginsObj?.plugins as Record<string, Record<string, unknown>> | undefined;
+  const periodicNotes = pluginMap?.["periodic-notes"];
+  const periodicSettings = periodicNotes?.settings as Record<string, Record<string, unknown>> | undefined;
+  const dailyConfig = periodicSettings?.daily;
+  if (dailyConfig?.enabled) {
+    const folder = (dailyConfig.folder as string) || "";
+    const format = (dailyConfig.format as string) || "YYYY-MM-DD";
     const dateStr = moment().format(format);
     return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
   }
 
-  // Fallback to built-in daily-notes plugin
-  const dailyNotes = (app as any).internalPlugins?.getPluginById?.("daily-notes");
-  const options = dailyNotes?.instance?.options || {};
+  // Fallback to built-in daily-notes plugin — internal API not publicly typed
+  const internalPlugins = appRecord.internalPlugins as Record<string, unknown> | undefined;
+  const getPluginById = internalPlugins?.getPluginById as ((id: string) => Record<string, unknown> | undefined) | undefined;
+  const dailyNotes = getPluginById?.("daily-notes");
+  const instance = dailyNotes?.instance as Record<string, unknown> | undefined;
+  const options = (instance?.options ?? {}) as Record<string, string>;
   const folder = options.folder || "";
   const format = options.format || "YYYY-MM-DD";
 
@@ -153,17 +160,25 @@ export function getDailyNotePath(app: App): string {
 export function getRecentDailyNotePaths(app: App, days: number): string[] {
   const paths: string[] = [];
 
-  // Get config from periodic-notes or built-in
+  // Get config from periodic-notes or built-in — internal APIs not publicly typed
   let folder = "";
   let format = "YYYY-MM-DD";
 
-  const periodicNotes = (app as any).plugins?.plugins?.["periodic-notes"];
-  if (periodicNotes?.settings?.daily?.enabled) {
-    folder = periodicNotes.settings.daily.folder || "";
-    format = periodicNotes.settings.daily.format || "YYYY-MM-DD";
+  const appRecord = app as unknown as Record<string, unknown>;
+  const pluginsObj = appRecord.plugins as Record<string, unknown> | undefined;
+  const pluginMap = pluginsObj?.plugins as Record<string, Record<string, unknown>> | undefined;
+  const periodicNotes = pluginMap?.["periodic-notes"];
+  const periodicSettings = periodicNotes?.settings as Record<string, Record<string, unknown>> | undefined;
+  const dailyConfig = periodicSettings?.daily;
+  if (dailyConfig?.enabled) {
+    folder = (dailyConfig.folder as string) || "";
+    format = (dailyConfig.format as string) || "YYYY-MM-DD";
   } else {
-    const dailyNotes = (app as any).internalPlugins?.getPluginById?.("daily-notes");
-    const options = dailyNotes?.instance?.options || {};
+    const internalPlugins = appRecord.internalPlugins as Record<string, unknown> | undefined;
+    const getPluginById = internalPlugins?.getPluginById as ((id: string) => Record<string, unknown> | undefined) | undefined;
+    const dailyNotes = getPluginById?.("daily-notes");
+    const instance = dailyNotes?.instance as Record<string, unknown> | undefined;
+    const options = (instance?.options ?? {}) as Record<string, string>;
     folder = options.folder || "";
     format = options.format || "YYYY-MM-DD";
   }
@@ -280,8 +295,9 @@ export async function executePostActions(
           results.push({ success: true, message: "Updated daily note" });
         }
       }
-    } catch (err: any) {
-      results.push({ success: false, message: `Post-action failed: ${err.message}` });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      results.push({ success: false, message: `Post-action failed: ${message}` });
     }
   }
 

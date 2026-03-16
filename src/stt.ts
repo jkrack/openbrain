@@ -65,7 +65,7 @@ async function fileExists(path: string): Promise<boolean> {
   try {
     await access(path);
     return true;
-  } catch {
+  } catch { /* expected — file may not exist */
     return false;
   }
 }
@@ -115,8 +115,9 @@ export async function transcribeBlob(
     await mkdir(debugDir, { recursive: true });
     const debugWavPath = join(debugDir, "last_recording.wav");
     await fsCopyFile(wavPath, debugWavPath);
-  } catch (e: any) {
-    console.warn(`[OpenBrain] failed to save debug WAV: ${e.message}`);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.warn(`[OpenBrain] failed to save debug WAV: ${message}`);
   }
 
   try {
@@ -247,13 +248,11 @@ function parseSherpaOutput(output: string): string {
     const trimmed = line.trim();
     if (trimmed.startsWith("{") && trimmed.includes('"text"')) {
       try {
-        const parsed = JSON.parse(trimmed);
+        const parsed: Record<string, unknown> = JSON.parse(trimmed);
         if (typeof parsed.text === "string") {
           return parsed.text.trim();
         }
-      } catch {
-        // Not valid JSON, continue
-      }
+      } catch { /* expected — not valid JSON, continue */ }
     }
   }
 

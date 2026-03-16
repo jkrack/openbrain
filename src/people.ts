@@ -1,4 +1,4 @@
-import { App, TFile } from "obsidian";
+import { App } from "obsidian";
 
 const PEOPLE_FOLDER = "OpenBrain/people";
 
