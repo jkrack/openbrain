@@ -118,8 +118,8 @@ export default class OpenBrainPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: "resume-chat-in-openbrain",
-      name: "Resume chat in OpenBrain",
+      id: "resume-chat",
+      name: "Resume chat in panel",
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
         if (!file) return false;
@@ -332,7 +332,7 @@ class QuickCaptureModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.addClass("ca-quick-capture-modal");
-    contentEl.createEl("h3", { text: "Quick capture" });
+    new Setting(contentEl).setName("Quick capture").setHeading();
 
     const input = contentEl.createEl("textarea", {
       cls: "ca-quick-capture-input",
@@ -387,7 +387,7 @@ class ChatSearchModal extends Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.addClass("ca-chat-search-modal");
-    contentEl.createEl("h3", { text: "Search chat history" });
+    new Setting(contentEl).setName("Search chat history").setHeading();
 
     const input = contentEl.createEl("input", {
       cls: "ca-chat-search-input",
@@ -439,7 +439,7 @@ class ChatSearchModal extends Modal {
 
     if (matches.length === 0) {
       // Fall back to full-text search
-      this.fullTextSearch(q, files, container);
+      void this.fullTextSearch(q, files, container);
       return;
     }
 

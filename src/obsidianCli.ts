@@ -34,7 +34,7 @@ function exec(command: string): string | null {
       timeout: 10000,
       env: getEnv(),
     }).trim();
-  } catch {
+  } catch { /* expected — CLI may not be installed or command failed */
     return null;
   }
 }

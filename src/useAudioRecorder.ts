@@ -172,7 +172,7 @@ export function useAudioRecorder(): AudioRecorderResult {
 
         // Auto-rotate at segment boundary
         if (segmentElapsedRef.current >= SEGMENT_DURATION_SEC) {
-          rotateSegment();
+          void rotateSegment();
         }
       }, 1000);
 
