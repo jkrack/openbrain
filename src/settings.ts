@@ -369,7 +369,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       // Installation status + install button
       const statusEl = containerEl.createDiv({ cls: "ca-stt-status" });
       statusEl.setText("Checking installation...");
-      this.renderSttStatus(statusEl);
+      void this.renderSttStatus(statusEl);
     }
 
     // --- Audio Input Section ---
@@ -380,7 +380,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .setDesc("Select which microphone to use for recording.");
 
     // Populate mic dropdown asynchronously
-    this.populateMicDropdown(micSetting);
+    void this.populateMicDropdown(micSetting);
 
     // ── Interface ──
     new Setting(containerEl).setName("Interface").setHeading();
@@ -431,7 +431,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .addButton((btn) =>
         btn.setButtonText("Open").onClick(() => {
           const basePath = `${this.plugin.settings.chatFolder}/Chat History.base`;
-          this.app.workspace.openLinkText(basePath, "");
+          void this.app.workspace.openLinkText(basePath, "");
         })
       );
 
@@ -494,7 +494,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           cls: "mod-cta",
         });
 
-        installBtn.addEventListener("click", async () => {
+        installBtn.addEventListener("click", () => { void (async () => {
           installBtn.disabled = true;
           installBtn.setText("Installing...");
 
@@ -514,7 +514,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             installBtn.disabled = false;
             installBtn.setText("Retry installation");
           }
-        });
+        })(); });
       }
     } catch (err: unknown) {
       el.empty();

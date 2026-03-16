@@ -132,7 +132,7 @@ export default class OpenBrainPlugin extends Plugin {
           const view = leaves[0].view;
           if (view instanceof OpenBrainView) {
             view.loadChatFromPath(file.path);
-            this.app.workspace.revealLeaf(leaves[0]);
+            void this.app.workspace.revealLeaf(leaves[0]);
           }
         } else {
           void this.activateView().then(() => {
@@ -198,7 +198,7 @@ export default class OpenBrainPlugin extends Plugin {
     // Fires skills with trigger: "daily-note-created" when a new daily note is created.
     // Waits 3 seconds for Templater to process the template first.
     this.registerEvent(
-      this.app.vault.on("create", async (file) => {
+      this.app.vault.on("create", (file) => {
         if (!(file instanceof TFile)) return;
 
         const expectedPath = getDailyNotePath(this.app);
@@ -283,7 +283,7 @@ export default class OpenBrainPlugin extends Plugin {
     }
 
     if (leaf) {
-      workspace.revealLeaf(leaf);
+      void workspace.revealLeaf(leaf);
       if (initialPrompt && leaf.view instanceof OpenBrainView) {
         leaf.view.setInitialPrompt(initialPrompt);
       }
