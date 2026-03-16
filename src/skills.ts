@@ -127,31 +127,39 @@ function extractTitle(response: string): string {
  * (community plugin), then falls back to built-in daily-notes config.
  */
 export function getDailyNotePath(app: App): string {
-  // Check periodic-notes plugin (community) first — internal API not publicly typed
-  const appRecord = app as unknown as Record<string, unknown>;
-  const pluginsObj = appRecord.plugins as Record<string, unknown> | undefined;
-  const pluginMap = pluginsObj?.plugins as Record<string, Record<string, unknown>> | undefined;
-  const periodicNotes = pluginMap?.["periodic-notes"];
-  const periodicSettings = periodicNotes?.settings as Record<string, Record<string, unknown>> | undefined;
-  const dailyConfig = periodicSettings?.daily;
-  if (dailyConfig?.enabled) {
-    const folder = (dailyConfig.folder as string) || "";
-    const format = (dailyConfig.format as string) || "YYYY-MM-DD";
-    const dateStr = moment().format(format);
-    return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+  try {
+    // Check periodic-notes plugin (community) first — internal API not publicly typed
+    const appRecord = app as unknown as Record<string, unknown>;
+    const pluginsObj = appRecord.plugins as Record<string, unknown> | undefined;
+    const pluginMap = pluginsObj?.plugins as Record<string, Record<string, unknown>> | undefined;
+    const periodicNotes = pluginMap?.["periodic-notes"];
+    const periodicSettings = periodicNotes?.settings as Record<string, Record<string, unknown>> | undefined;
+    const dailyConfig = periodicSettings?.daily;
+    if (dailyConfig?.enabled) {
+      const folder = (dailyConfig.folder as string) || "";
+      const format = (dailyConfig.format as string) || "YYYY-MM-DD";
+      const dateStr = moment().format(format);
+      return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+    }
+
+    // Fallback to built-in daily-notes plugin — internal API not publicly typed
+    const internalPlugins = appRecord.internalPlugins as Record<string, unknown> | undefined;
+    const pluginsMap = internalPlugins?.plugins as Record<string, Record<string, unknown>> | undefined;
+    const dailyNotes = pluginsMap?.["daily-notes"];
+    const instance = dailyNotes?.instance as Record<string, unknown> | undefined;
+    const options = instance?.options as Record<string, string> | undefined;
+    if (options) {
+      const folder = options.folder || "";
+      const format = options.format || "YYYY-MM-DD";
+      const dateStr = moment().format(format);
+      return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+    }
+  } catch {
+    /* expected — internal API may change between Obsidian versions */
   }
 
-  // Fallback to built-in daily-notes plugin — internal API not publicly typed
-  const internalPlugins = appRecord.internalPlugins as Record<string, unknown> | undefined;
-  const getPluginById = internalPlugins?.getPluginById as ((id: string) => Record<string, unknown> | undefined) | undefined;
-  const dailyNotes = getPluginById?.("daily-notes");
-  const instance = dailyNotes?.instance as Record<string, unknown> | undefined;
-  const options = (instance?.options ?? {}) as Record<string, string>;
-  const folder = options.folder || "";
-  const format = options.format || "YYYY-MM-DD";
-
-  const dateStr = moment().format(format);
-  return folder ? `${folder}/${dateStr}.md` : `${dateStr}.md`;
+  // Default fallback
+  return `${moment().format("YYYY-MM-DD")}.md`;
 }
 
 /**
@@ -174,13 +182,19 @@ export function getRecentDailyNotePaths(app: App, days: number): string[] {
     folder = (dailyConfig.folder as string) || "";
     format = (dailyConfig.format as string) || "YYYY-MM-DD";
   } else {
-    const internalPlugins = appRecord.internalPlugins as Record<string, unknown> | undefined;
-    const getPluginById = internalPlugins?.getPluginById as ((id: string) => Record<string, unknown> | undefined) | undefined;
-    const dailyNotes = getPluginById?.("daily-notes");
-    const instance = dailyNotes?.instance as Record<string, unknown> | undefined;
-    const options = (instance?.options ?? {}) as Record<string, string>;
-    folder = options.folder || "";
-    format = options.format || "YYYY-MM-DD";
+    try {
+      const internalPlugins = appRecord.internalPlugins as Record<string, unknown> | undefined;
+      const pluginsMap = internalPlugins?.plugins as Record<string, Record<string, unknown>> | undefined;
+      const dailyNotes = pluginsMap?.["daily-notes"];
+      const instance = dailyNotes?.instance as Record<string, unknown> | undefined;
+      const options = instance?.options as Record<string, string> | undefined;
+      if (options) {
+        folder = options.folder || "";
+        format = options.format || "YYYY-MM-DD";
+      }
+    } catch {
+      /* expected — internal API may change */
+    }
   }
 
   for (let i = 1; i <= days; i++) {
