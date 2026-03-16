@@ -1018,7 +1018,7 @@ git commit -m "feat(panel): inject recent chat context into new conversations"
 - [ ] **Step 1: Run the build**
 
 ```bash
-cd /Users/jlane/GitHub/OpenBrain && npm run build
+npm run build
 ```
 
 Expected: Clean build with no TypeScript errors.

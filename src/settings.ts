@@ -49,7 +49,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   lastChatPath: "",
   includeRecentChats: false,
   showTooltips: true, // Default ON for new users
-  dailyNoteFolder: "0. Daily/{{YYYY}}/{{MM}}",
+  dailyNoteFolder: "Daily/{{YYYY}}/{{MM}}",
   dailyNoteFormat: "YYYY-MM-DD",
   obsidianCliPath: "obsidian",
   onboardingComplete: false,
@@ -303,11 +303,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       .setName("Daily note folder")
       .setDesc(
         "Where daily notes are created. Supports date variables: {{YYYY}}, {{MM}}, {{DD}}. " +
-        "Example: 0. Daily/{{YYYY}}/{{MM}} creates notes like 0. Daily/2026/03/2026-03-15.md"
+        "Example: Daily/{{YYYY}}/{{MM}} creates notes like 0. Daily/2026/03/2026-03-15.md"
       )
       .addText((text) =>
         text
-          .setPlaceholder("0. Daily/{{YYYY}}/{{MM}}")
+          .setPlaceholder("Daily/{{YYYY}}/{{MM}}")
           .setValue(this.plugin.settings.dailyNoteFolder)
           .onChange((value) => { void (async () => {
             this.plugin.settings.dailyNoteFolder = value;
