@@ -622,7 +622,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         });
       } else if (hasAudioInput) {
         // --- Audio with no transcription available ---
-        onError("Voice transcription requires either local STT (Settings → Local speech-to-text) or an Anthropic API key.");
+        onError("Voice transcription requires either local STT (Settings → Local speech-to-text) or an API key from your configured provider.");
         setIsStreaming(false);
         return;
       } else {
