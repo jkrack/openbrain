@@ -43,10 +43,24 @@ export interface ChatOptions {
   onEvent: (event: StreamEvent) => void;
 }
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: Record<string, string>;
+}
+
+export interface ToolResultData {
+  tool_use_id: string;
+  content: string;
+  is_error: boolean;
+}
+
 export interface LLMProvider {
   id: string;
   name: string;
   streamChat(opts: ChatOptions): Promise<void>;
   supportsImages: boolean;
   supportsTools: boolean;
+  /** Format tool calls + results as messages for the next API call */
+  formatToolMessages(toolCalls: ToolCall[], results: ToolResultData[]): ChatMessage[];
 }

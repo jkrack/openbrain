@@ -1,5 +1,5 @@
 import { OpenBrainSettings } from "../settings";
-import { LLMProvider, ChatOptions, StreamEvent, ChatMessage, ToolDefinition } from "./types";
+import { LLMProvider, ChatOptions, StreamEvent, ChatMessage, ToolDefinition, ToolCall, ToolResultData } from "./types";
 
 export class OpenRouterProvider implements LLMProvider {
   id = "openrouter";
@@ -11,6 +11,30 @@ export class OpenRouterProvider implements LLMProvider {
 
   constructor(settings: OpenBrainSettings) {
     this.settings = settings;
+  }
+
+  formatToolMessages(toolCalls: ToolCall[], results: ToolResultData[]): ChatMessage[] {
+    // Use the same Anthropic content block format — buildMessages converts to OpenAI format
+    return [
+      {
+        role: "assistant",
+        content: toolCalls.map(tc => ({
+          type: "tool_use" as const,
+          id: tc.id,
+          name: tc.name,
+          input: tc.input,
+        })),
+      },
+      {
+        role: "user",
+        content: results.map(r => ({
+          type: "tool_result" as const,
+          tool_use_id: r.tool_use_id,
+          content: r.content,
+          is_error: r.is_error,
+        })),
+      },
+    ];
   }
 
   async streamChat(opts: ChatOptions): Promise<void> {
@@ -65,6 +89,37 @@ export class OpenRouterProvider implements LLMProvider {
     for (let i = 0; i < messages.length; i++) {
       const m = messages[i];
       if (m.role === "system") continue;
+
+      // Handle content block arrays (tool_use from assistant, tool_result from user)
+      if (Array.isArray(m.content)) {
+        const blocks = m.content as unknown as Record<string, unknown>[];
+
+        // Assistant message with tool_use blocks → OpenAI tool_calls format
+        if (m.role === "assistant" && blocks.some(b => b.type === "tool_use")) {
+          const textParts = blocks.filter(b => b.type === "text").map(b => b.text as string).join("");
+          const toolCalls = blocks.filter(b => b.type === "tool_use").map(b => ({
+            id: b.id as string,
+            type: "function",
+            function: { name: b.name as string, arguments: JSON.stringify(b.input) }
+          }));
+          result.push({ role: "assistant", content: textParts || null, tool_calls: toolCalls });
+          continue;
+        }
+
+        // User message with tool_result blocks → separate "tool" role messages
+        if (m.role === "user" && blocks.some(b => b.type === "tool_result")) {
+          for (const b of blocks) {
+            if (b.type === "tool_result") {
+              result.push({ role: "tool", tool_call_id: b.tool_use_id as string, content: b.content as string });
+            }
+          }
+          continue;
+        }
+
+        // Other array content — stringify
+        result.push({ role: m.role, content: JSON.stringify(m.content) });
+        continue;
+      }
 
       // Attach images to last user message
       if (i === messages.length - 1 && m.role === "user" && images?.length && typeof m.content === "string") {

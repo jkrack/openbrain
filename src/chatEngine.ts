@@ -3,9 +3,9 @@ import { OpenBrainSettings } from "./settings";
 import { AnthropicProvider } from "./providers/anthropic";
 import { OpenRouterProvider } from "./providers/openrouter";
 import { OllamaProvider } from "./providers/ollama";
-import { LLMProvider, ChatMessage, StreamEvent } from "./providers/types";
+import { LLMProvider, ChatMessage, StreamEvent, ToolCall, ToolResultData } from "./providers/types";
 import { getActiveTools } from "./tools";
-import { executeTool, ToolResult } from "./toolEngine";
+import { executeTool } from "./toolEngine";
 import { startTimer } from "./perf";
 
 export interface ChatEngineOptions {
@@ -13,7 +13,7 @@ export interface ChatEngineOptions {
   systemPrompt: string;
   allowWrite: boolean;
   images?: { base64: string; mediaType: string }[];
-  useTools: boolean; // false for "Chat" mode
+  useTools: boolean;
   onText: (text: string) => void;
   onToolStart: (name: string) => void;
   onToolEnd: (name: string, result: string) => void;
@@ -30,28 +30,22 @@ export async function runChat(
   const firstTokenTimer = startTimer("time-to-first-token");
   let receivedFirstToken = false;
 
-  // Select provider
   const provider = getProvider(settings);
-
-  // Get tools if enabled
   const tools = opts.useTools ? getActiveTools(opts.allowWrite) : undefined;
 
-  const systemPrompt = opts.systemPrompt;
-
-  // Build conversation for the agentic loop
   const conversationMessages = [...opts.messages];
-  let maxIterations = 10; // prevent infinite tool loops
+  let maxIterations = 10;
   let images = opts.images;
 
   while (maxIterations > 0) {
     maxIterations--;
-    const pendingToolCalls: { id: string; name: string; input: Record<string, string> }[] = [];
+    const pendingToolCalls: ToolCall[] = [];
     let hasToolUse = false;
 
     try {
       await provider.streamChat({
         messages: conversationMessages,
-        systemPrompt,
+        systemPrompt: opts.systemPrompt,
         tools,
         images,
         onEvent: (event: StreamEvent) => {
@@ -64,9 +58,7 @@ export async function runChat(
               if (event.text) opts.onText(event.text);
               break;
             case "tool_use_start":
-              if (event.toolUse) {
-                opts.onToolStart(event.toolUse.name);
-              }
+              if (event.toolUse) opts.onToolStart(event.toolUse.name);
               break;
             case "tool_use_end":
               if (event.toolUse) {
@@ -83,54 +75,26 @@ export async function runChat(
         }
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      opts.onError(`Chat error: ${message}`);
+      opts.onError(`Chat error: ${err instanceof Error ? err.message : String(err)}`);
       doneTimer();
       return;
     }
 
-    // If no tool calls, we're done
-    if (!hasToolUse || pendingToolCalls.length === 0) {
-      break;
-    }
-
-    // Execute tools and build results
-    // Add the assistant's response (with tool_use blocks) to conversation
-    const assistantContent: unknown[] = [];
-    for (const tc of pendingToolCalls) {
-      assistantContent.push({
-        type: "tool_use",
-        id: tc.id,
-        name: tc.name,
-        input: tc.input
-      });
-    }
-    conversationMessages.push({
-      role: "assistant",
-      content: assistantContent as ChatMessage["content"]
-    });
+    if (!hasToolUse || pendingToolCalls.length === 0) break;
 
     // Execute each tool
-    const toolResults: ToolResult[] = [];
+    const results: ToolResultData[] = [];
     for (const tc of pendingToolCalls) {
       const result = await executeTool(app, settings, tc.name, tc.id, tc.input);
       opts.onToolEnd(tc.name, result.is_error ? `Error: ${result.content}` : result.content.slice(0, 100));
-      toolResults.push(result);
+      results.push(result);
     }
 
-    // Add tool results to conversation
-    conversationMessages.push({
-      role: "user",
-      content: toolResults.map(r => ({
-        type: "tool_result" as const,
-        tool_use_id: r.tool_use_id,
-        content: r.content,
-        is_error: r.is_error
-      })) as ChatMessage["content"]
-    });
+    // Let the provider format the tool messages in its native format
+    const toolMessages = provider.formatToolMessages(pendingToolCalls, results);
+    conversationMessages.push(...toolMessages);
 
-    // Clear images after first iteration (don't resend)
-    images = undefined;
+    images = undefined; // Don't resend images
   }
 
   doneTimer();

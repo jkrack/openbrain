@@ -1,5 +1,5 @@
 import { OpenBrainSettings } from "../settings";
-import { LLMProvider, ChatOptions, StreamEvent, ChatMessage, ToolDefinition } from "./types";
+import { LLMProvider, ChatOptions, StreamEvent, ChatMessage, ToolDefinition, ToolCall, ToolResultData } from "./types";
 
 export class AnthropicProvider implements LLMProvider {
   id = "anthropic";
@@ -11,6 +11,29 @@ export class AnthropicProvider implements LLMProvider {
 
   constructor(settings: OpenBrainSettings) {
     this.settings = settings;
+  }
+
+  formatToolMessages(toolCalls: ToolCall[], results: ToolResultData[]): ChatMessage[] {
+    return [
+      {
+        role: "assistant",
+        content: toolCalls.map(tc => ({
+          type: "tool_use" as const,
+          id: tc.id,
+          name: tc.name,
+          input: tc.input,
+        })),
+      },
+      {
+        role: "user",
+        content: results.map(r => ({
+          type: "tool_result" as const,
+          tool_use_id: r.tool_use_id,
+          content: r.content,
+          is_error: r.is_error,
+        })),
+      },
+    ];
   }
 
   async streamChat(opts: ChatOptions): Promise<void> {

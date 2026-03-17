@@ -1,5 +1,5 @@
 import { OpenBrainSettings } from "../settings";
-import { LLMProvider, ChatOptions, StreamEvent, ChatMessage } from "./types";
+import { LLMProvider, ChatOptions, StreamEvent, ChatMessage, ToolCall, ToolResultData } from "./types";
 
 export class OllamaProvider implements LLMProvider {
   id = "ollama";
@@ -11,6 +11,30 @@ export class OllamaProvider implements LLMProvider {
 
   constructor(settings: OpenBrainSettings) {
     this.settings = settings;
+  }
+
+  formatToolMessages(toolCalls: ToolCall[], results: ToolResultData[]): ChatMessage[] {
+    // Ollama uses OpenAI-compatible format — same as OpenRouter
+    return [
+      {
+        role: "assistant",
+        content: toolCalls.map(tc => ({
+          type: "tool_use" as const,
+          id: tc.id,
+          name: tc.name,
+          input: tc.input,
+        })),
+      },
+      {
+        role: "user",
+        content: results.map(r => ({
+          type: "tool_result" as const,
+          tool_use_id: r.tool_use_id,
+          content: r.content,
+          is_error: r.is_error,
+        })),
+      },
+    ];
   }
 
   async streamChat(opts: ChatOptions): Promise<void> {

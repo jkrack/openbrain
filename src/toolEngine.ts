@@ -3,12 +3,7 @@ import { OpenBrainSettings } from "./settings";
 import * as cli from "./obsidianCli";
 import { appendToDailySection } from "./chatHistory";
 import { startTimer } from "./perf";
-
-export interface ToolResult {
-  tool_use_id: string;
-  content: string;
-  is_error: boolean;
-}
+import { ToolResultData } from "./providers/types";
 
 /**
  * Execute a tool call and return the result.
@@ -19,7 +14,7 @@ export async function executeTool(
   toolName: string,
   toolId: string,
   input: Record<string, string>
-): Promise<ToolResult> {
+): Promise<ToolResultData> {
   const done = startTimer("tool-exec", { tool: toolName });
 
   try {
