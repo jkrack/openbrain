@@ -60,10 +60,13 @@ export function streamClaudeCode(
     args.push("--resume", opts.sessionId);
   }
 
-  // Append vault context to system prompt
-  const notePath = opts.noteFilePath ? `\nActive note file path: ${opts.noteFilePath}` : "";
-  const contextNote = opts.noteContext
-    ? `\n\n---${notePath}\nActive note content:\n${opts.noteContext}`
+  // Append vault context to system prompt (cap at 4000 chars to limit token overhead)
+  const notePath = opts.noteFilePath ? `\nActive note: ${opts.noteFilePath}` : "";
+  const trimmedContext = opts.noteContext && opts.noteContext.length > 4000
+    ? opts.noteContext.slice(0, 4000) + "\n...(truncated)"
+    : opts.noteContext;
+  const contextNote = trimmedContext
+    ? `\n\n---${notePath}\n${trimmedContext}`
     : "";
 
   // Tell Claude about the Obsidian CLI when shell access is enabled
@@ -93,15 +96,7 @@ Prefer these over direct file read/write — they work through Obsidian's APIs a
 
   // Universal boundaries — always appended regardless of skill
   const boundaries = `
-
---- OpenBrain boundaries ---
-You are running inside the OpenBrain plugin for Obsidian. Follow these rules:
-- Do NOT activate or reference your own built-in skills or plugins (productivity, memory-management, etc.). Only use OpenBrain skills.
-- Never expose absolute file paths (e.g., /Users/..., /home/...) in responses. Use vault-relative paths only.
-- When creating or referencing files, use paths relative to the vault root.
-- Do not suggest running commands outside the vault context.
-- Keep responses focused on the user's vault and notes.
-`;
+RULES: You are inside the OpenBrain Obsidian plugin. No built-in CLI skills. Vault-relative paths only (never /Users/... or /home/...). Stay focused on the vault.`;
 
   args.push("--append-system-prompt", opts.systemPrompt + contextNote + obsidianCliContext + boundaries);
 
@@ -342,7 +337,7 @@ export async function transcribeAudioSegments(
     return;
   }
 
-  const apiBoundaries = "\n\nYou are running inside the OpenBrain plugin for Obsidian. Never expose absolute file paths. Use vault-relative paths only. Do not activate built-in CLI skills.";
+  const apiBoundaries = "\nRULES: OpenBrain Obsidian plugin. No built-in CLI skills. Vault-relative paths only.";
   const systemContent = opts.noteContext
     ? `${opts.systemPrompt}${apiBoundaries}\n\n---\nActive note content:\n${opts.noteContext}`
     : `${opts.systemPrompt}${apiBoundaries}`;
@@ -432,7 +427,7 @@ export async function streamClaudeAPI(
     return;
   }
 
-  const apiBoundaries = "\n\nYou are running inside the OpenBrain plugin for Obsidian. Never expose absolute file paths. Use vault-relative paths only. Do not activate built-in CLI skills.";
+  const apiBoundaries = "\nRULES: OpenBrain Obsidian plugin. No built-in CLI skills. Vault-relative paths only.";
   const systemContent = opts.noteContext
     ? `${opts.systemPrompt}${apiBoundaries}\n\n---\nActive note content:\n${opts.noteContext}`
     : `${opts.systemPrompt}${apiBoundaries}`;
@@ -544,7 +539,7 @@ export async function streamClaudeAPIChat(
     return;
   }
 
-  const apiBoundaries = "\n\nYou are running inside the OpenBrain plugin for Obsidian. Never expose absolute file paths. Use vault-relative paths only. Do not activate built-in CLI skills.";
+  const apiBoundaries = "\nRULES: OpenBrain Obsidian plugin. No built-in CLI skills. Vault-relative paths only.";
   const systemContent = opts.noteContext
     ? `${opts.systemPrompt}${apiBoundaries}\n\n---\nActive note content:\n${opts.noteContext}`
     : `${opts.systemPrompt}${apiBoundaries}`;
@@ -649,7 +644,7 @@ export async function streamOpenRouterChat(
     return;
   }
 
-  const apiBoundaries = "\n\nYou are running inside the OpenBrain plugin for Obsidian. Never expose absolute file paths. Use vault-relative paths only. Do not activate built-in CLI skills.";
+  const apiBoundaries = "\nRULES: OpenBrain Obsidian plugin. No built-in CLI skills. Vault-relative paths only.";
   const systemContent = opts.noteContext
     ? `${opts.systemPrompt}${apiBoundaries}\n\n---\nActive note content:\n${opts.noteContext}`
     : `${opts.systemPrompt}${apiBoundaries}`;

@@ -51,7 +51,7 @@ function extractKeywords(text: string): string[] {
 export function findRelevantFiles(
   app: App,
   message: string,
-  limit = 5
+  limit = 3
 ): string[] {
   const done = startTimer("smart-context", { messageLength: message.length });
   const keywords = extractKeywords(message);
