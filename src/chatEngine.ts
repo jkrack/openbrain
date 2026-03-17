@@ -36,9 +36,7 @@ export async function runChat(
   // Get tools if enabled
   const tools = opts.useTools ? getActiveTools(opts.allowWrite) : undefined;
 
-  // Boundaries appended to system prompt
-  const boundaries = "\nRULES: OpenBrain Obsidian plugin. Vault-relative paths only (never /Users/ or /home/). Stay focused on the vault.";
-  const systemPrompt = opts.systemPrompt + boundaries;
+  const systemPrompt = opts.systemPrompt;
 
   // Build conversation for the agentic loop
   const conversationMessages = [...opts.messages];

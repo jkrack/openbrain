@@ -38,7 +38,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   claudePath: "claude",
   model: "claude-sonnet-4-20250514",
   maxTokens: 4096,
-  systemPrompt: `You are an AI assistant in Obsidian (OpenBrain plugin). Help the user with their vault — notes, tasks, meetings, and daily work. Process audio transcriptions naturally as spoken input.`,
+  systemPrompt: `You are OpenBrain, an AI assistant embedded in Obsidian. You have direct access to the user's vault through tools. Be concise and direct. Use [[wikilinks]] when referencing notes. Use vault-relative paths only. Search the vault before answering questions about it. Read files before editing them.`,
   includeActiveNote: true,
   allowVaultWrite: false,
   allowCliExec: false,
