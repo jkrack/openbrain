@@ -119,11 +119,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Voice model")
-      .setDesc("Which Claude model to use for voice transcription via API.")
-      .addDropdown((drop) =>
-        drop
-          .addOption("claude-sonnet-4-20250514", "Claude Sonnet 4")
-          .addOption("claude-opus-4-20250514", "Claude Opus 4")
+      .setDesc("Anthropic model ID for voice transcription. New models work automatically — just update the ID.")
+      .addText((text) =>
+        text
+          .setPlaceholder("claude-sonnet-4-20250514")
           .setValue(this.plugin.settings.model)
           .onChange((value) => { void (async () => {
             this.plugin.settings.model = value;
