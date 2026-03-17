@@ -36,6 +36,10 @@ export default class OpenBrainPlugin extends Plugin {
     // Initialize everything once vault is ready
     this.app.workspace.onLayoutReady(async () => {
       await initVault(this.app, this.settings);
+
+      // Load system prompt from file (falls back to settings default)
+      await this.loadSystemPrompt();
+
       this.vaultIndex = new VaultIndex(this.app);
       this.refreshViews();
 
@@ -328,6 +332,22 @@ export default class OpenBrainPlugin extends Plugin {
       dataToSave.openrouterApiKey = encrypt(dataToSave.openrouterApiKey);
     }
     await this.saveData(dataToSave);
+  }
+
+  private async loadSystemPrompt(): Promise<void> {
+    const path = "OpenBrain/system-prompt.md";
+    const file = this.app.vault.getAbstractFileByPath(path);
+    if (file instanceof TFile) {
+      const content = await this.app.vault.read(file);
+      if (content.trim()) {
+        this.settings.systemPrompt = content.trim();
+      }
+    } else {
+      // Seed the file from the current default
+      try {
+        await this.app.vault.create(path, this.settings.systemPrompt);
+      } catch { /* folder may not exist yet — initVault handles it */ }
+    }
   }
 
   onunload() {

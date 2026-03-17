@@ -289,14 +289,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("System prompt")
-      .setDesc("Custom instructions for Claude. Applied to every conversation unless a skill overrides it.")
-      .addTextArea((text) =>
-        text
-          .setValue(this.plugin.settings.systemPrompt)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.systemPrompt = value;
-            await this.plugin.saveSettings();
-          })(); })
+      .setDesc("Edit OpenBrain/system-prompt.md to customize Claude's instructions. Applied to every conversation unless a skill overrides it.")
+      .addButton((btn) =>
+        btn.setButtonText("Open").onClick(() => {
+          void this.app.workspace.openLinkText("OpenBrain/system-prompt.md", "");
+        })
       );
 
     // ── Permissions ──
