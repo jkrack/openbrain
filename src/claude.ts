@@ -680,7 +680,7 @@ export async function streamOpenRouterChat(
         "X-Title": "OpenBrain",
       },
       body: JSON.stringify({
-        model: settings.openrouterModel || "anthropic/claude-sonnet-4-20250514",
+        model: settings.openrouterModel || "anthropic/claude-sonnet-4.6",
         messages: apiMessages,
         max_tokens: settings.maxTokens,
         stream: true,

@@ -28,7 +28,7 @@ export class OpenRouterProvider implements LLMProvider {
     }));
 
     const body: Record<string, unknown> = {
-      model: this.settings.openrouterModel || "anthropic/claude-sonnet-4-20250514",
+      model: this.settings.openrouterModel || "anthropic/claude-sonnet-4.6",
       max_tokens: this.settings.maxTokens || 4096,
       messages,
       stream: true,

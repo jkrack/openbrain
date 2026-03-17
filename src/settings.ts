@@ -59,7 +59,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   openclawGatewayUrl: "ws://127.0.0.1:18789",
   chatProvider: "anthropic",
   openrouterApiKey: "",
-  openrouterModel: "anthropic/claude-sonnet-4-20250514",
+  openrouterModel: "anthropic/claude-sonnet-4.6",
   anthropicModel: "",
   ollamaUrl: "",
   ollamaModel: "",
@@ -170,12 +170,12 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       new Setting(containerEl)
         .setName("Model")
         .setDesc(
-          "OpenRouter model ID. Examples: anthropic/claude-sonnet-4-20250514, " +
+          "OpenRouter model ID. Examples: anthropic/claude-sonnet-4.6, " +
           "openai/gpt-4o, google/gemini-2.5-pro, meta-llama/llama-4-maverick"
         )
         .addText((text) =>
           text
-            .setPlaceholder("anthropic/claude-sonnet-4-20250514")
+            .setPlaceholder("anthropic/claude-sonnet-4.6")
             .setValue(this.plugin.settings.openrouterModel)
             .onChange((value) => { void (async () => {
               this.plugin.settings.openrouterModel = value;
