@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Message, streamClaudeCode, streamClaudeAPI, streamClaudeAPIChat, streamOpenRouterChat, summarizeChat, transcribeAudioSegments } from "./claude";
+import { Message, summarizeChat, transcribeAudioSegments } from "./claude";
+import { ChatMessage } from "./providers/types";
+import { runChat } from "./chatEngine";
 import { useAudioRecorder, formatDuration } from "./useAudioRecorder";
 import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
 import { transcribeBlob, transcribeSegments } from "./stt";
 import { RecordingStatus } from "./view";
 import { App, Component, Notice } from "obsidian";
-import { execSync, ChildProcess } from "child_process";
 import {
   ChatMeta,
   saveChat,
@@ -52,9 +53,8 @@ interface ObsidianSettingsApi {
 }
 
 interface SetupStatus {
-  claudeCli: boolean;
+  hasProvider: boolean;
   obsidianCli: boolean;
-  apiKey: boolean;
 }
 
 export function OpenBrainPanel({ settings, app, initialPrompt, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
@@ -105,7 +105,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
   const threadRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<boolean>(false);
-  const procRef = useRef<ChildProcess | null>(null);
   const responseRef = useRef<string>("");
 
   const recorder = useAudioRecorder();
@@ -123,35 +122,26 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const [setupDismissed, setSetupDismissed] = useState(false);
   useEffect(() => {
     const check = () => {
-      const home = process.env.HOME || "";
-      const extraPaths = [
-        "/usr/local/bin",
-        "/opt/homebrew/bin",
-        `${home}/.local/bin`,
-        "/Applications/Obsidian.app/Contents/MacOS",
-      ];
-      const env = {
-        ...process.env,
-        PATH: [...extraPaths, process.env.PATH].filter(Boolean).join(":"),
-      };
-
-      let claudeCli = false;
-      try {
-        const claudePath = settings.claudePath || "claude";
-        execSync(`${claudePath} --version`, { timeout: 5000, encoding: "utf-8", env });
-        claudeCli = true;
-      } catch { /* expected — CLI may not be installed */ }
+      // Check if any provider is configured
+      let hasProvider = false;
+      if (settings.chatProvider === "anthropic" && settings.apiKey) hasProvider = true;
+      if (settings.chatProvider === "openrouter" && settings.openrouterApiKey) hasProvider = true;
+      if (settings.chatProvider === "ollama") hasProvider = true; // Ollama just needs to be running
 
       let obsidianCli = false;
       try {
+        const { execSync } = require("child_process") as typeof import("child_process");
+        const home = process.env.HOME || "";
+        const extraPaths = ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`, "/Applications/Obsidian.app/Contents/MacOS"];
+        const env = { ...process.env, PATH: [...extraPaths, process.env.PATH].filter(Boolean).join(":") };
         execSync("obsidian version", { timeout: 5000, encoding: "utf-8", env });
         obsidianCli = true;
       } catch { /* expected — CLI may not be installed */ }
 
-      setSetupStatus({ claudeCli, obsidianCli, apiKey: !!settings.apiKey });
+      setSetupStatus({ hasProvider, obsidianCli });
     };
     check();
-  }, [settings.claudePath, settings.apiKey]);
+  }, [settings.chatProvider, settings.apiKey, settings.openrouterApiKey]);
 
   // Apply tool overrides when skill changes
   useEffect(() => {
@@ -445,21 +435,15 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
       abortRef.current = false;
       responseRef.current = "";
 
-      const callbacks = {
-        onChunk: (chunk: string) => {
-          if (!abortRef.current) appendAssistantChunk(assistantId, chunk);
-        },
-        onError: (err: string) => {
-          setIsStreaming(false);
-          procRef.current = null;
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantId
-                ? { ...m, content: `Error: ${err}` }
-                : m
-            )
-          );
-        },
+      const onError = (err: string) => {
+        setIsStreaming(false);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: `Error: ${err}` }
+              : m
+          )
+        );
       };
 
       const audioDone = async () => {
@@ -538,7 +522,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             : audioPrompt && !audioPrompt.toLowerCase().includes("transcribe only");
 
           if (shouldAnalyze) {
-            // Send transcription to Claude Code for analysis
+            // Send transcription for analysis via chatEngine
             const analysisId = generateId();
             const analysisMsg: Message = {
               id: analysisId,
@@ -549,33 +533,36 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             setMessages((prev) => [...prev, analysisMsg]);
             responseRef.current = "";
 
-            // Use skill's autoPrompt if active, otherwise user's audioPrompt
             const prompt = activeSkill?.autoPrompt || audioPrompt || "Process this transcription";
             const analysisPrompt = `${prompt}\n\nTranscription:\n${transcription}`;
-            const proc = streamClaudeCode(settings, {
-              prompt: analysisPrompt,
-              noteContext,
-              noteFilePath,
+
+            const apiMessages: ChatMessage[] = messages.map(m => ({
+              role: m.role,
+              content: m.content
+            }));
+            apiMessages.push({ role: "user", content: analysisPrompt });
+
+            await runChat(app, settings, {
+              messages: apiMessages,
               systemPrompt: effectiveSystemPrompt,
-              sessionId,
               allowWrite: effectiveWrite,
-              allowCli: effectiveCli,
-              vaultPath,
-              onChunk: (chunk: string) => {
-                if (!abortRef.current) appendAssistantChunk(analysisId, chunk);
+              useTools: chatMode === "agent",
+              onText: (text) => {
+                if (!abortRef.current) appendAssistantChunk(analysisId, text);
               },
-              onError: callbacks.onError,
-              onDone: (newSessionId?: string) => { void (async () => {
+              onToolStart: (name) => {
+                if (!abortRef.current) appendAssistantChunk(analysisId, `\n*Using ${name}...*\n`);
+              },
+              onToolEnd: () => { /* Tool completed */ },
+              onDone: () => { void (async () => {
                 setIsStreaming(false);
-                procRef.current = null;
-                if (newSessionId) setSessionId(newSessionId);
                 recorder.clearAudio();
                 setAudioPrompt("");
                 setShowAudioPrompt(false);
                 await runPostActions();
               })(); },
+              onError,
             });
-            procRef.current = proc;
           } else {
             // Transcription only — run postActions with raw transcription
             await runPostActions();
@@ -586,7 +573,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           }
         } catch (err: unknown) {
           const errMessage = err instanceof Error ? err.message : String(err);
-          callbacks.onError(
+          onError(
             `Local transcription failed: ${errMessage}\n` +
               "Check that sherpa-onnx is installed via Settings > OpenBrain."
           );
@@ -595,9 +582,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           setShowAudioPrompt(false);
         }
       } else if (hasAudioInput && audioSegments.length > 1) {
-        // --- Existing multi-segment API path ---
+        // --- Multi-segment API transcription path ---
         await transcribeAudioSegments(settings, {
-          ...callbacks,
+          onChunk: (chunk: string) => {
+            if (!abortRef.current) appendAssistantChunk(assistantId, chunk);
+          },
+          onError,
           segments: audioSegments,
           systemPrompt: effectiveSystemPrompt,
           noteContext,
@@ -617,118 +607,28 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           onDone: () => void audioDone(),
         });
       } else if (hasAudioInput) {
-        // --- Existing single-segment API path ---
-        await streamClaudeAPI(settings, {
-          ...callbacks,
-          messages: [...messages, userMsg],
+        // --- Single-segment API transcription — then optionally analyze via chatEngine ---
+        await transcribeAudioSegments(settings, {
+          onChunk: (chunk: string) => {
+            if (!abortRef.current) appendAssistantChunk(assistantId, chunk);
+          },
+          onError,
+          segments: audioSegments,
           systemPrompt: effectiveSystemPrompt,
           noteContext,
-          audioBlob: audioSegments[0],
           audioPrompt: audioPrompt || "Transcribe this audio. If there are action items or key points, note them after the transcription.",
+          onProgress: () => { /* single segment, no progress needed */ },
           onDone: () => void audioDone(),
         });
-      } else if (chatMode === "chat") {
-        // --- Chat mode ---
-        const hasImages = pendingImages.length > 0;
-        const hasApiKey = settings.chatProvider === "openrouter"
-          ? !!settings.openrouterApiKey
-          : !!settings.apiKey;
-
-        if (hasImages && hasApiKey) {
-          // Images require API — use configured provider
-          const images = pendingImages.map((img) => ({ base64: img.base64, mediaType: img.mediaType }));
-          setPendingImages([]);
-
-          const smartCtx = buildSmartContext(app, userText, attachedFiles);
-          const allContext = [noteContext, smartCtx].filter(Boolean).join("");
-
-          const chatOpts = {
-            ...callbacks,
-            messages: [...messages, userMsg],
-            systemPrompt: effectiveSystemPrompt,
-            noteContext: allContext || undefined,
-            images,
-            onDone: () => {
-              setIsStreaming(false);
-              recorder.clearAudio();
-              setAudioPrompt("");
-              setShowAudioPrompt(false);
-            },
-          };
-
-          if (settings.chatProvider === "openrouter") {
-            await streamOpenRouterChat(settings, chatOpts);
-          } else {
-            await streamClaudeAPIChat(settings, chatOpts);
-          }
-        } else if (hasApiKey && !hasImages) {
-          // No images but API key available — use API for speed
-          if (pendingImages.length > 0) setPendingImages([]);
-
-          const smartCtx = buildSmartContext(app, userText, attachedFiles);
-          const allContext = [noteContext, smartCtx].filter(Boolean).join("");
-
-          const chatOpts = {
-            ...callbacks,
-            messages: [...messages, userMsg],
-            systemPrompt: effectiveSystemPrompt,
-            noteContext: allContext || undefined,
-            onDone: () => {
-              setIsStreaming(false);
-              recorder.clearAudio();
-              setAudioPrompt("");
-              setShowAudioPrompt(false);
-            },
-          };
-
-          if (settings.chatProvider === "openrouter") {
-            await streamOpenRouterChat(settings, chatOpts);
-          } else {
-            await streamClaudeAPIChat(settings, chatOpts);
-          }
-        } else {
-          // No API key — fall back to Claude Code CLI (no images, no tools)
-          if (hasImages) {
-            setPendingImages([]);
-            callbacks.onError("Images require an API key (Anthropic or OpenRouter). Configure one in settings, or switch to Vault mode.");
-            setIsStreaming(false);
-            return;
-          }
-
-          const smartCtx = buildSmartContext(app, userText, attachedFiles);
-          const allContext = [noteContext, smartCtx].filter(Boolean).join("");
-          const enrichedNoteContext = allContext || undefined;
-
-          const proc = streamClaudeCode(settings, {
-            ...callbacks,
-            prompt: userText,
-            noteContext: enrichedNoteContext,
-            noteFilePath,
-            systemPrompt: effectiveSystemPrompt,
-            sessionId,
-            allowWrite: false,
-            allowCli: false,
-            vaultPath,
-            onDone: (newSessionId?: string) => {
-              setIsStreaming(false);
-              procRef.current = null;
-              if (newSessionId) setSessionId(newSessionId);
-              recorder.clearAudio();
-              setAudioPrompt("");
-              setShowAudioPrompt(false);
-            },
-          });
-          procRef.current = proc;
-        }
       } else {
-        // --- Agent mode (Claude Code CLI) ---
+        // --- Text message path (both Chat and Vault modes) ---
         let recentContext = "";
-        if (!chatFilePath && messages.length === 0) {
+        if (chatMode === "agent" && !chatFilePath && messages.length === 0) {
           recentContext = await getRecentChatContext();
         }
 
-        const allContext = [noteContext, recentContext].filter(Boolean).join("");
-        const enrichedNoteContext = allContext || undefined;
+        const smartCtx = buildSmartContext(app, userText, attachedFiles);
+        const allContext = [noteContext, recentContext, smartCtx].filter(Boolean).join("");
 
         let fullPrompt = userText;
 
@@ -739,34 +639,49 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           setAttachedFiles([]);
         }
 
-        // Smart context: auto-find relevant vault notes
-        const smartCtx = buildSmartContext(app, userText, attachedFiles);
-        if (smartCtx) fullPrompt += smartCtx;
+        // Enrich system prompt with note context
+        const enrichedSystemPrompt = allContext
+          ? `${effectiveSystemPrompt}\n\n---\nActive note content:\n${allContext}`
+          : effectiveSystemPrompt;
 
-        const proc = streamClaudeCode(settings, {
-          ...callbacks,
-          prompt: fullPrompt,
-          noteContext: enrichedNoteContext,
-          noteFilePath,
-          systemPrompt: effectiveSystemPrompt,
-          sessionId,
+        // Build messages for the API
+        const apiMessages: ChatMessage[] = messages.map(m => ({
+          role: m.role,
+          content: m.content
+        }));
+        apiMessages.push({ role: "user", content: fullPrompt });
+
+        // Get images if any
+        const images = pendingImages.length > 0
+          ? pendingImages.map(img => ({ base64: img.base64, mediaType: img.mediaType }))
+          : undefined;
+        if (pendingImages.length > 0) setPendingImages([]);
+
+        await runChat(app, settings, {
+          messages: apiMessages,
+          systemPrompt: enrichedSystemPrompt,
           allowWrite: effectiveWrite,
-          allowCli: effectiveCli,
-          vaultPath,
-          onDone: (newSessionId?: string) => { void (async () => {
+          images,
+          useTools: chatMode === "agent",
+          onText: (text) => {
+            if (!abortRef.current) appendAssistantChunk(assistantId, text);
+          },
+          onToolStart: (name) => {
+            if (!abortRef.current) appendAssistantChunk(assistantId, `\n*Using ${name}...*\n`);
+          },
+          onToolEnd: () => { /* Tool completed — model will continue with the result */ },
+          onDone: () => { void (async () => {
             setIsStreaming(false);
-            procRef.current = null;
-            if (newSessionId) setSessionId(newSessionId);
             recorder.clearAudio();
             setAudioPrompt("");
             setShowAudioPrompt(false);
             await runPostActions();
           })(); },
+          onError,
         });
-        procRef.current = proc;
       }
     },
-    [isStreaming, messages, settings, noteContext, noteFilePath, audioPrompt, appendAssistantChunk, recorder, sessionId, effectiveWrite, effectiveCli, effectiveSystemPrompt, runPostActions]
+    [isStreaming, messages, settings, noteContext, audioPrompt, appendAssistantChunk, recorder, effectiveWrite, effectiveSystemPrompt, runPostActions, chatMode, chatFilePath, pendingImages, attachedFiles, activeSkill, app]
   );
 
   const handleSend = useCallback(() => {
@@ -886,10 +801,6 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
     setChatFilePath(null);
     setSessionId(undefined);
     abortRef.current = true;
-    if (procRef.current) {
-      procRef.current.kill();
-      procRef.current = null;
-    }
     setIsStreaming(false);
     setSelectedPerson(null);
     setShowPersonPicker(false);
@@ -956,21 +867,19 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         />
       )}
 
-      {/* Setup banner — only when Claude CLI is missing and not dismissed */}
-      {setupStatus && !setupStatus.claudeCli && !setupDismissed && messages.length === 0 && (
+      {/* Setup banner — only when no provider is configured and not dismissed */}
+      {setupStatus && !setupStatus.hasProvider && !setupDismissed && messages.length === 0 && (
         <div className="ca-setup-banner">
           <div className="ca-setup-title">
-            Claude Code CLI not found
+            No API provider configured
             <button
               className="ca-setup-dismiss"
               onClick={() => setSetupDismissed(true)}
               aria-label="Dismiss"
-            >✕</button>
+            >&#x2715;</button>
           </div>
           <div className="ca-setup-text">
-            Text chat requires the Claude Code CLI.{" "}
-            <a href="https://docs.anthropic.com/en/docs/claude-code" className="ca-setup-link">Install it</a>
-            {" "}or check the path in{" "}
+            Configure an API key in{" "}
             <a
               href="#"
               className="ca-setup-link"
@@ -979,13 +888,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                 const setting = (app as unknown as { setting?: ObsidianSettingsApi }).setting;
                 if (setting) { setting.open(); setting.openTabById("open-brain"); }
               }}
-            >settings</a>.
+            >settings</a>{" "}
+            to start chatting. Supports Anthropic, OpenRouter, or Ollama (local).
           </div>
-          {!setupStatus.obsidianCli && (
-            <div className="ca-setup-text ca-setup-optional">
-              Tip: Enable the Obsidian CLI (Settings → General → Command line interface) for vault search and task tracking.
-            </div>
-          )}
         </div>
       )}
 
@@ -1012,13 +917,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
               <>
                 <div className="ca-welcome-title">Setup Check</div>
                 <div className="ca-welcome-checks">
-                  <div className={`ca-welcome-check ${setupStatus.claudeCli ? "ready" : "missing"}`}>
-                    <span className="ca-welcome-check-icon">{setupStatus.claudeCli ? "\u2713" : "\u2715"}</span>
-                    <span>Claude Code CLI {setupStatus.claudeCli ? "" : "(required for text chat)"}</span>
-                  </div>
-                  <div className={`ca-welcome-check ${setupStatus.apiKey ? "ready" : "optional"}`}>
-                    <span className="ca-welcome-check-icon">{setupStatus.apiKey ? "\u2713" : "\u25CB"}</span>
-                    <span>Anthropic API key {setupStatus.apiKey ? "" : "(optional, for voice + chat mode)"}</span>
+                  <div className={`ca-welcome-check ${setupStatus.hasProvider ? "ready" : "missing"}`}>
+                    <span className="ca-welcome-check-icon">{setupStatus.hasProvider ? "\u2713" : "\u2715"}</span>
+                    <span>API provider {setupStatus.hasProvider ? `(${settings.chatProvider})` : "(configure in settings)"}</span>
                   </div>
                   <div className={`ca-welcome-check ${setupStatus.obsidianCli ? "ready" : "optional"}`}>
                     <span className="ca-welcome-check-icon">{setupStatus.obsidianCli ? "\u2713" : "\u25CB"}</span>
@@ -1028,13 +929,13 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                 <button
                   className="ca-welcome-btn"
                   onClick={() => setOnboardingStep(3)}
-                  disabled={!setupStatus.claudeCli}
+                  disabled={!setupStatus.hasProvider}
                 >
-                  Continue →
+                  Continue &#x2192;
                 </button>
-                {!setupStatus.claudeCli && (
+                {!setupStatus.hasProvider && (
                   <div className="ca-welcome-text" style={{ marginTop: 8, fontSize: 12 }}>
-                    Install the <a href="https://docs.anthropic.com/en/docs/claude-code" className="ca-setup-link">Claude Code CLI</a> to continue, or check the path in{" "}
+                    Configure an API provider in{" "}
                     <a
                       href="#"
                       className="ca-setup-link"
@@ -1043,7 +944,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
                         const setting = (app as unknown as { setting?: ObsidianSettingsApi }).setting;
                         if (setting) { setting.open(); setting.openTabById("open-brain"); }
                       }}
-                    >settings</a>.
+                    >settings</a>{" "}
+                    (Anthropic, OpenRouter, or Ollama).
                   </div>
                 )}
               </>

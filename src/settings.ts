@@ -1,5 +1,4 @@
 import { App, PluginSettingTab, Setting, Notice } from "obsidian";
-import { execSync } from "child_process";
 import OpenBrainPlugin from "./main";
 
 export interface OpenBrainSettings {
@@ -26,9 +25,12 @@ export interface OpenBrainSettings {
   onboardingComplete: boolean;
   openclawEnabled: boolean;
   openclawGatewayUrl: string;
-  chatProvider: "anthropic" | "openrouter";
+  chatProvider: "anthropic" | "openrouter" | "ollama";
   openrouterApiKey: string;
   openrouterModel: string;
+  anthropicModel: string;
+  ollamaUrl: string;
+  ollamaModel: string;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -58,6 +60,9 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   chatProvider: "anthropic",
   openrouterApiKey: "",
   openrouterModel: "anthropic/claude-sonnet-4-20250514",
+  anthropicModel: "",
+  ollamaUrl: "",
+  ollamaModel: "",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -74,33 +79,6 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     // ── Setup ──
     new Setting(containerEl).setName("Setup").setHeading();
-
-    new Setting(containerEl)
-      .setName("Claude Code CLI")
-      .setDesc(
-        "Path to the Claude Code CLI. Required for text chat. " +
-        "Install from https://docs.anthropic.com/en/docs/claude-code"
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder("claude")
-          .setValue(this.plugin.settings.claudePath)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.claudePath = value;
-            await this.plugin.saveSettings();
-            // Validate the path
-            try {
-              const home = process.env.HOME || "";
-              const env = {
-                ...process.env,
-                PATH: ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`, `${home}/.nvm/versions/node`, process.env.PATH].filter(Boolean).join(":"),
-              };
-              execSync(`${value || "claude"} --version`, { timeout: 5000, encoding: "utf-8", env });
-            } catch { /* expected — CLI may not be installed */
-              new Notice("Claude Code CLI not found at this path.");
-            }
-          })(); })
-      );
 
     new Setting(containerEl)
       .setName("Obsidian CLI path")
@@ -121,9 +99,9 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Anthropic API key")
       .setDesc(
-        "Optional. Only needed for voice transcription via API. " +
-        "Not required if using local transcription or text-only chat. " +
-        "Encrypted using your system keychain when available."
+        "Required when using the Anthropic provider. " +
+        "Also used for voice transcription via API. " +
+        "Get one at console.anthropic.com."
       )
       .addText((text) => {
         text
@@ -158,14 +136,15 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Provider")
-      .setDesc("Which API to use for Chat mode conversations and image analysis.")
+      .setDesc("Which API to use for all conversations — Vault mode and Chat mode.")
       .addDropdown((drop) =>
         drop
           .addOption("anthropic", "Anthropic (Claude)")
           .addOption("openrouter", "OpenRouter (any model)")
+          .addOption("ollama", "Ollama (local)")
           .setValue(this.plugin.settings.chatProvider)
           .onChange((value) => { void (async () => {
-            this.plugin.settings.chatProvider = value as "anthropic" | "openrouter";
+            this.plugin.settings.chatProvider = value as "anthropic" | "openrouter" | "ollama";
             await this.plugin.saveSettings();
             this.display();
           })(); })
@@ -202,6 +181,83 @@ export class OpenBrainSettingTab extends PluginSettingTab {
               this.plugin.settings.openrouterModel = value;
               await this.plugin.saveSettings();
             })(); })
+        );
+    }
+
+    if (this.plugin.settings.chatProvider === "anthropic") {
+      new Setting(containerEl)
+        .setName("Model")
+        .setDesc("Anthropic model to use. Leave empty for default (Claude Sonnet 4).")
+        .addText((text) =>
+          text
+            .setPlaceholder("claude-sonnet-4-20250514")
+            .setValue(this.plugin.settings.anthropicModel)
+            .onChange((value) => { void (async () => {
+              this.plugin.settings.anthropicModel = value;
+              await this.plugin.saveSettings();
+            })(); })
+        );
+    }
+
+    if (this.plugin.settings.chatProvider === "ollama") {
+      new Setting(containerEl)
+        .setName("Ollama URL")
+        .setDesc("Base URL where Ollama is running. Default: http://localhost:11434")
+        .addText((text) =>
+          text
+            .setPlaceholder("http://localhost:11434")
+            .setValue(this.plugin.settings.ollamaUrl)
+            .onChange((value) => { void (async () => {
+              this.plugin.settings.ollamaUrl = value;
+              await this.plugin.saveSettings();
+            })(); })
+        );
+
+      new Setting(containerEl)
+        .setName("Model")
+        .setDesc("Ollama model name. Examples: llama3, mistral, codellama, gemma2")
+        .addText((text) =>
+          text
+            .setPlaceholder("llama3")
+            .setValue(this.plugin.settings.ollamaModel)
+            .onChange((value) => { void (async () => {
+              this.plugin.settings.ollamaModel = value;
+              await this.plugin.saveSettings();
+            })(); })
+        );
+
+      new Setting(containerEl)
+        .setName("Test connection")
+        .setDesc("Verify that Ollama is running and the model is available.")
+        .addButton((btn) =>
+          btn.setButtonText("Test").onClick(() => { void (async () => {
+            btn.setButtonText("Testing...");
+            btn.setDisabled(true);
+            try {
+              const baseUrl = this.plugin.settings.ollamaUrl || "http://localhost:11434";
+              const response = await globalThis.fetch(`${baseUrl}/api/tags`);
+              if (!response.ok) {
+                new Notice(`Ollama connection failed: ${response.statusText}`);
+                return;
+              }
+              const data = await response.json() as { models?: { name: string }[] };
+              const models = data.models || [];
+              const modelName = this.plugin.settings.ollamaModel || "llama3";
+              const found = models.some((m: { name: string }) => m.name.startsWith(modelName));
+              if (found) {
+                new Notice(`Connected to Ollama. Model "${modelName}" is available.`);
+              } else {
+                const available = models.map((m: { name: string }) => m.name).join(", ");
+                new Notice(`Connected to Ollama but model "${modelName}" not found. Available: ${available || "none"}`);
+              }
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : String(err);
+              new Notice(`Cannot connect to Ollama: ${message}. Is it running? Start with: ollama serve`);
+            } finally {
+              btn.setButtonText("Test");
+              btn.setDisabled(false);
+            }
+          })(); })
         );
     }
 
