@@ -153,9 +153,145 @@ const VAULT_TOOLS = [
         folder: { type: "string", description: "Folder path" }
       }
     }
+  },
+  // --- Graph & Structure ---
+  {
+    name: "vault_backlinks",
+    description: "Find all notes that link TO this file",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string" }
+      },
+      required: ["path"]
+    }
+  },
+  {
+    name: "vault_links",
+    description: "Get all outgoing links FROM this file",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string" }
+      },
+      required: ["path"]
+    }
+  },
+  {
+    name: "vault_outline",
+    description: "Get the heading structure of a note",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string" }
+      },
+      required: ["path"]
+    }
+  },
+  // --- Properties & Tags ---
+  {
+    name: "vault_properties",
+    description: "Read frontmatter properties from a note",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string" }
+      },
+      required: ["path"]
+    }
+  },
+  {
+    name: "vault_property_set",
+    description: "Set a frontmatter property on a note",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        name: { type: "string" },
+        value: { type: "string" },
+        type: { type: "string", enum: ["text", "number", "date", "list"] }
+      },
+      required: ["path", "name", "value"]
+    }
+  },
+  {
+    name: "vault_tags",
+    description: "List all tags in the vault with counts",
+    input_schema: { type: "object", properties: {} }
+  },
+  // --- File Operations ---
+  {
+    name: "vault_rename",
+    description: "Rename a note (updates all links automatically)",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        new_name: { type: "string", description: "New name without path" }
+      },
+      required: ["path", "new_name"]
+    }
+  },
+  {
+    name: "vault_move",
+    description: "Move a note to a different folder",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string" },
+        to: { type: "string", description: "Destination folder" }
+      },
+      required: ["path", "to"]
+    }
+  },
+  {
+    name: "vault_delete",
+    description: "Delete a note (moves to Obsidian trash)",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string" }
+      },
+      required: ["path"]
+    }
+  },
+  // --- Vault Health ---
+  {
+    name: "vault_orphans",
+    description: "Find notes with no incoming links",
+    input_schema: { type: "object", properties: {} }
+  },
+  {
+    name: "vault_deadends",
+    description: "Find broken links pointing to nonexistent notes",
+    input_schema: { type: "object", properties: {} }
+  },
+  {
+    name: "vault_unresolved",
+    description: "Find unresolved wikilinks",
+    input_schema: { type: "object", properties: {} }
+  },
+  // --- Contextual Search ---
+  {
+    name: "vault_search_context",
+    description: "Search with surrounding context shown around matches",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string" }
+      },
+      required: ["query"]
+    }
   }
 ];
 ```
+
+**22 tools total**, gated by permissions:
+
+| Permission | Tools |
+|---|---|
+| **Always available** (14) | search, search_context, read, list, backlinks, links, outline, properties, tags, tasks, daily_read, orphans, deadends, unresolved |
+| **Requires write** (8) | create, edit, append, daily_append, property_set, rename, move, delete |
 
 Tools are **gated by permissions** — write tools (create, edit, append, daily_append) only included when write is enabled. Search/read always available.
 
