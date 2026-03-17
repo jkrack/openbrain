@@ -1,14 +1,22 @@
 # OpenBrain
 
-AI-powered vault assistant for [Obsidian](https://obsidian.md). Chat with Claude about your notes, record voice memos, run structured workflows, and manage your daily work — all from a side panel. Connects to [OpenClaw](https://github.com/openclaw/openclaw) to access your vault from any messaging channel.
+AI-powered vault assistant for [Obsidian](https://obsidian.md). Chat with any LLM about your notes, record voice memos, run structured workflows, and manage your daily work — all from a side panel. Supports Anthropic, OpenRouter (200+ models), and Ollama (free, local). Connects to [OpenClaw](https://github.com/openclaw/openclaw) to access your vault from any messaging channel.
 
 ## Features
 
 ### Chat with your vault
-Type a message and Claude responds with full context of your vault. Reference any file with `@` — Claude reads it directly. Switch between **Vault mode** (full vault access, skills, commands) and **Chat mode** (fast conversation with image support).
+Type a message and your AI responds with full context of your vault. It can search, read, create, and edit notes through 22 built-in vault tools. Reference any file with `@` — or let smart context surface relevant notes automatically. Switch between **Vault mode** (full tool access) and **Chat mode** (fast conversation with image support).
+
+### Multiple providers
+Choose your LLM provider:
+- **Anthropic** — Claude models with native tool calling and vision
+- **OpenRouter** — 200+ models (GPT-4o, Gemini, Llama, Mistral, Claude, and more)
+- **Ollama** — Run models locally for free. No API key, no data leaves your machine
+
+Switch providers anytime in settings. All providers support the same vault tools and skills.
 
 ### Voice recording & transcription
-Record voice memos with one click. Transcribe locally (private, offline via sherpa-onnx) or via the Anthropic API. Audio is automatically processed through active skills.
+Record voice memos with one click. Transcribe locally (private, offline via sherpa-onnx) or via your configured provider. Audio is automatically processed through active skills.
 
 ### Skills (/commands)
 Type `/` to activate specialized workflows:
@@ -22,11 +30,30 @@ Type `/` to activate specialized workflows:
 - **Vault Health** — Audit orphans, broken links, stale notes
 - **Note Organizer** — Classify, tag, and suggest links for notes
 - **Project Status** — Review project progress and next steps
+- **Create Skill** — Build new skills through conversation
 
-Skills are markdown files — create your own in `OpenBrain/skills/`.
+Skills are markdown files — create your own with `/Create Skill` or in `OpenBrain/skills/`.
+
+### 22 vault tools
+OpenBrain gives your LLM structured access to your vault:
+
+| Category | Tools |
+|----------|-------|
+| **Search** | Full-text search, contextual search |
+| **Read** | Read notes, list files, get outlines |
+| **Graph** | Backlinks, outgoing links, orphans, dead links |
+| **Metadata** | Properties, tags, unresolved links |
+| **Write** | Create, edit, append, rename, move, delete |
+| **Daily notes** | Read and append to sections |
+| **Tasks** | Get open/completed tasks from any file |
+
+Write tools are gated by permissions — off by default.
 
 ### Daily note integration
-Every conversation and meeting note is automatically linked in your daily note. Action items are extracted and added as tasks. Configure your daily note folder and date format in settings.
+Every conversation and meeting note is automatically linked in your daily note with a TLDR summary. Action items are extracted and added as tasks. Configure your daily note folder and date format in settings (supports nested `{{YYYY}}/{{MM}}` paths).
+
+### System prompt as a vault file
+Your AI's instructions live at `OpenBrain/system-prompt.md` — editable right in Obsidian. Customize how it behaves, what sections to target in daily notes, and how to handle different types of requests.
 
 ### Person profiles & 1:1 meetings
 Create profiles for your team in `OpenBrain/people/`. The `/1:1` skill loads their context, pulls recent meeting history, and creates a structured session note.
@@ -35,7 +62,7 @@ Create profiles for your team in `OpenBrain/people/`. The `/1:1` skill loads the
 OpenBrain automatically finds relevant vault notes for every message — no need to manually reference files. It searches by keywords, backlinks, and tags to surface what matters.
 
 ### Templates
-Built-in templates for daily notes, meetings, 1:1s, and projects. Customize them in `OpenBrain/templates/`.
+Built-in templates for daily notes, meetings, 1:1s, and projects. Customize them in `OpenBrain/templates/`. Skill templates also available for creating new workflows.
 
 ### Quick capture
 Capture a thought from the command palette without opening the panel. Goes straight to today's daily note.
@@ -43,30 +70,19 @@ Capture a thought from the command palette without opening the panel. Goes strai
 ### OpenClaw integration
 Connect OpenBrain to [OpenClaw](https://github.com/openclaw/openclaw) to access your vault from any messaging channel — WhatsApp, Slack, Telegram, Discord, Signal, and more.
 
-When enabled, OpenBrain registers as an OpenClaw node and exposes 10 vault commands:
+When enabled, OpenBrain registers as an OpenClaw node and exposes vault commands so you can search, capture, and query from any device.
 
-| Command | What it does |
-|---------|-------------|
-| `vault.search` | Full-text search across your vault |
-| `vault.read` | Read any note's content |
-| `vault.create` | Create a note from template |
-| `vault.daily.read` | Read today's daily note |
-| `vault.daily.append` | Append to a daily note section |
-| `vault.capture` | Quick capture to daily note |
-| `vault.tasks` | Get open tasks from any file |
-| `vault.skills.list` | List available skills |
-| `vault.people.list` | List person profiles |
-| `vault.chat.search` | Search conversation history |
-
-This means you can message "capture: call Sarah about the migration" from WhatsApp and it lands in your daily note. Or ask "what are my open tasks?" from Slack and get a response from your vault.
-
-**Setup:** Enable in Settings → OpenClaw. Requires [OpenClaw](https://github.com/openclaw/openclaw) running locally. Localhost-only by default, all write operations gated by existing permissions.
+**Setup:** Enable in Settings → OpenClaw. Requires [OpenClaw](https://github.com/openclaw/openclaw) running locally.
 
 ## Requirements
 
-- **Claude Code CLI** (required) — [Install](https://docs.anthropic.com/en/docs/claude-code)
-- **Anthropic API key** (optional) — Only for voice transcription via API and Chat mode
-- **Obsidian CLI** (optional) — Enables vault search, task queries, and richer skill capabilities. Enable in Obsidian Settings → General → Command line interface.
+One of:
+- **Anthropic API key** — [Get one](https://console.anthropic.com/)
+- **OpenRouter API key** — [Get one](https://openrouter.ai/keys) (access to 200+ models)
+- **Ollama** — [Install](https://ollama.ai/) (free, runs locally, no API key needed)
+
+Optional:
+- **Obsidian CLI** — Enables enhanced vault search and task queries. Enable in Obsidian Settings → General → Command line interface.
 
 ## Installation
 
@@ -84,7 +100,8 @@ This means you can message "capture: call Sarah about the migration" from WhatsA
 
 1. Open the OpenBrain panel from the ribbon icon (brain) or command palette
 2. Walk through the 3-step setup wizard
-3. Start chatting — type a message, use `@` for files, `/` for skills
+3. Choose your provider and add an API key (or select Ollama for free local use)
+4. Start chatting — type a message, use `@` for files, `/` for skills
 
 A **Getting Started** note is created in your vault at `OpenBrain/Getting Started.md` with detailed documentation.
 
@@ -94,36 +111,40 @@ OpenBrain creates these folders in your vault:
 
 ```
 OpenBrain/
-  chats/          — saved conversations (.md files)
-  skills/         — skill definitions
-  templates/      — note templates (daily, meeting, 1:1, project)
-  people/         — person profiles for 1:1s
+  chats/              — saved conversations (.md files)
+  skills/             — skill definitions
+  templates/          — note templates (daily, meeting, 1:1, project)
+  people/             — person profiles for 1:1s
+  system-prompt.md    — editable AI instructions
+  Getting Started.md  — documentation
 ```
 
 ## Privacy & security
 
-- **Local-first**: Text chat runs through Claude Code CLI on your machine. No data is sent to external servers unless you explicitly use the API (voice transcription or Chat mode).
-- **API key encryption**: Your Anthropic API key is encrypted using your system's keychain (macOS Keychain, Windows DPAPI) before storage.
-- **Offline voice**: Local transcription via sherpa-onnx runs entirely on your device.
-- **Permissions**: File editing and shell commands are off by default. Enable per-conversation as needed.
+- **Provider choice**: Use Ollama for fully local, private AI — no data leaves your machine
+- **API key encryption**: All API keys are encrypted using your system's keychain (macOS Keychain, Windows DPAPI) before storage
+- **Offline voice**: Local transcription via sherpa-onnx runs entirely on your device
+- **Permissions**: File editing is off by default. Enable per-conversation as needed
+- **No telemetry**: Performance data stays local. Nothing is sent anywhere
 
 ## Settings
 
 Open Settings → OpenBrain to configure:
 
-- Claude Code CLI and Obsidian CLI paths
-- API key (encrypted, masked)
-- Permissions (file editing, shell commands)
+- Provider selection (Anthropic, OpenRouter, Ollama)
+- API keys (encrypted, masked)
+- Model selection (text field — future-proof for new models)
+- Permissions (file editing)
 - Daily note folder and format
-- System prompt
-- Tooltip visibility
-- OpenClaw integration (gateway URL, enable/disable)
+- System prompt (opens the vault file)
+- Obsidian CLI path
+- OpenClaw integration
 
 ## Disclaimer
 
 **This plugin is in early development.** OpenBrain can create, modify, and delete files in your vault when write permissions are enabled. While permissions are off by default and require explicit activation, AI-generated actions may produce unexpected results.
 
-- **Back up your vault** before enabling file editing or shell commands
+- **Back up your vault** before enabling file editing
 - **Review changes** before approving — the Note Organizer and Vault Health skills propose plans before acting
 - **The authors are not responsible** for any data loss, file deletions, or vault corruption
 - **Use at your own risk** — this software is provided as-is under the MIT License
