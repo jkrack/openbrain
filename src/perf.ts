@@ -95,6 +95,30 @@ export function getEntries(): readonly PerfEntry[] {
 }
 
 /**
+ * Get the last response timing (for showing inline after each message).
+ */
+export function getLastResponseTiming(): { totalMs: number; breakdown: Record<string, number> } | null {
+  const recent = entries.filter((e) => e.durationMs !== undefined).slice(-10);
+  if (recent.length === 0) return null;
+
+  const breakdown: Record<string, number> = {};
+  let totalMs = 0;
+
+  for (const entry of recent) {
+    if (!entry.durationMs) continue;
+    breakdown[entry.operation] = entry.durationMs;
+    if (entry.operation === "cli-total-response") totalMs = entry.durationMs;
+  }
+
+  if (totalMs === 0) {
+    // No CLI response — use the largest timing
+    totalMs = Math.max(...Object.values(breakdown));
+  }
+
+  return { totalMs, breakdown };
+}
+
+/**
  * Print a formatted summary to console.
  */
 export function logSummary(): void {

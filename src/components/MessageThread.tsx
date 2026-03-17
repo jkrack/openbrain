@@ -4,6 +4,7 @@ import { Skill } from "../skills";
 import { PersonProfile } from "../people";
 import { App, Component, MarkdownRenderer } from "obsidian";
 import { ObsidianIcon } from "./ObsidianIcon";
+import { getLastResponseTiming } from "../perf";
 
 const MESSAGES_PER_PAGE = 50;
 
@@ -50,6 +51,38 @@ export interface MessageThreadProps {
   app: App;
   component: Component;
   showTooltips: boolean;
+}
+
+function TimingBadge() {
+  const [expanded, setExpanded] = useState(false);
+  const timing = getLastResponseTiming();
+  if (!timing || timing.totalMs < 100) return null;
+
+  const formatTime = (ms: number) => {
+    if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${ms}ms`;
+  };
+
+  return (
+    <div className="ca-timing">
+      <button
+        className="ca-timing-badge"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {formatTime(timing.totalMs)}
+      </button>
+      {expanded && (
+        <div className="ca-timing-detail">
+          {Object.entries(timing.breakdown).map(([op, ms]) => (
+            <div key={op} className="ca-timing-row">
+              <span className="ca-timing-label">{op}</span>
+              <span className="ca-timing-value">{formatTime(ms)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function MessageThread({
@@ -144,6 +177,9 @@ export function MessageThread({
                   )}
                   {msg.content && !isStreaming && (
                     <CopyButton content={msg.content} />
+                  )}
+                  {isLastAssistant && !isStreaming && msg.content && (
+                    <TimingBadge />
                   )}
                 </>
               ) : (

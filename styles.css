@@ -284,6 +284,47 @@
   text-decoration: underline;
 }
 
+/* Timing badge */
+.ca-timing {
+  margin-top: 6px;
+}
+.ca-timing-badge {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.ca-timing-badge:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+}
+.ca-timing-detail {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  font-size: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ca-timing-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ca-timing-label {
+  color: var(--text-muted);
+}
+.ca-timing-value {
+  color: var(--text-normal);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Load more messages */
 .ca-load-more {
   display: block;
