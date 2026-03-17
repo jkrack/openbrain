@@ -454,8 +454,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         await runPostActions();
       };
 
-      if (hasAudioInput && settings.useLocalStt) {
-        // --- Local STT path ---
+      if (hasAudioInput) {
+        // --- Audio path: try local STT first, fall back to API ---
         try {
           setMessages((prev) =>
             prev.map((m) =>
@@ -581,8 +581,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           setAudioPrompt("");
           setShowAudioPrompt(false);
         }
-      } else if (hasAudioInput && audioSegments.length > 1) {
-        // --- Multi-segment API transcription path ---
+      } else if (!settings.useLocalStt && hasAudioInput && settings.apiKey && audioSegments.length > 1) {
+        // --- Multi-segment API transcription fallback (requires Anthropic key) ---
         await transcribeAudioSegments(settings, {
           onChunk: (chunk: string) => {
             if (!abortRef.current) appendAssistantChunk(assistantId, chunk);
@@ -606,8 +606,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           },
           onDone: () => void audioDone(),
         });
-      } else if (hasAudioInput) {
-        // --- Single-segment API transcription — then optionally analyze via chatEngine ---
+      } else if (!settings.useLocalStt && hasAudioInput && settings.apiKey) {
+        // --- Single-segment API transcription fallback (requires Anthropic key) ---
         await transcribeAudioSegments(settings, {
           onChunk: (chunk: string) => {
             if (!abortRef.current) appendAssistantChunk(assistantId, chunk);
@@ -620,6 +620,11 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
           onProgress: () => { /* single segment, no progress needed */ },
           onDone: () => void audioDone(),
         });
+      } else if (hasAudioInput) {
+        // --- Audio with no transcription available ---
+        onError("Voice transcription requires either local STT (Settings → Local speech-to-text) or an Anthropic API key.");
+        setIsStreaming(false);
+        return;
       } else {
         // --- Text message path (both Chat and Vault modes) ---
         let recentContext = "";
