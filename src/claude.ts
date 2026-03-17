@@ -53,7 +53,7 @@ export function streamClaudeCode(
 ): ChildProcess {
   const claudePath = settings.claudePath || "claude";
 
-  const args = ["-p", "--output-format", "stream-json", "--verbose"];
+  const args = ["-p", "--output-format", "stream-json", "--verbose", "--disable-slash-commands"];
 
   // Resume existing session for multi-turn
   if (opts.sessionId) {
