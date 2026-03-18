@@ -9,6 +9,9 @@ import { configure as configureObsidianCli } from "./obsidianCli";
 import { encrypt, decrypt } from "./secureStorage";
 import { OpenClawNode } from "./openclawNode";
 import { logSummary as logPerfSummary } from "./perf";
+import { TaskDashboardView, TASK_DASHBOARD_VIEW } from "./taskDashboard";
+import { SkillScheduler } from "./scheduler";
+import { checkNotifications } from "./notifications";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -16,6 +19,7 @@ export default class OpenBrainPlugin extends Plugin {
   vaultIndex: VaultIndex | null = null;
   private statusBarEl: HTMLElement | null = null;
   private openclawNode: OpenClawNode | null = null;
+  private scheduler: SkillScheduler | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -33,6 +37,9 @@ export default class OpenBrainPlugin extends Plugin {
       }
     );
 
+    // Register task dashboard view
+    this.registerView(TASK_DASHBOARD_VIEW, (leaf) => new TaskDashboardView(leaf));
+
     // Initialize everything once vault is ready
     this.app.workspace.onLayoutReady(async () => {
       await initVault(this.app, this.settings);
@@ -42,6 +49,13 @@ export default class OpenBrainPlugin extends Plugin {
 
       this.vaultIndex = new VaultIndex(this.app);
       this.refreshViews();
+
+      // Start skill scheduler
+      this.scheduler = new SkillScheduler(this.app, this.settings);
+      this.scheduler.start();
+
+      // Run notification checks
+      void checkNotifications(this.app, this.settings);
 
       // Connect to OpenClaw gateway if enabled
       if (this.settings.openclawEnabled) {
@@ -74,6 +88,19 @@ export default class OpenBrainPlugin extends Plugin {
 
     this.addRibbonIcon("brain", "OpenBrain", () => {
       void this.activateView();
+    });
+
+    this.addRibbonIcon("check-square", "OpenBrain Tasks", () => {
+      const leaves = this.app.workspace.getLeavesOfType(TASK_DASHBOARD_VIEW);
+      if (leaves.length > 0) {
+        void this.app.workspace.revealLeaf(leaves[0]);
+      } else {
+        const leaf = this.app.workspace.getRightLeaf(false);
+        if (leaf) {
+          void leaf.setViewState({ type: TASK_DASHBOARD_VIEW, active: true });
+          void this.app.workspace.revealLeaf(leaf);
+        }
+      }
     });
 
     // Status bar item
@@ -168,6 +195,24 @@ export default class OpenBrainPlugin extends Plugin {
       callback: () => {
         logPerfSummary();
         new Notice("Performance summary logged to console (Cmd+Opt+I)");
+      },
+    });
+
+    // Command to open task dashboard
+    this.addCommand({
+      id: "open-tasks",
+      name: "Open task dashboard",
+      callback: () => {
+        const leaves = this.app.workspace.getLeavesOfType(TASK_DASHBOARD_VIEW);
+        if (leaves.length > 0) {
+          void this.app.workspace.revealLeaf(leaves[0]);
+        } else {
+          const leaf = this.app.workspace.getRightLeaf(false);
+          if (leaf) {
+            void leaf.setViewState({ type: TASK_DASHBOARD_VIEW, active: true });
+            void this.app.workspace.revealLeaf(leaf);
+          }
+        }
       },
     });
 
@@ -351,6 +396,7 @@ export default class OpenBrainPlugin extends Plugin {
   }
 
   onunload() {
+    this.scheduler?.stop();
     this.openclawNode?.disconnect();
   }
 }
