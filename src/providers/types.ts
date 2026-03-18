@@ -1,3 +1,13 @@
+/** App-level message (stored in chat history) */
+export interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  isAudio?: boolean;
+  timestamp: Date;
+}
+
+/** API-level message (sent to providers) */
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string | ContentBlock[];

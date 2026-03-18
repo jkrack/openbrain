@@ -1,6 +1,6 @@
 import { App, Notice, TFile, TFolder, parseYaml, moment } from "obsidian";
 import { OpenBrainSettings } from "./settings";
-import { streamClaudeCode } from "./claude";
+import { runChat } from "./chatEngine";
 
 export interface PostAction {
   type: "create_note" | "append_to_daily" | "replace_in_daily";
@@ -347,36 +347,31 @@ export async function runSkillInBackground(
 
   new Notice(`OpenBrain: Running ${skill.name}...`);
 
-  return new Promise((resolve) => {
-    let response = "";
+  let response = "";
 
-    streamClaudeCode(settings, {
-      prompt,
-      noteContext: undefined, // Already included in systemPrompt
-      systemPrompt,
-      allowWrite: skill.tools.write ?? false,
-      allowCli: skill.tools.cli ?? false,
-      onChunk: (chunk: string) => {
-        response += chunk;
-      },
-      onError: (err: string) => {
-        new Notice(`OpenBrain: ${skill.name} failed — ${err}`, 8000);
-        resolve();
-      },
-      onDone: () => { void (async () => {
-        if (response.trim() && skill.postActions.length > 0) {
-          const results = await executePostActions(app, skill.postActions, response);
-          const failures = results.filter((r) => !r.success);
-          if (failures.length > 0) {
-            new Notice(`OpenBrain: ${skill.name} — some post-actions failed`, 5000);
-          } else {
-            new Notice(`OpenBrain: ${skill.name} complete`, 3000);
-          }
-        } else if (response.trim()) {
-          new Notice(`OpenBrain: ${skill.name} complete`, 3000);
-        }
-        resolve();
-      })(); },
-    });
+  await runChat(app, settings, {
+    messages: [{ role: "user", content: prompt }],
+    systemPrompt,
+    allowWrite: skill.tools.write ?? false,
+    useTools: true,
+    onText: (text) => { response += text; },
+    onToolStart: () => { /* background — no UI */ },
+    onToolEnd: () => { /* background — no UI */ },
+    onError: (err) => {
+      new Notice(`OpenBrain: ${skill.name} failed — ${err}`, 8000);
+    },
+    onDone: () => { /* handled below */ },
   });
+
+  if (response.trim() && skill.postActions.length > 0) {
+    const results = await executePostActions(app, skill.postActions, response);
+    const failures = results.filter((r) => !r.success);
+    if (failures.length > 0) {
+      new Notice(`OpenBrain: ${skill.name} — some post-actions failed`, 5000);
+    } else {
+      new Notice(`OpenBrain: ${skill.name} complete`, 3000);
+    }
+  } else if (response.trim()) {
+    new Notice(`OpenBrain: ${skill.name} complete`, 3000);
+  }
 }

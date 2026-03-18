@@ -3,7 +3,7 @@ import { OpenBrainSettings } from "./settings";
 import { AnthropicProvider } from "./providers/anthropic";
 import { OpenRouterProvider } from "./providers/openrouter";
 import { OllamaProvider } from "./providers/ollama";
-import { LLMProvider, ChatMessage, StreamEvent, ToolCall, ToolResultData } from "./providers/types";
+import { LLMProvider, ChatMessage, StreamEvent, ToolCall, ToolResultData, Message } from "./providers/types";
 import { getActiveTools } from "./tools";
 import { executeTool } from "./toolEngine";
 import { startTimer } from "./perf";
@@ -99,6 +99,42 @@ export async function runChat(
 
   doneTimer();
   opts.onDone();
+}
+
+/**
+ * Generate a one-line TLDR summary of a conversation using the configured provider.
+ */
+export async function summarizeChat(
+  settings: OpenBrainSettings,
+  messages: Message[]
+): Promise<string | null> {
+  if (messages.length < 2) return null;
+
+  const provider = getProvider(settings);
+  const prompt = "Summarize this entire conversation in ONE sentence (under 80 chars) for a daily note. Just the summary, nothing else.";
+
+  const apiMessages: ChatMessage[] = messages.slice(-6).map(m => ({
+    role: m.role,
+    content: m.content.slice(0, 300)
+  }));
+  apiMessages.push({ role: "user", content: prompt });
+
+  let summary = "";
+
+  try {
+    await provider.streamChat({
+      messages: apiMessages,
+      systemPrompt: "Respond with ONLY a one-sentence summary. Nothing else.",
+      onEvent: (event) => {
+        if (event.type === "text" && event.text) summary += event.text;
+      }
+    });
+  } catch {
+    return null;
+  }
+
+  const trimmed = summary.trim();
+  return (trimmed && trimmed.length < 200) ? trimmed : null;
 }
 
 function getProvider(settings: OpenBrainSettings): LLMProvider {

@@ -1,5 +1,5 @@
 import { App, TFile, Notice, moment } from "obsidian";
-import { Message } from "./claude";
+import { Message } from "./providers/types";
 import { OpenBrainSettings } from "./settings";
 import { createFromTemplate } from "./templates";
 import * as cli from "./obsidianCli";

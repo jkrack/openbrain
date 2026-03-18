@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Message, summarizeChat, transcribeAudioSegments } from "./claude";
-import { ChatMessage } from "./providers/types";
-import { runChat } from "./chatEngine";
+import { transcribeAudioSegments } from "./claude";
+import { Message, ChatMessage } from "./providers/types";
+import { runChat, summarizeChat } from "./chatEngine";
 import { useAudioRecorder, formatDuration } from "./useAudioRecorder";
 import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
@@ -785,9 +785,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
 
       // Try to generate a summary for better title
       if (messages.length >= 2) {
-        const tldr = await summarizeChat(
-          settings, messages, sessionIdRef.current, vaultPath
-        );
+        const tldr = await summarizeChat(settings, messages);
         if (tldr) meta.title = tldr;
       }
 

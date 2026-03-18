@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Message } from "../claude";
+import { Message } from "../providers/types";
 import { Skill } from "../skills";
 import { PersonProfile } from "../people";
 import { App, Component, MarkdownRenderer } from "obsidian";

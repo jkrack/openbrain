@@ -27,7 +27,7 @@ import {
   generateChatFilename,
   ChatMeta,
 } from "../chatHistory";
-import type { Message } from "../claude";
+import type { Message } from "../providers/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
