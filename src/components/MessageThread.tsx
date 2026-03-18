@@ -8,6 +8,17 @@ import { getLastResponseTiming } from "../perf";
 
 const MESSAGES_PER_PAGE = 50;
 
+/** Parse tool-use lines from assistant content to render as pills. */
+function parseToolUse(content: string): { text: string; tools: { name: string; detail: string }[] } {
+  const toolPattern = /\n?\*Using ([^.…*]+?)(?:\.\.\.)?\*\n?/g;
+  const tools: { name: string; detail: string }[] = [];
+  const text = content.replace(toolPattern, (_match, name) => {
+    tools.push({ name: name.trim(), detail: "" });
+    return "\n";
+  });
+  return { text: text.trim(), tools };
+}
+
 function MarkdownBlock({ markdown, app, component }: { markdown: string; app: App; component: Component }) {
   const elRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +49,15 @@ function CopyButton({ content }: { content: string }) {
     >
       <ObsidianIcon name={copied ? "check" : "copy"} />
     </button>
+  );
+}
+
+function ToolPill({ name }: { name: string }) {
+  return (
+    <span className="ca-tool-pill">
+      <span className="ca-tool-pill-icon">{"\u26A1"}</span>
+      {name}
+    </span>
   );
 }
 
@@ -155,36 +175,51 @@ export function MessageThread({
         const globalIdx = hiddenCount + idx;
         const isLastAssistant = msg.role === "assistant" &&
           globalIdx === messages.length - 1;
+
+        if (msg.role === "assistant") {
+          // Parse tool-use lines into pills
+          const { text: cleanText, tools } = parseToolUse(msg.content);
+          const showThinking = isLastAssistant && isStreaming;
+
+          return (
+            <div key={msg.id} className="ca-msg ca-msg--assistant">
+              {/* Tool pills rendered compactly above the content */}
+              {tools.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "6px" }}>
+                  {tools.map((tool, ti) => (
+                    <ToolPill key={ti} name={tool.name} />
+                  ))}
+                </div>
+              )}
+              <div className="ca-msg-content">
+                {msg.isAudio && <span className="ca-audio-tag">{"\uD83C\uDF99"} </span>}
+                {cleanText && (
+                  <MarkdownBlock
+                    markdown={cleanText}
+                    app={app}
+                    component={component}
+                  />
+                )}
+                {showThinking && (
+                  <div className="ca-thinking-line" />
+                )}
+                {cleanText && !isStreaming && (
+                  <CopyButton content={msg.content} />
+                )}
+                {isLastAssistant && !isStreaming && cleanText && (
+                  <TimingBadge />
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // User messages — right-aligned with accent border
         return (
-          <div key={msg.id} className={`ca-msg ca-msg--${msg.role}`}>
+          <div key={msg.id} className="ca-msg ca-msg--user">
             <div className="ca-msg-content">
               {msg.isAudio && <span className="ca-audio-tag">{"\uD83C\uDF99"} </span>}
-              {msg.role === "assistant" ? (
-                <>
-                  {msg.content && (
-                    <MarkdownBlock
-                      markdown={msg.content}
-                      app={app}
-                      component={component}
-                    />
-                  )}
-                  {isLastAssistant && isStreaming && (
-                    <span className="ca-dots">
-                      <span className="ca-dot" />
-                      <span className="ca-dot" />
-                      <span className="ca-dot" />
-                    </span>
-                  )}
-                  {msg.content && !isStreaming && (
-                    <CopyButton content={msg.content} />
-                  )}
-                  {isLastAssistant && !isStreaming && msg.content && (
-                    <TimingBadge />
-                  )}
-                </>
-              ) : (
-                <span className="ca-msg-text">{msg.content}</span>
-              )}
+              <span className="ca-msg-text">{msg.content}</span>
             </div>
           </div>
         );

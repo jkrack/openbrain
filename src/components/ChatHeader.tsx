@@ -44,8 +44,6 @@ export function ChatHeader({
   onNewChat,
   onOpenSettings,
 }: ChatHeaderProps) {
-  // Use aria-label for both accessibility and Obsidian's tooltip system.
-  // Only set when tooltips are enabled; always set aria-label for screen readers.
   const tip = (text: string) => (showTooltips ? text : undefined);
 
   return (
@@ -69,26 +67,36 @@ export function ChatHeader({
         )}
       </div>
       <div className="ca-header-right">
+        {/* Segmented mode toggle: Vault | Chat */}
         {onboardingComplete && (
-          <button
-            className={`ca-mode-toggle ${chatMode === "chat" ? "ca-mode-chat" : "ca-mode-agent"}`}
-            onClick={onChatModeToggle}
-            aria-label={tip(chatMode === "agent"
-              ? "Vault mode — Claude can read/write vault, run skills, and search"
-              : "Chat mode — direct conversation, supports images, no vault access"
-            )}
-          >
-            {chatMode === "agent" ? "Vault" : "Chat"}
-          </button>
+          <div className="ca-mode-toggle-group">
+            <button
+              className={`ca-mode-seg ${chatMode === "agent" ? "active" : ""}`}
+              onClick={chatMode === "agent" ? undefined : onChatModeToggle}
+              aria-label={tip("Vault mode — Claude can read/write vault, run skills, and search")}
+            >
+              Vault
+            </button>
+            <button
+              className={`ca-mode-seg ${chatMode === "chat" ? "active" : ""}`}
+              onClick={chatMode === "chat" ? undefined : onChatModeToggle}
+              aria-label={tip("Chat mode — direct conversation, supports images, no vault access")}
+            >
+              Chat
+            </button>
+          </div>
         )}
+
+        {/* Skill selector — minimal pill */}
         {onboardingComplete && skills.length > 0 && chatMode === "agent" && (
           <div className="ca-skill-selector">
             <button
-              className={`ca-tool-btn ${activeSkill ? "active" : ""}`}
+              className={`ca-skill-pill ${activeSkill ? "has-skill" : ""}`}
               onClick={onSkillMenuToggle}
               aria-label={tip(activeSkill?.description || "Choose a skill — specialized workflows for meetings, reviews, etc.")}
             >
               {activeSkill?.name || "General"}
+              <span className="ca-skill-pill-chevron">{"\u25BE"}</span>
             </button>
             {showSkillMenu && (
               <div className="ca-skill-menu" role="listbox">
@@ -114,28 +122,29 @@ export function ChatHeader({
             )}
           </div>
         )}
-        {onboardingComplete && chatMode === "agent" && <>
-          <button
-            className={`ca-tool-btn ${effectiveWrite ? "active" : ""}`}
-            onClick={onToggleWrite}
-            aria-label={tip(effectiveWrite
-              ? "File editing ON — Claude can create and modify notes"
-              : "File editing OFF — Claude can only read"
-            )}
-          >
-            write
-          </button>
-          <button
-            className={`ca-tool-btn ${effectiveCli ? "active" : ""}`}
-            onClick={onToggleCli}
-            aria-label={tip(effectiveCli
-              ? "Shell access ON — Claude can run commands and search your vault"
-              : "Shell access OFF — Claude cannot run commands"
-            )}
-          >
-            cli
-          </button>
-        </>}
+
+        {/* Permission dots: write (green) and cli (accent) */}
+        {onboardingComplete && chatMode === "agent" && (
+          <div className="ca-perm-dots">
+            <button
+              className={`ca-perm-dot ${effectiveWrite ? "write-on" : "write-off"}`}
+              onClick={onToggleWrite}
+              aria-label={tip(effectiveWrite
+                ? "File editing ON — Claude can create and modify notes"
+                : "File editing OFF — Claude can only read"
+              )}
+            />
+            <button
+              className={`ca-perm-dot ${effectiveCli ? "cli-on" : "cli-off"}`}
+              onClick={onToggleCli}
+              aria-label={tip(effectiveCli
+                ? "Shell access ON — Claude can run commands and search your vault"
+                : "Shell access OFF — Claude cannot run commands"
+              )}
+            />
+          </div>
+        )}
+
         <button
           className="ca-icon-btn"
           onClick={onNewChat}

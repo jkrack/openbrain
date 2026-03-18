@@ -831,7 +831,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const hasAudio = recorder.audioSegments.length > 0 && recorder.state === "idle";
 
   return (
-    <div className="claude-agent-panel">
+    <div className={`claude-agent-panel${isRecording ? " is-recording" : ""}${isStreaming ? " is-streaming" : ""}`}>
       {/* Header */}
       <ChatHeader
         activeSkill={activeSkill}
