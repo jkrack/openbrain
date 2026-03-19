@@ -71,7 +71,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   ollamaUrl: "",
   ollamaModel: "",
   floatingRecorderEnabled: false,
-  floatingRecorderHotkey: "",
+  floatingRecorderHotkey: "Alt+V",
   floatingRecorderPosition: "auto" as { x: number; y: number } | "auto",
   floatingRecorderSegmentDuration: 300,
   floatingRecorderOutputFolder: "OpenBrain/recordings",
@@ -515,6 +515,13 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           .onChange((value) => { void (async () => {
             this.plugin.settings.floatingRecorderEnabled = value;
             await this.plugin.saveSettings();
+            // Register or unregister hotkey based on toggle
+            const fr = (this.plugin as any).floatingRecorder;
+            if (value) {
+              fr?.registerHotkey();
+            } else {
+              fr?.unregisterHotkey();
+            }
             this.display();
           })(); })
       );
@@ -537,8 +544,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     let listening = false;
 
     const setHotkey = (accelerator: string) => { void (async () => {
+      // Unregister old hotkey, save new one, re-register
+      (this.plugin as any).floatingRecorder?.unregisterHotkey();
       this.plugin.settings.floatingRecorderHotkey = accelerator;
       await this.plugin.saveSettings();
+      (this.plugin as any).floatingRecorder?.registerHotkey();
       this.display();
     })(); };
 
