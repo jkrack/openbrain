@@ -112,6 +112,9 @@ export class FloatingRecorder {
       "floatingRecorder.html"
     );
 
+    // Use the same session as Obsidian's main window so mic permissions are inherited
+    const obsidianSession = remote.getCurrentWindow().webContents.session;
+
     this.window = new BrowserWindow({
       width: 360,
       height: 68,
@@ -126,8 +129,20 @@ export class FloatingRecorder {
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false,
+        session: obsidianSession,
       },
     });
+
+    // Auto-grant media permissions (mic) for this window
+    this.window.webContents.session.setPermissionRequestHandler(
+      (_webContents: any, permission: string, callback: (granted: boolean) => void) => {
+        if (permission === "media") {
+          callback(true);
+        } else {
+          callback(false);
+        }
+      }
+    );
 
     this.window.loadFile(htmlPath);
 
