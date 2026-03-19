@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 main.js
+floatingRecorder.html
 
 # Environment
 .env
@@ -17,3 +18,6 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Claude Code
+CLAUDE.md

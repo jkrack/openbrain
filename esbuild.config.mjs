@@ -1,6 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { copyFileSync } from "fs";
 
 const prod = process.argv[2] === "production";
 
@@ -32,6 +33,11 @@ const context = await esbuild.context({
   jsx: "automatic",
   jsxImportSource: "react",
 });
+
+// Copy floating recorder HTML alongside the bundle
+try {
+  copyFileSync("src/floatingRecorder.html", "floatingRecorder.html");
+} catch { /* file may not exist yet */ }
 
 if (prod) {
   await context.rebuild();
