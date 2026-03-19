@@ -560,15 +560,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         if (e.altKey) parts.push("Alt");
         if (e.shiftKey) parts.push("Shift");
 
-        // Map key names to Electron accelerator format
-        let key = e.key;
-        if (key === " ") key = "Space";
-        else if (key.length === 1) key = key.toUpperCase();
-        else if (key === "ArrowUp") key = "Up";
-        else if (key === "ArrowDown") key = "Down";
-        else if (key === "ArrowLeft") key = "Left";
-        else if (key === "ArrowRight") key = "Right";
-        else if (key === "Escape") {
+        // Use e.code for the physical key (immune to Option-key character mapping)
+        // e.code gives "KeyV", "Digit1", "Space", etc.
+        const code = e.code;
+
+        if (code === "Escape") {
           // Cancel
           listening = false;
           hotkeyDisplay.setText(currentHotkey || "Not set");
@@ -576,6 +572,30 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           document.removeEventListener("keydown", onKeyDown, true);
           return;
         }
+
+        // Map e.code to Electron accelerator key names
+        let key: string;
+        if (code.startsWith("Key")) key = code.slice(3); // KeyV -> V
+        else if (code.startsWith("Digit")) key = code.slice(5); // Digit1 -> 1
+        else if (code === "Space") key = "Space";
+        else if (code === "Backspace") key = "Backspace";
+        else if (code === "Delete") key = "Delete";
+        else if (code === "Enter") key = "Enter";
+        else if (code === "Tab") key = "Tab";
+        else if (code.startsWith("Arrow")) key = code.slice(5); // ArrowUp -> Up
+        else if (code.startsWith("F") && /^F\d+$/.test(code)) key = code; // F1-F24
+        else if (code === "Minus") key = "-";
+        else if (code === "Equal") key = "=";
+        else if (code === "BracketLeft") key = "[";
+        else if (code === "BracketRight") key = "]";
+        else if (code === "Backslash") key = "\\";
+        else if (code === "Semicolon") key = ";";
+        else if (code === "Quote") key = "'";
+        else if (code === "Comma") key = ",";
+        else if (code === "Period") key = ".";
+        else if (code === "Slash") key = "/";
+        else if (code === "Backquote") key = "`";
+        else key = e.key.toUpperCase(); // fallback
 
         parts.push(key);
         const accelerator = parts.join("+");
