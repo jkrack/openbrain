@@ -84,7 +84,21 @@ export class FloatingRecorder {
     }
     if (this.window) {
       // Send stop signal to overlay — it will save segments and close itself
-      this.window.webContents.send("recorder:request-stop");
+      try {
+        if (!this.window.isDestroyed()) {
+          this.window.webContents.send("recorder:request-stop");
+          // Fallback: if overlay doesn't close within 3 seconds, force it
+          setTimeout(() => {
+            if (this.window && !this.window.isDestroyed()) {
+              this.window.close();
+            }
+          }, 3000);
+        }
+      } catch {
+        // Remote proxy may be stale — force cleanup
+        try { this.window.close(); } catch { /* already gone */ }
+        this.window = null;
+      }
     } else {
       await this.start();
     }
