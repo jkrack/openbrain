@@ -264,15 +264,16 @@ export class FloatingRecorder {
 
   private getTranscribeFn(): TranscribeFn {
     return async (wavPath: string) => {
-      const { readFile } = await import("fs/promises");
-      const wavBuffer = await readFile(wavPath);
-      const blob = new Blob([wavBuffer], { type: "audio/wav" });
-      const start = Date.now();
-
       if (this.settings.useLocalStt) {
-        const { transcribeBlob } = await import("./stt");
-        return transcribeBlob(blob, this.settings);
+        // WAV is already 16kHz mono on disk — pass directly to sherpa-onnx
+        const { transcribeWavFile } = await import("./stt");
+        return transcribeWavFile(wavPath, this.settings);
       } else {
+        // API transcription — read WAV and send as blob
+        const { readFile } = await import("fs/promises");
+        const wavBuffer = await readFile(wavPath);
+        const blob = new Blob([wavBuffer], { type: "audio/wav" });
+        const start = Date.now();
         const { transcribeAudioSegments } = await import("./claude");
         return new Promise<{ text: string; durationMs: number }>((resolve, reject) => {
           let text = "";

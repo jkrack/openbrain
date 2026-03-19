@@ -132,6 +132,22 @@ export async function transcribeBlob(
 }
 
 /**
+ * Transcribe a WAV file already on disk (no conversion needed).
+ * Use this when the file is already 16kHz mono PCM WAV.
+ */
+export async function transcribeWavFile(
+  wavPath: string,
+  settings: OpenBrainSettings
+): Promise<TranscribeResult> {
+  const start = Date.now();
+  const text = await runSherpaOnnx(wavPath, settings);
+  return {
+    text: text.trim(),
+    durationMs: Date.now() - start,
+  };
+}
+
+/**
  * Transcribe multiple audio segments sequentially.
  */
 export async function transcribeSegments(
