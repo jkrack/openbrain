@@ -100,7 +100,7 @@ export class FloatingRecorder {
       (this.app as any).vault.adapter.basePath,
       ".obsidian",
       "plugins",
-      "obsidian-open-brain",
+      "open-brain",
       "floatingRecorder.html"
     );
 
