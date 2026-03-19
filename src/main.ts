@@ -300,7 +300,7 @@ export default class OpenBrainPlugin extends Plugin {
       this.app.vault.on("create", (file) => {
         if (!(file instanceof TFile)) return;
 
-        const expectedPath = getDailyNotePath(this.app);
+        const expectedPath = getDailyNotePath(this.app, this.settings);
         if (file.path !== expectedPath) return;
 
         // Find skills with this trigger

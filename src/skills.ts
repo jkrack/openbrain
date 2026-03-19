@@ -126,7 +126,7 @@ function extractTitle(response: string): string {
  * Find today's daily note path. Checks periodic-notes plugin first
  * (community plugin), then falls back to built-in daily-notes config.
  */
-export function getDailyNotePath(app: App): string {
+export function getDailyNotePath(app: App, settings?: OpenBrainSettings): string {
   try {
     // Check periodic-notes plugin (community) first — internal API not publicly typed
     const appRecord = app as unknown as Record<string, unknown>;
@@ -158,7 +158,17 @@ export function getDailyNotePath(app: App): string {
     /* expected — internal API may change between Obsidian versions */
   }
 
-  // Default fallback
+  // Fallback to OpenBrain's own daily note settings
+  if (settings?.dailyNoteFolder && settings?.dailyNoteFormat) {
+    const folder = settings.dailyNoteFolder
+      .replace("{{YYYY}}", moment().format("YYYY"))
+      .replace("{{MM}}", moment().format("MM"))
+      .replace("{{DD}}", moment().format("DD"));
+    const dateStr = moment().format(settings.dailyNoteFormat);
+    return `${folder}/${dateStr}.md`;
+  }
+
+  // Last resort fallback
   return `${moment().format("YYYY-MM-DD")}.md`;
 }
 
@@ -240,7 +250,8 @@ export interface PostActionResult {
 export async function executePostActions(
   app: App,
   actions: PostAction[],
-  response: string
+  response: string,
+  settings?: OpenBrainSettings
 ): Promise<PostActionResult[]> {
   const results: PostActionResult[] = [];
   const title = extractTitle(response);
@@ -283,7 +294,7 @@ export async function executePostActions(
         (action.type === "append_to_daily" || action.type === "replace_in_daily") &&
         action.section
       ) {
-        const dailyPath = getDailyNotePath(app);
+        const dailyPath = getDailyNotePath(app, settings);
         let dailyFile = app.vault.getAbstractFileByPath(dailyPath);
 
         if (!dailyFile) {
@@ -364,7 +375,7 @@ export async function runSkillInBackground(
   });
 
   if (response.trim() && skill.postActions.length > 0) {
-    const results = await executePostActions(app, skill.postActions, response);
+    const results = await executePostActions(app, skill.postActions, response, settings);
     const failures = results.filter((r) => !r.success);
     if (failures.length > 0) {
       new Notice(`OpenBrain: ${skill.name} — some post-actions failed`, 5000);

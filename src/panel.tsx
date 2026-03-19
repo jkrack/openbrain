@@ -401,7 +401,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
     const response = responseRef.current;
     if (!response.trim()) return;
 
-    const results = await executePostActions(app, activeSkill.postActions, response);
+    const results = await executePostActions(app, activeSkill.postActions, response, settings);
 
     const feedback = results
       .map((r) => (r.success ? `${r.message}` : `Failed: ${r.message}`))
