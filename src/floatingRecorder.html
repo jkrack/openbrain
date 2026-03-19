@@ -398,24 +398,39 @@
     animFrame = requestAnimationFrame(updateWaveform);
   }
 
+  let stopping = false;
+
   async function stopRecording() {
+    if (stopping) return;
+    stopping = true;
+
     clearInterval(timerInterval);
     cancelAnimationFrame(animFrame);
 
     recorderEl.classList.add('state-transcribing');
-    timerEl.textContent = 'Transcribing...';
+    timerEl.textContent = 'Stopping...';
 
-    const blob = await finalizeSegment();
-    if (blob.size > 0) {
-      segmentCount++;
-      const wavBuffer = await blobToWavBuffer(blob);
-      ipcRenderer.send('recorder:segment-ready', {
-        index: segmentCount,
-        wavBuffer: wavBuffer,
-        duration: segmentElapsed,
-      });
+    // Finalize last segment — errors should not prevent stop
+    try {
+      const blob = await finalizeSegment();
+      if (blob.size > 0) {
+        segmentCount++;
+        try {
+          const wavBuffer = await blobToWavBuffer(blob);
+          ipcRenderer.send('recorder:segment-ready', {
+            index: segmentCount,
+            wavBuffer: wavBuffer,
+            duration: segmentElapsed,
+          });
+        } catch (err) {
+          console.error('Failed to convert last segment:', err);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to finalize last segment:', err);
     }
 
+    // Always stop tracks and send stop signal
     if (stream) stream.getTracks().forEach((t) => t.stop());
 
     ipcRenderer.send('recorder:stop', { totalDuration: duration, totalSegments: segmentCount });

@@ -502,17 +502,18 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Floating recorder").setHeading();
 
     new Setting(containerEl)
-      .setName("Global hotkey")
+      .setName("Hotkey")
       .setDesc(
-        "System-wide hotkey to toggle the floating recorder. " +
-        "Works even when Obsidian is not focused. Format: modifier+key (e.g., Alt+V, Ctrl+Shift+R)."
+        "Use Obsidian's Hotkeys settings to bind a key to \"Toggle floating recorder\". " +
+        "For a system-wide hotkey (works when Obsidian is not focused), enter an Electron " +
+        "accelerator below (e.g., Alt+V, CommandOrControl+Shift+R). Leave empty to disable."
       )
       .addText((text) =>
         text
-          .setPlaceholder("Alt+V")
+          .setPlaceholder("Alt+V (or leave empty)")
           .setValue(this.plugin.settings.floatingRecorderHotkey)
           .onChange((value) => { void (async () => {
-            this.plugin.settings.floatingRecorderHotkey = value || "Alt+V";
+            this.plugin.settings.floatingRecorderHotkey = value;
             await this.plugin.saveSettings();
           })(); })
       );

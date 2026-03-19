@@ -56,7 +56,9 @@ export class FloatingRecorder {
   registerHotkey(): void {
     if (!globalShortcut) return;
 
-    const hotkey = this.settings.floatingRecorderHotkey || "Alt+V";
+    const hotkey = this.settings.floatingRecorderHotkey?.trim();
+    if (!hotkey) return; // No global hotkey configured — user relies on Obsidian command
+
     try {
       globalShortcut.register(hotkey, () => {
         void this.toggle();
@@ -69,7 +71,8 @@ export class FloatingRecorder {
 
   unregisterHotkey(): void {
     if (!globalShortcut) return;
-    const hotkey = this.settings.floatingRecorderHotkey || "Alt+V";
+    const hotkey = this.settings.floatingRecorderHotkey?.trim();
+    if (!hotkey) return;
     try {
       globalShortcut.unregister(hotkey);
     } catch { /* may not be registered */ }
@@ -156,22 +159,36 @@ export class FloatingRecorder {
 
     ipcMain.on("recorder:stop", async (_e: any, data: any) => {
       if (!this.sessionDir) return;
+      const dir = this.sessionDir;
 
-      await Promise.allSettled(this.pendingTranscriptions);
-      this.pendingTranscriptions = [];
-
-      await this.createVaultNote(data.totalDuration);
-
-      await markCompleted(this.sessionDir);
-
-      const recBaseDir = getRecordingsDir(this.settings);
-      void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);
-
+      // Close the overlay window immediately — don't make user wait
       if (this.window && !this.window.isDestroyed()) {
         this.window.webContents.send("recorder:done");
       }
+      setTimeout(() => this.cleanup(), 500);
 
-      setTimeout(() => this.cleanup(), 1500);
+      // Wait for pending transcriptions with a 30-second timeout
+      if (this.pendingTranscriptions.length > 0) {
+        const timeout = new Promise<void>((resolve) => setTimeout(resolve, 30000));
+        await Promise.race([
+          Promise.allSettled(this.pendingTranscriptions),
+          timeout,
+        ]);
+        this.pendingTranscriptions = [];
+      }
+
+      try {
+        await this.createVaultNote(data.totalDuration);
+        await markCompleted(dir);
+        new Notice("Recording saved");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[OpenBrain] Failed to create recording note: ${message}`);
+        new Notice(`Recording error: ${message}`);
+      }
+
+      const recBaseDir = getRecordingsDir(this.settings);
+      void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);
     });
 
     ipcMain.on("recorder:position-changed", (_e: any, pos: any) => {
