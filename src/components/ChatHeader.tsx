@@ -1,5 +1,6 @@
 import React from "react";
 import { Skill } from "../skills";
+import { ObsidianIcon } from "./ObsidianIcon";
 
 export interface ChatHeaderProps {
   activeSkill: Skill | null;
@@ -14,6 +15,7 @@ export interface ChatHeaderProps {
   showTooltips: boolean;
   chatMode: "agent" | "chat";
   onboardingComplete: boolean;
+  taskTrayOpen: boolean;
   onChatModeToggle: () => void;
   onSkillMenuToggle: () => void;
   onSkillSelect: (skillId: string | null) => void;
@@ -21,6 +23,7 @@ export interface ChatHeaderProps {
   onToggleCli: () => void;
   onNewChat: () => void;
   onOpenSettings: () => void;
+  onToggleTaskTray: () => void;
 }
 
 export function ChatHeader({
@@ -36,6 +39,7 @@ export function ChatHeader({
   showTooltips,
   chatMode,
   onboardingComplete,
+  taskTrayOpen,
   onChatModeToggle,
   onSkillMenuToggle,
   onSkillSelect,
@@ -43,6 +47,7 @@ export function ChatHeader({
   onToggleCli,
   onNewChat,
   onOpenSettings,
+  onToggleTaskTray,
 }: ChatHeaderProps) {
   const tip = (text: string) => (showTooltips ? text : undefined);
 
@@ -145,6 +150,15 @@ export function ChatHeader({
           </div>
         )}
 
+        {onboardingComplete && (
+          <button
+            className={`ca-icon-btn ${taskTrayOpen ? "active" : ""}`}
+            onClick={onToggleTaskTray}
+            aria-label={tip("Toggle task tray")}
+          >
+            <ObsidianIcon name="check-square" />
+          </button>
+        )}
         <button
           className="ca-icon-btn"
           onClick={onNewChat}

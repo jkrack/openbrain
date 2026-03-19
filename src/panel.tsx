@@ -27,6 +27,7 @@ import { PersonPicker } from "./components/PersonPicker";
 import { InputArea } from "./components/InputArea";
 import { MessageThread } from "./components/MessageThread";
 import { AudioControls } from "./components/AudioControls";
+import { TaskTray } from "./components/TaskTray";
 
 interface PanelProps {
   settings: OpenBrainSettings;
@@ -82,6 +83,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [chatMode, setChatMode] = useState<"agent" | "chat">("agent");
   const [pendingImages, setPendingImages] = useState<{ base64: string; mediaType: string; preview: string }[]>([]);
+  const [showTaskTray, setShowTaskTray] = useState(false);
 
   // Onboarding state
   const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
@@ -831,7 +833,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   const hasAudio = recorder.audioSegments.length > 0 && recorder.state === "idle";
 
   return (
-    <div className={`claude-agent-panel${isRecording ? " is-recording" : ""}${isStreaming ? " is-streaming" : ""}`}>
+    <div className={`claude-agent-panel${isRecording ? " is-recording" : ""}${isStreaming ? " is-streaming" : ""}${showTaskTray ? " tray-open" : ""}`}>
       {/* Header */}
       <ChatHeader
         activeSkill={activeSkill}
@@ -846,6 +848,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         showTooltips={settings.showTooltips}
         chatMode={chatMode}
         onboardingComplete={onboardingDone}
+        taskTrayOpen={showTaskTray}
         onChatModeToggle={() => setChatMode((m) => m === "agent" ? "chat" : "agent")}
         onSkillMenuToggle={() => setShowSkillMenu((v) => !v)}
         onSkillSelect={(id) => void selectSkill(id)}
@@ -859,6 +862,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
             setting.openTabById("open-brain");
           }
         }}
+        onToggleTaskTray={() => setShowTaskTray((v) => !v)}
       />
 
       {/* Person picker overlay */}
@@ -1051,6 +1055,20 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
         onMicClick={() => void handleMicClick()}
         micState={recorder.state === "processing" ? "processing" : isRecording ? "recording" : "idle"}
         isSendDisabled={isStreaming || isRecording || !input.trim()}
+      />
+
+      {/* Task tray — slides from right */}
+      <TaskTray
+        app={app}
+        settings={settings}
+        isOpen={showTaskTray}
+        onClose={() => setShowTaskTray(false)}
+        onFocusTask={(task) => {
+          // Set the task as chat context — prefill input and attach source file
+          setInput(`Help me work on this task: "${task.text}"`);
+          setAttachedFiles((prev) => prev.includes(task.file) ? prev : [...prev, task.file]);
+          setShowTaskTray(false);
+        }}
       />
     </div>
   );
