@@ -520,22 +520,79 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.floatingRecorderEnabled) {
-    new Setting(containerEl)
+    const hotkeySetting = new Setting(containerEl)
       .setName("System-wide hotkey")
       .setDesc(
-        "Optional hotkey that works even when Obsidian is not focused. " +
-        "Uses Electron accelerator format (e.g., Alt+V, CommandOrControl+Shift+R). " +
-        "Leave empty to use only the Obsidian command palette."
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder("e.g., Alt+V")
-          .setValue(this.plugin.settings.floatingRecorderHotkey)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.floatingRecorderHotkey = value;
-            await this.plugin.saveSettings();
-          })(); })
+        "Press a key combination to set a global hotkey that works even when Obsidian is not focused. " +
+        "Click Clear to remove."
       );
+
+    const currentHotkey = this.plugin.settings.floatingRecorderHotkey;
+    const hotkeyDisplay = hotkeySetting.controlEl.createEl("kbd", {
+      text: currentHotkey || "Not set",
+      cls: "setting-hotkey" + (currentHotkey ? "" : " setting-hotkey-empty"),
+    });
+    hotkeyDisplay.style.cssText = "padding:4px 10px;border-radius:4px;font-family:var(--font-monospace);font-size:12px;cursor:pointer;min-width:80px;text-align:center;border:1px solid var(--background-modifier-border);background:var(--background-secondary);";
+
+    let listening = false;
+
+    const setHotkey = (accelerator: string) => { void (async () => {
+      this.plugin.settings.floatingRecorderHotkey = accelerator;
+      await this.plugin.saveSettings();
+      this.display();
+    })(); };
+
+    hotkeyDisplay.addEventListener("click", () => {
+      if (listening) return;
+      listening = true;
+      hotkeyDisplay.setText("Press keys...");
+      hotkeyDisplay.style.borderColor = "var(--interactive-accent)";
+
+      const onKeyDown = (e: KeyboardEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Ignore lone modifier presses
+        if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+
+        const parts: string[] = [];
+        if (e.ctrlKey || e.metaKey) parts.push("CommandOrControl");
+        if (e.altKey) parts.push("Alt");
+        if (e.shiftKey) parts.push("Shift");
+
+        // Map key names to Electron accelerator format
+        let key = e.key;
+        if (key === " ") key = "Space";
+        else if (key.length === 1) key = key.toUpperCase();
+        else if (key === "ArrowUp") key = "Up";
+        else if (key === "ArrowDown") key = "Down";
+        else if (key === "ArrowLeft") key = "Left";
+        else if (key === "ArrowRight") key = "Right";
+        else if (key === "Escape") {
+          // Cancel
+          listening = false;
+          hotkeyDisplay.setText(currentHotkey || "Not set");
+          hotkeyDisplay.style.borderColor = "";
+          document.removeEventListener("keydown", onKeyDown, true);
+          return;
+        }
+
+        parts.push(key);
+        const accelerator = parts.join("+");
+
+        listening = false;
+        document.removeEventListener("keydown", onKeyDown, true);
+        setHotkey(accelerator);
+      };
+
+      document.addEventListener("keydown", onKeyDown, true);
+    });
+
+    if (currentHotkey) {
+      hotkeySetting.addButton((btn) =>
+        btn.setButtonText("Clear").onClick(() => setHotkey(""))
+      );
+    }
 
     new Setting(containerEl)
       .setName("Segment duration")
