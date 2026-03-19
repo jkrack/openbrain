@@ -155,25 +155,36 @@ export class FloatingRecorder {
       });
     });
 
-    // When overlay closes (stop button, hotkey, or crash) — process the session
-    this.window.on("closed", () => {
-      const dir = this.sessionDir;
-      this.window = null;
-      this.sessionDir = null;
+    // Poll for window close — remote event listeners are unreliable
+    // When the overlay closes itself, we detect it here and process the session
+    const obsidianWindow = remote.getCurrentWindow();
+    let onFocus: (() => void) | null = null;
+    let onBlur: (() => void) | null = null;
 
-      if (dir) {
-        void this.processSession(dir);
+    const pollInterval = setInterval(() => {
+      if (!this.window || this.window.isDestroyed()) {
+        clearInterval(pollInterval);
+        const dir = this.sessionDir;
+        this.window = null;
+        this.sessionDir = null;
+
+        // Clean up focus/blur listeners
+        if (onFocus) obsidianWindow.removeListener("focus", onFocus);
+        if (onBlur) obsidianWindow.removeListener("blur", onBlur);
+
+        if (dir) {
+          void this.processSession(dir);
+        }
       }
-    });
+    }, 500);
 
     // Hide overlay when Obsidian is focused, show when blurred
-    const obsidianWindow = remote.getCurrentWindow();
-    const onFocus = () => {
+    onFocus = () => {
       if (this.window && !this.window.isDestroyed()) {
         this.window.hide();
       }
     };
-    const onBlur = () => {
+    onBlur = () => {
       if (this.window && !this.window.isDestroyed()) {
         this.window.showInactive();
       }
@@ -185,13 +196,6 @@ export class FloatingRecorder {
     if (obsidianWindow.isFocused()) {
       this.window.hide();
     }
-
-    // Clean up focus listeners when window closes
-    const origOnClosed = this.window.on;
-    this.window.once("closed", () => {
-      obsidianWindow.removeListener("focus", onFocus);
-      obsidianWindow.removeListener("blur", onBlur);
-    });
   }
 
   /**
