@@ -17,13 +17,16 @@ import { transcribeSegment, transcribeAllPending, TranscribeFn } from "./progres
 // Electron access via remote — may not be available in all environments
 let BrowserWindow: any;
 let globalShortcut: any;
-let screen: any;
+let electronScreen: any;
+let ipcRenderer: any;
+let remote: any;
 
 try {
-  const remote = require("electron").remote;
+  remote = require("electron").remote;
   BrowserWindow = remote.BrowserWindow;
   globalShortcut = remote.globalShortcut;
-  screen = remote.screen;
+  electronScreen = remote.screen;
+  ipcRenderer = require("electron").ipcRenderer;
 } catch {
   // Electron remote not available — floating recorder will be disabled
 }
@@ -39,6 +42,7 @@ export class FloatingRecorder {
   private window: any = null;
   private sessionDir: string | null = null;
   private pendingTranscriptions: Promise<void>[] = [];
+  private ipcHandlers: Map<string, (...args: any[]) => void> = new Map();
 
   constructor(app: App, settings: OpenBrainSettings) {
     this.app = app;
@@ -54,10 +58,10 @@ export class FloatingRecorder {
   }
 
   registerHotkey(): void {
-    if (!globalShortcut) return;
+    if (!globalShortcut || !this.settings.floatingRecorderEnabled) return;
 
     const hotkey = this.settings.floatingRecorderHotkey?.trim();
-    if (!hotkey) return; // No global hotkey configured — user relies on Obsidian command
+    if (!hotkey) return;
 
     try {
       globalShortcut.register(hotkey, () => {
@@ -79,6 +83,10 @@ export class FloatingRecorder {
   }
 
   async toggle(): Promise<void> {
+    if (!this.settings.floatingRecorderEnabled) {
+      new Notice("Floating recorder is disabled. Enable it in Settings > OpenBrain.");
+      return;
+    }
     if (this.window) {
       this.window.webContents.send("recorder:request-stop");
     } else {
@@ -126,29 +134,27 @@ export class FloatingRecorder {
 
     this.window.loadFile(htmlPath);
 
+    // Get Obsidian's window ID so the overlay can send messages back to us
+    const obsidianWindowId = remote.getCurrentWindow().id;
+
     this.window.webContents.on("did-finish-load", () => {
       this.window.webContents.send("recorder:config", {
         segmentDuration: this.settings.floatingRecorderSegmentDuration,
         deviceId: this.settings.audioDeviceId,
+        parentWindowId: obsidianWindowId,
       });
     });
 
-    const { ipcMain } = require("electron");
-
-    ipcMain.removeAllListeners("recorder:segment-ready");
-    ipcMain.removeAllListeners("recorder:stop");
-    ipcMain.removeAllListeners("recorder:position-changed");
-    ipcMain.removeAllListeners("recorder:error");
-
-    ipcMain.on("recorder:segment-ready", (_e: any, data: any) => {
+    // Listen for messages from overlay via ipcRenderer (overlay sends to our webContents)
+    this.registerIpcHandler("recorder:segment-ready", (_e: any, data: any) => {
       if (!this.sessionDir) return;
       const wavBuffer = Buffer.from(data.wavBuffer);
       const dir = this.sessionDir;
 
       const work = (async () => {
-        const filename = await addSegment(dir, wavBuffer, data.duration);
-        const session = await readSession(dir);
-        const segIndex = session.segments.length - 1;
+        await addSegment(dir, wavBuffer, data.duration);
+        const s = await readSession(dir);
+        const segIndex = s.segments.length - 1;
 
         const transcribeFn = this.getTranscribeFn();
         await transcribeSegment(dir, segIndex, transcribeFn);
@@ -157,11 +163,11 @@ export class FloatingRecorder {
       this.pendingTranscriptions.push(work);
     });
 
-    ipcMain.on("recorder:stop", async (_e: any, data: any) => {
+    this.registerIpcHandler("recorder:stop", async (_e: any, data: any) => {
       if (!this.sessionDir) return;
       const dir = this.sessionDir;
 
-      // Close the overlay window immediately — don't make user wait
+      // Close the overlay window immediately
       if (this.window && !this.window.isDestroyed()) {
         this.window.webContents.send("recorder:done");
       }
@@ -180,7 +186,6 @@ export class FloatingRecorder {
       try {
         await this.createVaultNote(data.totalDuration);
         await markCompleted(dir);
-        new Notice("Recording saved");
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         console.error(`[OpenBrain] Failed to create recording note: ${message}`);
@@ -191,18 +196,54 @@ export class FloatingRecorder {
       void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);
     });
 
-    ipcMain.on("recorder:position-changed", (_e: any, pos: any) => {
+    this.registerIpcHandler("recorder:position-changed", (_e: any, pos: any) => {
       this.settings.floatingRecorderPosition = { x: pos.x, y: pos.y };
     });
 
-    ipcMain.on("recorder:error", (_e: any, data: any) => {
+    this.registerIpcHandler("recorder:error", (_e: any, data: any) => {
       new Notice(`Recording error: ${data.message}`);
       this.cleanup();
     });
 
+    // Hide overlay when Obsidian is focused, show when blurred
+    const obsidianWindow = remote.getCurrentWindow();
+    const onFocus = () => {
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.hide();
+      }
+    };
+    const onBlur = () => {
+      if (this.window && !this.window.isDestroyed()) {
+        this.window.showInactive();
+      }
+    };
+    obsidianWindow.on("focus", onFocus);
+    obsidianWindow.on("blur", onBlur);
+
+    // Initially show only if Obsidian is not focused
+    if (obsidianWindow.isFocused()) {
+      this.window.hide();
+    }
+
     this.window.on("closed", () => {
       this.window = null;
+      obsidianWindow.removeListener("focus", onFocus);
+      obsidianWindow.removeListener("blur", onBlur);
     });
+  }
+
+  private registerIpcHandler(channel: string, handler: (...args: any[]) => void): void {
+    if (!ipcRenderer) return;
+    this.ipcHandlers.set(channel, handler);
+    ipcRenderer.on(channel, handler);
+  }
+
+  private removeIpcHandlers(): void {
+    if (!ipcRenderer) return;
+    for (const [channel, handler] of this.ipcHandlers) {
+      ipcRenderer.removeListener(channel, handler);
+    }
+    this.ipcHandlers.clear();
   }
 
   private getWindowPosition(): { x: number; y: number } {
@@ -213,8 +254,8 @@ export class FloatingRecorder {
       return this.settings.floatingRecorderPosition;
     }
 
-    if (screen) {
-      const display = screen.getPrimaryDisplay();
+    if (electronScreen) {
+      const display = electronScreen.getPrimaryDisplay();
       const { width, height } = display.workAreaSize;
       return {
         x: Math.round((width - 360) / 2),
@@ -289,20 +330,14 @@ export class FloatingRecorder {
   }
 
   private cleanup(): void {
+    this.removeIpcHandlers();
+
     if (this.window && !this.window.isDestroyed()) {
       this.window.close();
     }
     this.window = null;
     this.sessionDir = null;
     this.pendingTranscriptions = [];
-
-    try {
-      const { ipcMain } = require("electron");
-      ipcMain.removeAllListeners("recorder:segment-ready");
-      ipcMain.removeAllListeners("recorder:stop");
-      ipcMain.removeAllListeners("recorder:position-changed");
-      ipcMain.removeAllListeners("recorder:error");
-    } catch { /* may not be available */ }
   }
 
   async recoverIncompleteSessions(): Promise<void> {

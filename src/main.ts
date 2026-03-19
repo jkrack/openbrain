@@ -61,7 +61,7 @@ export default class OpenBrainPlugin extends Plugin {
 
       // Initialize floating recorder
       this.floatingRecorder = new FloatingRecorder(this.app, this.settings);
-      if (this.floatingRecorder.isAvailable) {
+      if (this.floatingRecorder.isAvailable && this.settings.floatingRecorderEnabled) {
         this.floatingRecorder.registerHotkey();
         void this.floatingRecorder.recoverIncompleteSessions();
       }

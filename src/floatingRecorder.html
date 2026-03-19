@@ -200,6 +200,7 @@
 
 <script>
   const { ipcRenderer } = require('electron');
+  const remote = require('electron').remote;
 
   let mediaRecorder = null;
   let analyser = null;
@@ -214,15 +215,30 @@
   let segmentDuration = 300;
   let deviceId = '';
   let mimeType = 'audio/webm';
+  let parentWindowId = null;
 
   const timerEl = document.getElementById('timer');
   const metaEl = document.getElementById('meta');
   const waveLine = document.getElementById('waveLine');
   const recorderEl = document.getElementById('recorder');
 
+  // Send message to the Obsidian plugin (parent window's renderer)
+  function sendToPlugin(channel, data) {
+    if (!parentWindowId) return;
+    try {
+      const parentWin = remote.BrowserWindow.fromId(parentWindowId);
+      if (parentWin && !parentWin.isDestroyed()) {
+        parentWin.webContents.send(channel, data);
+      }
+    } catch (err) {
+      console.error('Failed to send to plugin:', err);
+    }
+  }
+
   ipcRenderer.on('recorder:config', (_e, config) => {
     segmentDuration = config.segmentDuration || 300;
     deviceId = config.deviceId || '';
+    parentWindowId = config.parentWindowId || null;
     startRecording();
   });
 
@@ -257,7 +273,7 @@
       startTimer();
       updateWaveform();
     } catch (err) {
-      ipcRenderer.send('recorder:error', { message: err.message });
+      sendToPlugin('recorder:error', { message: err.message });
     }
   }
 
@@ -292,7 +308,7 @@
       updateMeta();
 
       const wavBuffer = await blobToWavBuffer(blob);
-      ipcRenderer.send('recorder:segment-ready', {
+      sendToPlugin('recorder:segment-ready', {
         index: segmentCount,
         wavBuffer: wavBuffer,
         duration: segmentElapsed,
@@ -433,7 +449,7 @@
     // Always stop tracks and send stop signal
     if (stream) stream.getTracks().forEach((t) => t.stop());
 
-    ipcRenderer.send('recorder:stop', { totalDuration: duration, totalSegments: segmentCount });
+    sendToPlugin('recorder:stop', { totalDuration: duration, totalSegments: segmentCount });
   }
 
   ipcRenderer.on('recorder:done', () => {
@@ -451,7 +467,7 @@
   const currentWindow = require('electron').remote.getCurrentWindow();
   currentWindow.on('moved', () => {
     const [x, y] = currentWindow.getPosition();
-    ipcRenderer.send('recorder:position-changed', { x, y });
+    sendToPlugin('recorder:position-changed', { x, y });
   });
 </script>
 </body>

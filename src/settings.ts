@@ -32,6 +32,7 @@ export interface OpenBrainSettings {
   ollamaUrl: string;
   ollamaModel: string;
   // Floating recorder
+  floatingRecorderEnabled: boolean;
   floatingRecorderHotkey: string;
   floatingRecorderPosition: { x: number; y: number } | "auto";
   floatingRecorderSegmentDuration: number;
@@ -69,7 +70,8 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   anthropicModel: "",
   ollamaUrl: "",
   ollamaModel: "",
-  floatingRecorderHotkey: "Alt+V",
+  floatingRecorderEnabled: false,
+  floatingRecorderHotkey: "",
   floatingRecorderPosition: "auto" as { x: number; y: number } | "auto",
   floatingRecorderSegmentDuration: 300,
   floatingRecorderOutputFolder: "OpenBrain/recordings",
@@ -502,15 +504,32 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Floating recorder").setHeading();
 
     new Setting(containerEl)
-      .setName("Hotkey")
+      .setName("Enable floating recorder")
       .setDesc(
-        "Use Obsidian's Hotkeys settings to bind a key to \"Toggle floating recorder\". " +
-        "For a system-wide hotkey (works when Obsidian is not focused), enter an Electron " +
-        "accelerator below (e.g., Alt+V, CommandOrControl+Shift+R). Leave empty to disable."
+        "Show a floating recording overlay when Obsidian is not the active window. " +
+        "Toggle recording via the command palette or an optional system-wide hotkey."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.floatingRecorderEnabled)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.floatingRecorderEnabled = value;
+            await this.plugin.saveSettings();
+            this.display();
+          })(); })
+      );
+
+    if (this.plugin.settings.floatingRecorderEnabled) {
+    new Setting(containerEl)
+      .setName("System-wide hotkey")
+      .setDesc(
+        "Optional hotkey that works even when Obsidian is not focused. " +
+        "Uses Electron accelerator format (e.g., Alt+V, CommandOrControl+Shift+R). " +
+        "Leave empty to use only the Obsidian command palette."
       )
       .addText((text) =>
         text
-          .setPlaceholder("Alt+V (or leave empty)")
+          .setPlaceholder("e.g., Alt+V")
           .setValue(this.plugin.settings.floatingRecorderHotkey)
           .onChange((value) => { void (async () => {
             this.plugin.settings.floatingRecorderHotkey = value;
@@ -567,6 +586,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             }
           })(); })
       );
+    } // end floatingRecorderEnabled
 
     // ── OpenClaw ──
     new Setting(containerEl).setName("OpenClaw").setHeading();
