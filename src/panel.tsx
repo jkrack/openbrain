@@ -34,6 +34,7 @@ interface PanelProps {
   app: App;
   initialPrompt?: string;
   initialAttachedFile?: string;
+  floatingRecorderStatus?: string | null;
   component: Component;
   skills: Skill[];
   registerToggleRecording?: (fn: () => void) => void;
@@ -59,7 +60,7 @@ interface SetupStatus {
   obsidianCli: boolean;
 }
 
-export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFile, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
+export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFile, floatingRecorderStatus, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(initialPrompt || "");
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
@@ -874,6 +875,19 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         }}
         onToggleTaskTray={() => setShowTaskTray((v) => !v)}
       />
+
+      {/* Floating recorder status banner */}
+      {floatingRecorderStatus && (
+        <div className="ca-floating-status">
+          <div className="ca-floating-status-chrome">
+            <span className="ca-floating-status-label">OpenBrain Recorder</span>
+          </div>
+          <div className="ca-floating-status-body">
+            <span className="ca-floating-status-dot" />
+            <span className="ca-floating-status-text">{floatingRecorderStatus}</span>
+          </div>
+        </div>
+      )}
 
       {/* Person picker overlay */}
       {showPersonPicker && (

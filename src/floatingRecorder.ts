@@ -41,6 +41,8 @@ export class FloatingRecorder {
 
   /** Called after a recording is transcribed and saved. Receives the vault note path. */
   onRecordingComplete: ((notePath: string) => void) | null = null;
+  /** Called when processing status changes (for UI feedback). Null clears the status. */
+  onStatusChange: ((status: string | null) => void) | null = null;
 
   constructor(app: App, settings: OpenBrainSettings) {
     this.app = app;
@@ -227,14 +229,19 @@ export class FloatingRecorder {
         return;
       }
 
-      new Notice("Transcribing recording...");
+      const segCount = session.segments.length;
+      this.onStatusChange?.(`Transcribing ${segCount} segment${segCount > 1 ? "s" : ""}...`);
 
       const transcribeFn = this.getTranscribeFn();
       await transcribeAllPending(dir, transcribeFn);
 
+      this.onStatusChange?.("Saving note...");
+
       const totalDuration = session.segments.reduce((sum, s) => sum + s.duration, 0);
       const notePath = await this.createVaultNote(dir, totalDuration);
       await markCompleted(dir);
+
+      this.onStatusChange?.(null); // Clear status
 
       // Open the recording note in the OpenBrain panel
       if (notePath && this.onRecordingComplete) {
@@ -244,6 +251,7 @@ export class FloatingRecorder {
       const recBaseDir = getRecordingsDir(this.settings);
       void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);
     } catch (err: unknown) {
+      this.onStatusChange?.(null);
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[OpenBrain] Failed to process recording session: ${message}`);
       new Notice(`Recording error: ${message}`);

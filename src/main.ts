@@ -64,6 +64,17 @@ export default class OpenBrainPlugin extends Plugin {
 
       // Initialize floating recorder
       this.floatingRecorder = new FloatingRecorder(this.app, this.settings);
+      this.floatingRecorder.onStatusChange = (status) => {
+        // Show transcription progress in the OpenBrain panel
+        const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
+        if (leaves.length > 0 && leaves[0].view instanceof OpenBrainView) {
+          leaves[0].view.setFloatingRecorderStatus(status);
+        }
+        // Also open the panel when transcription starts so the user sees it
+        if (status) {
+          void this.activateView();
+        }
+      };
       this.floatingRecorder.onRecordingComplete = (notePath) => {
         // Open the panel with the recording note attached as context
         void this.activateView().then(() => {

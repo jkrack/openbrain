@@ -25,6 +25,7 @@ export class OpenBrainView extends ItemView {
   private skills: Skill[];
   private initialPrompt: string | undefined;
   private initialAttachedFile: string | undefined;
+  private floatingRecorderStatus: string | null = null;
   private toggleRecordingFn: (() => void) | null = null;
   onStatusChange: ((status: RecordingStatus) => void) | null = null;
 
@@ -59,6 +60,11 @@ export class OpenBrainView extends ItemView {
 
   setInitialAttachedFile(path: string) {
     this.initialAttachedFile = path;
+    this.rerender();
+  }
+
+  setFloatingRecorderStatus(status: string | null) {
+    this.floatingRecorderStatus = status;
     this.rerender();
   }
 
@@ -108,6 +114,7 @@ export class OpenBrainView extends ItemView {
         app: this.app,
         initialPrompt: this.initialPrompt,
         initialAttachedFile: this.initialAttachedFile,
+        floatingRecorderStatus: this.floatingRecorderStatus,
         component: this,
         skills: this.skills,
         registerToggleRecording: (fn: () => void) => {
