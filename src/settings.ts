@@ -31,6 +31,12 @@ export interface OpenBrainSettings {
   anthropicModel: string;
   ollamaUrl: string;
   ollamaModel: string;
+  // Floating recorder
+  floatingRecorderHotkey: string;
+  floatingRecorderPosition: { x: number; y: number } | "auto";
+  floatingRecorderSegmentDuration: number;
+  floatingRecorderOutputFolder: string;
+  floatingRecorderRetentionDays: number;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -63,6 +69,11 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   anthropicModel: "",
   ollamaUrl: "",
   ollamaModel: "",
+  floatingRecorderHotkey: "Alt+V",
+  floatingRecorderPosition: "auto" as { x: number; y: number } | "auto",
+  floatingRecorderSegmentDuration: 300,
+  floatingRecorderOutputFolder: "OpenBrain/recordings",
+  floatingRecorderRetentionDays: 7,
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -485,6 +496,75 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           const basePath = `${this.plugin.settings.chatFolder}/Chat History.base`;
           void this.app.workspace.openLinkText(basePath, "");
         })
+      );
+
+    // ── Floating Recorder ──
+    new Setting(containerEl).setName("Floating recorder").setHeading();
+
+    new Setting(containerEl)
+      .setName("Global hotkey")
+      .setDesc(
+        "System-wide hotkey to toggle the floating recorder. " +
+        "Works even when Obsidian is not focused. Format: modifier+key (e.g., Alt+V, Ctrl+Shift+R)."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("Alt+V")
+          .setValue(this.plugin.settings.floatingRecorderHotkey)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.floatingRecorderHotkey = value || "Alt+V";
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Segment duration")
+      .setDesc(
+        "How often to save a recording segment to disk (in seconds). " +
+        "Shorter segments mean less data loss on crash. Default: 300 (5 minutes)."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("300")
+          .setValue(String(this.plugin.settings.floatingRecorderSegmentDuration))
+          .onChange((value) => { void (async () => {
+            const num = parseInt(value, 10);
+            if (!isNaN(num) && num >= 30) {
+              this.plugin.settings.floatingRecorderSegmentDuration = num;
+              await this.plugin.saveSettings();
+            }
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Output folder")
+      .setDesc("Vault folder where transcription notes are created.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/recordings")
+          .setValue(this.plugin.settings.floatingRecorderOutputFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.floatingRecorderOutputFolder = value || "OpenBrain/recordings";
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("WAV file retention")
+      .setDesc(
+        "Days to keep raw WAV files after transcription. Set to 0 to delete immediately."
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("7")
+          .setValue(String(this.plugin.settings.floatingRecorderRetentionDays))
+          .onChange((value) => { void (async () => {
+            const num = parseInt(value, 10);
+            if (!isNaN(num) && num >= 0) {
+              this.plugin.settings.floatingRecorderRetentionDays = num;
+              await this.plugin.saveSettings();
+            }
+          })(); })
       );
 
     // ── OpenClaw ──
