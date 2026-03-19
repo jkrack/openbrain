@@ -33,6 +33,7 @@ interface PanelProps {
   settings: OpenBrainSettings;
   app: App;
   initialPrompt?: string;
+  initialAttachedFile?: string;
   component: Component;
   skills: Skill[];
   registerToggleRecording?: (fn: () => void) => void;
@@ -58,7 +59,7 @@ interface SetupStatus {
   obsidianCli: boolean;
 }
 
-export function OpenBrainPanel({ settings, app, initialPrompt, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
+export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFile, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(initialPrompt || "");
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
@@ -180,6 +181,15 @@ export function OpenBrainPanel({ settings, app, initialPrompt, component, skills
   useEffect(() => {
     if (initialPrompt) setInput(initialPrompt);
   }, [initialPrompt]);
+
+  // Pre-attach a file (e.g., from floating recorder)
+  useEffect(() => {
+    if (initialAttachedFile) {
+      setAttachedFiles((prev) =>
+        prev.includes(initialAttachedFile) ? prev : [...prev, initialAttachedFile]
+      );
+    }
+  }, [initialAttachedFile]);
 
   // Handle image paste (Cmd+V)
   useEffect(() => {

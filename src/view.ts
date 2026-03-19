@@ -24,6 +24,7 @@ export class OpenBrainView extends ItemView {
   private settings: OpenBrainSettings;
   private skills: Skill[];
   private initialPrompt: string | undefined;
+  private initialAttachedFile: string | undefined;
   private toggleRecordingFn: (() => void) | null = null;
   onStatusChange: ((status: RecordingStatus) => void) | null = null;
 
@@ -53,6 +54,11 @@ export class OpenBrainView extends ItemView {
 
   setInitialPrompt(prompt: string) {
     this.initialPrompt = prompt;
+    this.rerender();
+  }
+
+  setInitialAttachedFile(path: string) {
+    this.initialAttachedFile = path;
     this.rerender();
   }
 
@@ -101,6 +107,7 @@ export class OpenBrainView extends ItemView {
         settings: this.settings,
         app: this.app,
         initialPrompt: this.initialPrompt,
+        initialAttachedFile: this.initialAttachedFile,
         component: this,
         skills: this.skills,
         registerToggleRecording: (fn: () => void) => {

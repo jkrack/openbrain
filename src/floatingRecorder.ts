@@ -39,6 +39,9 @@ export class FloatingRecorder {
   private window: any = null;
   private sessionDir: string | null = null;
 
+  /** Called after a recording is transcribed and saved. Receives the vault note path. */
+  onRecordingComplete: ((notePath: string) => void) | null = null;
+
   constructor(app: App, settings: OpenBrainSettings) {
     this.app = app;
     this.settings = settings;
@@ -230,8 +233,13 @@ export class FloatingRecorder {
       await transcribeAllPending(dir, transcribeFn);
 
       const totalDuration = session.segments.reduce((sum, s) => sum + s.duration, 0);
-      await this.createVaultNote(dir, totalDuration);
+      const notePath = await this.createVaultNote(dir, totalDuration);
       await markCompleted(dir);
+
+      // Open the recording note in the OpenBrain panel
+      if (notePath && this.onRecordingComplete) {
+        this.onRecordingComplete(notePath);
+      }
 
       const recBaseDir = getRecordingsDir(this.settings);
       void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);
@@ -290,7 +298,7 @@ export class FloatingRecorder {
     };
   }
 
-  private async createVaultNote(dir: string, totalDuration: number): Promise<void> {
+  private async createVaultNote(dir: string, totalDuration: number): Promise<string> {
     const text = await assembleTranscription(dir);
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
@@ -322,6 +330,7 @@ export class FloatingRecorder {
 
     await this.app.vault.create(path, content);
     new Notice(`Recording saved: ${filename}`);
+    return path;
   }
 
   private cleanup(): void {
