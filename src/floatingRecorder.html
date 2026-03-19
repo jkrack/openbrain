@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+    user-select: none;
+  }
+
+  .recorder {
+    display: flex;
+    flex-direction: column;
+    min-width: 340px;
+  }
+
+  .titlebar {
+    background: linear-gradient(90deg, #1a3a5a, #0a1a2a, #1a3a5a);
+    border-radius: 6px 6px 0 0;
+    padding: 3px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid rgba(100,180,255,0.15);
+    border-bottom: none;
+    -webkit-app-region: drag;
+  }
+
+  .titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .titlebar-icon { font-size: 11px; }
+
+  .titlebar-label {
+    font-size: 9px;
+    color: rgba(100,180,255,0.7);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .titlebar-buttons {
+    display: flex;
+    gap: 3px;
+    -webkit-app-region: no-drag;
+  }
+
+  .titlebar-btn {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: rgba(100,180,255,0.2);
+    border: 1px solid rgba(100,180,255,0.3);
+    cursor: pointer;
+  }
+
+  .titlebar-btn:hover { background: rgba(100,180,255,0.4); }
+  .titlebar-btn.close:hover { background: rgba(255,80,80,0.5); }
+
+  .body {
+    background: linear-gradient(180deg, #0e1a28, #0a1420);
+    border: 1px solid rgba(100,180,255,0.12);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .rec-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(100,180,255,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(100,180,255,0.05);
+    flex-shrink: 0;
+  }
+
+  .rec-dot-inner {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e44;
+    box-shadow: 0 0 8px rgba(230,60,60,0.5);
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .display { flex: 1; }
+
+  .display-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .timer {
+    font-size: 16px;
+    color: #6be;
+    text-shadow: 0 0 6px rgba(100,180,255,0.3);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 2px;
+  }
+
+  .meta {
+    font-size: 8px;
+    color: rgba(100,180,255,0.5);
+  }
+
+  .waveform { width: 100%; height: 14px; }
+
+  .wave-line {
+    fill: none;
+    stroke: #6be;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    opacity: 0.7;
+  }
+
+  .stop-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #2a3a4a, #1a2a38);
+    border: 1px solid rgba(100,180,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    -webkit-app-region: no-drag;
+  }
+
+  .stop-btn:hover { background: linear-gradient(180deg, #3a4a5a, #2a3a48); }
+
+  .stop-icon {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    background: #e44;
+  }
+
+  .state-transcribing .rec-dot-inner {
+    animation: none;
+    opacity: 0;
+  }
+
+  .state-transcribing .timer {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .state-transcribing .wave-line {
+    opacity: 0.3;
+  }
+</style>
+</head>
+<body>
+<div class="recorder" id="recorder">
+  <div class="titlebar">
+    <div class="titlebar-left">
+      <span class="titlebar-icon">&#129504;</span>
+      <span class="titlebar-label">OpenBrain Recorder</span>
+    </div>
+    <div class="titlebar-buttons">
+      <div class="titlebar-btn close" id="closeBtn" title="Stop & Transcribe"></div>
+    </div>
+  </div>
+  <div class="body">
+    <div class="rec-dot">
+      <div class="rec-dot-inner"></div>
+    </div>
+    <div class="display">
+      <div class="display-top">
+        <span class="timer" id="timer">0:00</span>
+        <span class="meta" id="meta"></span>
+      </div>
+      <svg class="waveform" viewBox="0 0 160 16" preserveAspectRatio="none">
+        <polyline class="wave-line" id="waveLine" points="0,8 160,8"/>
+      </svg>
+    </div>
+    <div class="stop-btn" id="stopBtn" title="Stop">
+      <div class="stop-icon"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const { ipcRenderer } = require('electron');
+
+  let mediaRecorder = null;
+  let analyser = null;
+  let audioCtx = null;
+  let stream = null;
+  let chunks = [];
+  let duration = 0;
+  let segmentElapsed = 0;
+  let segmentCount = 0;
+  let timerInterval = null;
+  let animFrame = 0;
+  let segmentDuration = 300;
+  let deviceId = '';
+  let mimeType = 'audio/webm';
+
+  const timerEl = document.getElementById('timer');
+  const metaEl = document.getElementById('meta');
+  const waveLine = document.getElementById('waveLine');
+  const recorderEl = document.getElementById('recorder');
+
+  ipcRenderer.on('recorder:config', (_e, config) => {
+    segmentDuration = config.segmentDuration || 300;
+    deviceId = config.deviceId || '';
+    startRecording();
+  });
+
+  async function startRecording() {
+    try {
+      const constraints = deviceId
+        ? { audio: { deviceId: { exact: deviceId } } }
+        : { audio: true };
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        if (deviceId) {
+          console.warn('Device unavailable, falling back to default mic');
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } else {
+          throw err;
+        }
+      }
+
+      audioCtx = new AudioContext();
+      const source = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+
+      mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+
+      startMediaRecorder();
+      startTimer();
+      updateWaveform();
+    } catch (err) {
+      ipcRenderer.send('recorder:error', { message: err.message });
+    }
+  }
+
+  function startMediaRecorder() {
+    chunks = [];
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    mediaRecorder.start(250);
+  }
+
+  function finalizeSegment() {
+    return new Promise((resolve) => {
+      if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        resolve(new Blob([], { type: mimeType }));
+        return;
+      }
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        chunks = [];
+        resolve(blob);
+      };
+      mediaRecorder.stop();
+    });
+  }
+
+  async function rotateSegment() {
+    const blob = await finalizeSegment();
+    if (blob.size > 0) {
+      segmentCount++;
+      updateMeta();
+
+      const wavBuffer = await blobToWavBuffer(blob);
+      ipcRenderer.send('recorder:segment-ready', {
+        index: segmentCount,
+        wavBuffer: wavBuffer,
+        duration: segmentElapsed,
+      });
+    }
+
+    if (stream && stream.active) {
+      segmentElapsed = 0;
+      startMediaRecorder();
+    }
+  }
+
+  async function blobToWavBuffer(blob) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const tempCtx = new OfflineAudioContext(1, 1, 16000);
+    const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+
+    const targetRate = 16000;
+    const numSamples = Math.ceil(audioBuffer.duration * targetRate);
+    const offlineCtx = new OfflineAudioContext(1, numSamples, targetRate);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineCtx.destination);
+    source.start(0);
+    const rendered = await offlineCtx.startRendering();
+    const samples = rendered.getChannelData(0);
+
+    const bytesPerSample = 2;
+    const dataSize = samples.length * bytesPerSample;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    let o = 0;
+
+    writeString(view, o, 'RIFF'); o += 4;
+    view.setUint32(o, 36 + dataSize, true); o += 4;
+    writeString(view, o, 'WAVE'); o += 4;
+    writeString(view, o, 'fmt '); o += 4;
+    view.setUint32(o, 16, true); o += 4;
+    view.setUint16(o, 1, true); o += 2;
+    view.setUint16(o, 1, true); o += 2;
+    view.setUint32(o, targetRate, true); o += 4;
+    view.setUint32(o, targetRate * bytesPerSample, true); o += 4;
+    view.setUint16(o, bytesPerSample, true); o += 2;
+    view.setUint16(o, 16, true); o += 2;
+    writeString(view, o, 'data'); o += 4;
+    view.setUint32(o, dataSize, true); o += 4;
+
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(o, Math.round(s * 32767), true);
+      o += 2;
+    }
+
+    return buffer;
+  }
+
+  function writeString(view, offset, str) {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  }
+
+  function startTimer() {
+    timerInterval = setInterval(() => {
+      duration++;
+      segmentElapsed++;
+      updateTimerDisplay();
+
+      if (segmentElapsed >= segmentDuration) {
+        rotateSegment();
+      }
+    }, 1000);
+  }
+
+  function updateTimerDisplay() {
+    const m = Math.floor(duration / 60);
+    const s = duration % 60;
+    timerEl.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  function updateMeta() {
+    metaEl.textContent = segmentCount > 0 ? `SEG ${segmentCount + 1}` : '';
+  }
+
+  function updateWaveform() {
+    if (!analyser) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteTimeDomainData(data);
+
+    const points = 40;
+    const step = Math.floor(data.length / points);
+    let polyline = '';
+
+    for (let i = 0; i < points; i++) {
+      const x = (i / (points - 1)) * 160;
+      const val = data[i * step] / 128 - 1;
+      const amp = Math.min(Math.abs(val) * 48, 7);
+      const y = 8 - amp;
+      polyline += `${x},${y} `;
+    }
+
+    waveLine.setAttribute('points', polyline.trim());
+    animFrame = requestAnimationFrame(updateWaveform);
+  }
+
+  async function stopRecording() {
+    clearInterval(timerInterval);
+    cancelAnimationFrame(animFrame);
+
+    recorderEl.classList.add('state-transcribing');
+    timerEl.textContent = 'Transcribing...';
+
+    const blob = await finalizeSegment();
+    if (blob.size > 0) {
+      segmentCount++;
+      const wavBuffer = await blobToWavBuffer(blob);
+      ipcRenderer.send('recorder:segment-ready', {
+        index: segmentCount,
+        wavBuffer: wavBuffer,
+        duration: segmentElapsed,
+      });
+    }
+
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+
+    ipcRenderer.send('recorder:stop', { totalDuration: duration, totalSegments: segmentCount });
+  }
+
+  ipcRenderer.on('recorder:done', () => {
+    timerEl.textContent = 'Done';
+    setTimeout(() => window.close(), 1000);
+  });
+
+  ipcRenderer.on('recorder:request-stop', () => {
+    stopRecording();
+  });
+
+  document.getElementById('stopBtn').addEventListener('click', stopRecording);
+  document.getElementById('closeBtn').addEventListener('click', stopRecording);
+
+  const currentWindow = require('electron').remote.getCurrentWindow();
+  currentWindow.on('moved', () => {
+    const [x, y] = currentWindow.getPosition();
+    ipcRenderer.send('recorder:position-changed', { x, y });
+  });
+</script>
+</body>
+</html>
