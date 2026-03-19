@@ -5,20 +5,18 @@ import { mkdir } from "fs/promises";
 import { OpenBrainSettings } from "./settings";
 import {
   createSession,
-  addSegment,
   assembleTranscription,
   markCompleted,
   findIncompleteSessions,
   readSession,
   cleanupOldSegments,
 } from "./diskRecorder";
-import { transcribeSegment, transcribeAllPending, TranscribeFn } from "./progressiveTranscriber";
+import { transcribeAllPending, TranscribeFn } from "./progressiveTranscriber";
 
 // Electron access via remote — may not be available in all environments
 let BrowserWindow: any;
 let globalShortcut: any;
 let electronScreen: any;
-let ipcRenderer: any;
 let remote: any;
 
 try {
@@ -26,7 +24,6 @@ try {
   BrowserWindow = remote.BrowserWindow;
   globalShortcut = remote.globalShortcut;
   electronScreen = remote.screen;
-  ipcRenderer = require("electron").ipcRenderer;
 } catch {
   // Electron remote not available — floating recorder will be disabled
 }
@@ -41,8 +38,6 @@ export class FloatingRecorder {
   private settings: OpenBrainSettings;
   private window: any = null;
   private sessionDir: string | null = null;
-  private pendingTranscriptions: Promise<void>[] = [];
-  private ipcHandlers: Map<string, (...args: any[]) => void> = new Map();
 
   constructor(app: App, settings: OpenBrainSettings) {
     this.app = app;
@@ -88,6 +83,7 @@ export class FloatingRecorder {
       return;
     }
     if (this.window) {
+      // Send stop signal to overlay — it will save segments and close itself
       this.window.webContents.send("recorder:request-stop");
     } else {
       await this.start();
@@ -100,6 +96,7 @@ export class FloatingRecorder {
       return;
     }
 
+    // Create session directory
     const baseDir = getRecordingsDir(this.settings);
     await mkdir(baseDir, { recursive: true });
     const session = await createSession(baseDir, this.settings.floatingRecorderSegmentDuration);
@@ -134,75 +131,24 @@ export class FloatingRecorder {
 
     this.window.loadFile(htmlPath);
 
-    // Get Obsidian's window ID so the overlay can send messages back to us
-    const obsidianWindowId = remote.getCurrentWindow().id;
-
+    // Send config with session directory — overlay writes segments directly to disk
     this.window.webContents.on("did-finish-load", () => {
       this.window.webContents.send("recorder:config", {
         segmentDuration: this.settings.floatingRecorderSegmentDuration,
         deviceId: this.settings.audioDeviceId,
-        parentWindowId: obsidianWindowId,
+        sessionDir: this.sessionDir,
       });
     });
 
-    // Listen for messages from overlay via ipcRenderer (overlay sends to our webContents)
-    this.registerIpcHandler("recorder:segment-ready", (_e: any, data: any) => {
-      if (!this.sessionDir) return;
-      const wavBuffer = Buffer.from(data.wavBuffer);
+    // When overlay closes (stop button, hotkey, or crash) — process the session
+    this.window.on("closed", () => {
       const dir = this.sessionDir;
+      this.window = null;
+      this.sessionDir = null;
 
-      const work = (async () => {
-        await addSegment(dir, wavBuffer, data.duration);
-        const s = await readSession(dir);
-        const segIndex = s.segments.length - 1;
-
-        const transcribeFn = this.getTranscribeFn();
-        await transcribeSegment(dir, segIndex, transcribeFn);
-      })();
-
-      this.pendingTranscriptions.push(work);
-    });
-
-    this.registerIpcHandler("recorder:stop", async (_e: any, data: any) => {
-      if (!this.sessionDir) return;
-      const dir = this.sessionDir;
-
-      // Close the overlay window immediately
-      if (this.window && !this.window.isDestroyed()) {
-        this.window.webContents.send("recorder:done");
+      if (dir) {
+        void this.processSession(dir);
       }
-      setTimeout(() => this.cleanup(), 500);
-
-      // Wait for pending transcriptions with a 30-second timeout
-      if (this.pendingTranscriptions.length > 0) {
-        const timeout = new Promise<void>((resolve) => setTimeout(resolve, 30000));
-        await Promise.race([
-          Promise.allSettled(this.pendingTranscriptions),
-          timeout,
-        ]);
-        this.pendingTranscriptions = [];
-      }
-
-      try {
-        await this.createVaultNote(data.totalDuration);
-        await markCompleted(dir);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(`[OpenBrain] Failed to create recording note: ${message}`);
-        new Notice(`Recording error: ${message}`);
-      }
-
-      const recBaseDir = getRecordingsDir(this.settings);
-      void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);
-    });
-
-    this.registerIpcHandler("recorder:position-changed", (_e: any, pos: any) => {
-      this.settings.floatingRecorderPosition = { x: pos.x, y: pos.y };
-    });
-
-    this.registerIpcHandler("recorder:error", (_e: any, data: any) => {
-      new Notice(`Recording error: ${data.message}`);
-      this.cleanup();
     });
 
     // Hide overlay when Obsidian is focused, show when blurred
@@ -225,25 +171,42 @@ export class FloatingRecorder {
       this.window.hide();
     }
 
-    this.window.on("closed", () => {
-      this.window = null;
+    // Clean up focus listeners when window closes
+    const origOnClosed = this.window.on;
+    this.window.once("closed", () => {
       obsidianWindow.removeListener("focus", onFocus);
       obsidianWindow.removeListener("blur", onBlur);
     });
   }
 
-  private registerIpcHandler(channel: string, handler: (...args: any[]) => void): void {
-    if (!ipcRenderer) return;
-    this.ipcHandlers.set(channel, handler);
-    ipcRenderer.on(channel, handler);
-  }
+  /**
+   * Process a completed recording session — transcribe segments and create vault note.
+   * Called after the overlay window closes.
+   */
+  private async processSession(dir: string): Promise<void> {
+    try {
+      const session = await readSession(dir);
+      if (session.segments.length === 0) {
+        // No segments recorded — nothing to process
+        return;
+      }
 
-  private removeIpcHandlers(): void {
-    if (!ipcRenderer) return;
-    for (const [channel, handler] of this.ipcHandlers) {
-      ipcRenderer.removeListener(channel, handler);
+      new Notice("Transcribing recording...");
+
+      const transcribeFn = this.getTranscribeFn();
+      await transcribeAllPending(dir, transcribeFn);
+
+      const totalDuration = session.segments.reduce((sum, s) => sum + s.duration, 0);
+      await this.createVaultNote(dir, totalDuration);
+      await markCompleted(dir);
+
+      const recBaseDir = getRecordingsDir(this.settings);
+      void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[OpenBrain] Failed to process recording session: ${message}`);
+      new Notice(`Recording error: ${message}`);
     }
-    this.ipcHandlers.clear();
   }
 
   private getWindowPosition(): { x: number; y: number } {
@@ -293,16 +256,14 @@ export class FloatingRecorder {
     };
   }
 
-  private async createVaultNote(totalDuration: number): Promise<void> {
-    if (!this.sessionDir) return;
-
-    const text = await assembleTranscription(this.sessionDir);
+  private async createVaultNote(dir: string, totalDuration: number): Promise<void> {
+    const text = await assembleTranscription(dir);
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
     const timeStr = `${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`;
     const durationStr = formatDuration(totalDuration);
 
-    const session = await readSession(this.sessionDir);
+    const session = await readSession(dir);
     const segmentCount = session.segments.length;
 
     const folder = this.settings.floatingRecorderOutputFolder || "OpenBrain/recordings";
@@ -330,14 +291,11 @@ export class FloatingRecorder {
   }
 
   private cleanup(): void {
-    this.removeIpcHandlers();
-
     if (this.window && !this.window.isDestroyed()) {
       this.window.close();
     }
     this.window = null;
     this.sessionDir = null;
-    this.pendingTranscriptions = [];
   }
 
   async recoverIncompleteSessions(): Promise<void> {
@@ -346,27 +304,9 @@ export class FloatingRecorder {
       const incomplete = await findIncompleteSessions(baseDir);
       if (incomplete.length === 0) return;
 
-      const transcribeFn = this.getTranscribeFn();
-
       for (const dir of incomplete) {
-        try {
-          await transcribeAllPending(dir, transcribeFn);
-          const session = await readSession(dir);
-          const totalDuration = session.segments.reduce((sum, s) => sum + s.duration, 0);
-
-          this.sessionDir = dir;
-          await this.createVaultNote(totalDuration);
-          await markCompleted(dir);
-          this.sessionDir = null;
-
-          const dateStr = session.startedAt.slice(0, 10);
-          new Notice(`Recovered recording from ${dateStr} — created note`);
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error(`[OpenBrain] Failed to recover session in ${dir}: ${message}`);
-        }
+        await this.processSession(dir);
       }
-      await cleanupOldSegments(baseDir, this.settings.floatingRecorderRetentionDays);
     } catch {
       // recordings directory may not exist yet
     }

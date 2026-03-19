@@ -73,30 +73,20 @@
     gap: 10px;
   }
 
+  /* Recording indicator — clearly a circle, not a square */
   .rec-dot {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 2px solid rgba(100,180,255,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(100,180,255,0.05);
-    flex-shrink: 0;
-  }
-
-  .rec-dot-inner {
-    width: 8px;
-    height: 8px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: #e44;
     box-shadow: 0 0 8px rgba(230,60,60,0.5);
     animation: pulse 1.5s ease-in-out infinite;
+    flex-shrink: 0;
   }
 
   @keyframes pulse {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+    50% { opacity: 0.3; }
   }
 
   .display { flex: 1; }
@@ -131,6 +121,7 @@
     opacity: 0.7;
   }
 
+  /* Stop button — clearly a square inside a rounded container */
   .stop-btn {
     width: 26px;
     height: 26px;
@@ -150,20 +141,26 @@
   .stop-icon {
     width: 8px;
     height: 8px;
-    border-radius: 2px;
+    border-radius: 1px;
     background: #e44;
   }
 
-  .state-transcribing .rec-dot-inner {
+  /* Stopping state */
+  .state-stopping .rec-dot {
     animation: none;
-    opacity: 0;
+    opacity: 0.3;
   }
 
-  .state-transcribing .timer {
-    animation: pulse 2s ease-in-out infinite;
+  .state-stopping .timer {
+    color: rgba(100,180,255,0.5);
   }
 
-  .state-transcribing .wave-line {
+  .state-stopping .wave-line {
+    opacity: 0.2;
+  }
+
+  .state-stopping .stop-btn {
+    pointer-events: none;
     opacity: 0.3;
   }
 </style>
@@ -176,13 +173,11 @@
       <span class="titlebar-label">OpenBrain Recorder</span>
     </div>
     <div class="titlebar-buttons">
-      <div class="titlebar-btn close" id="closeBtn" title="Stop & Transcribe"></div>
+      <div class="titlebar-btn close" id="closeBtn" title="Stop & Close"></div>
     </div>
   </div>
   <div class="body">
-    <div class="rec-dot">
-      <div class="rec-dot-inner"></div>
-    </div>
+    <div class="rec-dot" id="recDot"></div>
     <div class="display">
       <div class="display-top">
         <span class="timer" id="timer">0:00</span>
@@ -200,8 +195,10 @@
 
 <script>
   const { ipcRenderer } = require('electron');
-  const remote = require('electron').remote;
+  const fs = require('fs');
+  const path = require('path');
 
+  // --- State ---
   let mediaRecorder = null;
   let analyser = null;
   let audioCtx = null;
@@ -215,33 +212,43 @@
   let segmentDuration = 300;
   let deviceId = '';
   let mimeType = 'audio/webm';
-  let parentWindowId = null;
+  let sessionDir = '';
 
+  // --- DOM refs ---
   const timerEl = document.getElementById('timer');
   const metaEl = document.getElementById('meta');
   const waveLine = document.getElementById('waveLine');
   const recorderEl = document.getElementById('recorder');
 
-  // Send message to the Obsidian plugin (parent window's renderer)
-  function sendToPlugin(channel, data) {
-    if (!parentWindowId) return;
-    try {
-      const parentWin = remote.BrowserWindow.fromId(parentWindowId);
-      if (parentWin && !parentWin.isDestroyed()) {
-        parentWin.webContents.send(channel, data);
-      }
-    } catch (err) {
-      console.error('Failed to send to plugin:', err);
-    }
+  // --- Session JSON helpers (direct file I/O, no IPC) ---
+  function readSessionJson() {
+    const raw = fs.readFileSync(path.join(sessionDir, 'session.json'), 'utf-8');
+    return JSON.parse(raw);
   }
 
+  function writeSessionJson(data) {
+    fs.writeFileSync(path.join(sessionDir, 'session.json'), JSON.stringify(data, null, 2));
+  }
+
+  function addSegmentToDisk(wavBuffer, segDuration) {
+    const session = readSessionJson();
+    const index = session.segments.length + 1;
+    const filename = `segment-${String(index).padStart(3, '0')}.wav`;
+    fs.writeFileSync(path.join(sessionDir, filename), Buffer.from(wavBuffer));
+    session.segments.push({ file: filename, duration: segDuration, transcription: null });
+    writeSessionJson(session);
+    return filename;
+  }
+
+  // --- Init: receive config from main plugin ---
   ipcRenderer.on('recorder:config', (_e, config) => {
     segmentDuration = config.segmentDuration || 300;
     deviceId = config.deviceId || '';
-    parentWindowId = config.parentWindowId || null;
+    sessionDir = config.sessionDir || '';
     startRecording();
   });
 
+  // --- Recording ---
   async function startRecording() {
     try {
       const constraints = deviceId
@@ -260,6 +267,9 @@
       }
 
       audioCtx = new AudioContext();
+      // Resume AudioContext — required in Electron when no user gesture initiated it
+      await audioCtx.resume();
+
       const source = audioCtx.createMediaStreamSource(stream);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 512;
@@ -273,7 +283,9 @@
       startTimer();
       updateWaveform();
     } catch (err) {
-      sendToPlugin('recorder:error', { message: err.message });
+      console.error('Failed to start recording:', err);
+      timerEl.textContent = 'Mic error';
+      setTimeout(() => window.close(), 3000);
     }
   }
 
@@ -307,12 +319,12 @@
       segmentCount++;
       updateMeta();
 
-      const wavBuffer = await blobToWavBuffer(blob);
-      sendToPlugin('recorder:segment-ready', {
-        index: segmentCount,
-        wavBuffer: wavBuffer,
-        duration: segmentElapsed,
-      });
+      try {
+        const wavBuffer = await blobToWavBuffer(blob);
+        addSegmentToDisk(wavBuffer, segmentElapsed);
+      } catch (err) {
+        console.error('Failed to save segment:', err);
+      }
     }
 
     if (stream && stream.active) {
@@ -321,6 +333,7 @@
     }
   }
 
+  // --- WAV conversion ---
   async function blobToWavBuffer(blob) {
     const arrayBuffer = await blob.arrayBuffer();
     const tempCtx = new OfflineAudioContext(1, 1, 16000);
@@ -371,6 +384,7 @@
     }
   }
 
+  // --- Timer ---
   function startTimer() {
     timerInterval = setInterval(() => {
       duration++;
@@ -390,9 +404,10 @@
   }
 
   function updateMeta() {
-    metaEl.textContent = segmentCount > 0 ? `SEG ${segmentCount + 1}` : '';
+    metaEl.textContent = segmentCount > 0 ? `SEG ${segmentCount}` : '';
   }
 
+  // --- Waveform ---
   function updateWaveform() {
     if (!analyser) return;
     const data = new Uint8Array(analyser.frequencyBinCount);
@@ -414,6 +429,7 @@
     animFrame = requestAnimationFrame(updateWaveform);
   }
 
+  // --- Stop ---
   let stopping = false;
 
   async function stopRecording() {
@@ -423,21 +439,17 @@
     clearInterval(timerInterval);
     cancelAnimationFrame(animFrame);
 
-    recorderEl.classList.add('state-transcribing');
-    timerEl.textContent = 'Stopping...';
+    recorderEl.classList.add('state-stopping');
+    timerEl.textContent = 'Saving...';
 
-    // Finalize last segment — errors should not prevent stop
+    // Finalize last segment and write to disk
     try {
       const blob = await finalizeSegment();
       if (blob.size > 0) {
         segmentCount++;
         try {
           const wavBuffer = await blobToWavBuffer(blob);
-          ipcRenderer.send('recorder:segment-ready', {
-            index: segmentCount,
-            wavBuffer: wavBuffer,
-            duration: segmentElapsed,
-          });
+          addSegmentToDisk(wavBuffer, segmentElapsed);
         } catch (err) {
           console.error('Failed to convert last segment:', err);
         }
@@ -446,29 +458,21 @@
       console.error('Failed to finalize last segment:', err);
     }
 
-    // Always stop tracks and send stop signal
+    // Stop mic
     if (stream) stream.getTracks().forEach((t) => t.stop());
 
-    sendToPlugin('recorder:stop', { totalDuration: duration, totalSegments: segmentCount });
+    // Close window — plugin detects close and processes the session
+    setTimeout(() => window.close(), 500);
   }
 
-  ipcRenderer.on('recorder:done', () => {
-    timerEl.textContent = 'Done';
-    setTimeout(() => window.close(), 1000);
-  });
-
+  // --- IPC: hotkey stop from main plugin ---
   ipcRenderer.on('recorder:request-stop', () => {
     stopRecording();
   });
 
+  // --- Button handlers ---
   document.getElementById('stopBtn').addEventListener('click', stopRecording);
   document.getElementById('closeBtn').addEventListener('click', stopRecording);
-
-  const currentWindow = require('electron').remote.getCurrentWindow();
-  currentWindow.on('moved', () => {
-    const [x, y] = currentWindow.getPosition();
-    sendToPlugin('recorder:position-changed', { x, y });
-  });
 </script>
 </body>
 </html>
