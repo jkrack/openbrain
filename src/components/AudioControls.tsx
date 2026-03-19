@@ -33,46 +33,37 @@ export function AudioControls({
 
   return (
     <>
-      {/* Waveform / recording state */}
+      {/* Blue Steel recording state */}
       {isRecording && (
         <div className="ca-waveform">
-          <span className="ca-rec-dot" />
-          <svg className="ca-wave-svg" viewBox="0 0 200 40" preserveAspectRatio="none">
-            <polyline
-              className="ca-wave-line"
-              fill="none"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              points={recorder.waveformData
-                .map((v, i) => {
-                  const x = (i / (recorder.waveformData.length - 1)) * 200;
-                  const amp = Math.min(v * 48, 18); // larger amplitude, capped
-                  const y = 20 - amp;
-                  return `${x},${y}`;
-                })
-                .join(" ")}
-            />
-            <polyline
-              className="ca-wave-line ca-wave-line-mirror"
-              fill="none"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              points={recorder.waveformData
-                .map((v, i) => {
-                  const x = (i / (recorder.waveformData.length - 1)) * 200;
-                  const amp = Math.min(v * 48, 18);
-                  const y = 20 + amp;
-                  return `${x},${y}`;
-                })
-                .join(" ")}
-            />
-          </svg>
-          <span className="ca-rec-time">
-            {formatDuration(recorder.duration)}
-            {recorder.segmentCount > 0 && ` (${recorder.segmentCount + 1} segments)`}
-          </span>
+          <div className="ca-waveform-chrome">
+            <span className="ca-waveform-label">OpenBrain Recorder</span>
+            {recorder.segmentCount > 0 && (
+              <span className="ca-waveform-seg">SEG {recorder.segmentCount}</span>
+            )}
+          </div>
+          <div className="ca-waveform-body">
+            <span className="ca-rec-dot" />
+            <div className="ca-waveform-display">
+              <span className="ca-rec-time">{formatDuration(recorder.duration)}</span>
+              <svg className="ca-wave-svg" viewBox="0 0 160 16" preserveAspectRatio="none">
+                <polyline
+                  className="ca-wave-line"
+                  fill="none"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  points={recorder.waveformData
+                    .map((v, i) => {
+                      const x = (i / (recorder.waveformData.length - 1)) * 160;
+                      const amp = Math.min(v * 48, 7);
+                      const y = 8 - amp;
+                      return `${x},${y}`;
+                    })
+                    .join(" ")}
+                />
+              </svg>
+            </div>
+          </div>
         </div>
       )}
 

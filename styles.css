@@ -827,52 +827,85 @@
 }
 
 /* ============================================================
-   WAVEFORM / RECORDING STATE
+   WAVEFORM / RECORDING STATE — Blue Steel Skin
    ============================================================ */
 .ca-waveform {
   display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Chrome title bar */
+.ca-waveform-chrome {
+  background: linear-gradient(90deg, #1a3a5a, #0a1a2a, #1a3a5a);
+  padding: 3px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(100, 180, 255, 0.08);
+}
+.ca-waveform-label {
+  font-family: var(--ca-font-mono);
+  font-size: 9px;
+  color: rgba(100, 180, 255, 0.6);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.ca-waveform-seg {
+  font-family: var(--ca-font-mono);
+  font-size: 8px;
+  color: rgba(100, 180, 255, 0.4);
+  letter-spacing: 1px;
+}
+
+/* Body: recording dot + display */
+.ca-waveform-body {
+  background: linear-gradient(180deg, #0e1a28, #0a1420);
+  padding: 8px 12px;
+  display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
-  background: var(--background-secondary);
-  border-top: 1px solid var(--background-modifier-border);
-  flex-shrink: 0;
-  /* Subtle warm red tint during recording */
-  box-shadow: inset 0 0 80px rgba(229, 68, 68, 0.03);
 }
 
 .ca-rec-dot {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #e54;
+  background: #e44;
+  box-shadow: 0 0 8px rgba(230, 60, 60, 0.5);
   flex-shrink: 0;
-  animation: ca-pulse-glow 1.2s ease-in-out infinite;
+  animation: ca-pulse-glow 1.5s ease-in-out infinite;
 }
 @keyframes ca-pulse-glow {
-  0%, 100% { opacity: 1; box-shadow: 0 0 4px rgba(229, 68, 68, 0.6); }
-  50% { opacity: 0.4; box-shadow: 0 0 8px rgba(229, 68, 68, 0); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
 }
 
-.ca-wave-svg {
+.ca-waveform-display {
   flex: 1;
-  height: 56px;
-}
-.ca-wave-line {
-  stroke: var(--interactive-accent);
-  opacity: 0.85;
-  transition: all 0.2s ease-out;
-}
-.ca-wave-line-mirror {
-  opacity: 0.3;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .ca-rec-time {
-  font-size: var(--ca-size-meta);
+  font-size: 16px;
   font-family: var(--ca-font-mono);
-  color: var(--text-muted);
+  color: #6be;
+  text-shadow: 0 0 6px rgba(100, 180, 255, 0.3);
   font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
+  letter-spacing: 2px;
+}
+
+.ca-wave-svg {
+  width: 100%;
+  height: 14px;
+}
+.ca-wave-line {
+  stroke: #6be;
+  opacity: 0.7;
+  stroke-linecap: round;
 }
 
 /* --- Audio ready state --- */
