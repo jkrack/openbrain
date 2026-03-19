@@ -1,4 +1,4 @@
-import { App, Plugin, TFile, WorkspaceLeaf, Modal, Notice, Setting } from "obsidian";
+import { addIcon, App, Plugin, TFile, WorkspaceLeaf, Modal, Notice, Setting } from "obsidian";
 import { OpenBrainView, OPEN_BRAIN_VIEW_TYPE, RecordingStatus } from "./view";
 import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./settings";
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
@@ -24,6 +24,9 @@ export default class OpenBrainPlugin extends Plugin {
   private floatingRecorder: FloatingRecorder | null = null;
 
   async onload() {
+    // Register custom icon: brain with checkmark
+    addIcon("brain-check", `<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a7 7 0 0 0-7 7c0 2.5 1.3 4.7 3.2 6l.8.6V22h6v-3.4l.8-.6A7 7 0 0 0 12 5z"/><path d="M12 5V2"/><path d="M9 9c0-1 .6-2 2-2"/><path d="M15 13l-4 4-2-2" stroke-width="2.5"/></g>`);
+
     await this.loadSettings();
     configureObsidianCli(this.settings.obsidianCliPath);
     this.skills = await loadSkills(this.app, this.settings.skillsFolder);
@@ -99,7 +102,7 @@ export default class OpenBrainPlugin extends Plugin {
       void this.activateView();
     });
 
-    this.addRibbonIcon("check-square", "OpenBrain Tasks", () => {
+    this.addRibbonIcon("brain-check", "OpenBrain Tasks", () => {
       const leaves = this.app.workspace.getLeavesOfType(TASK_DASHBOARD_VIEW);
       if (leaves.length > 0) {
         void this.app.workspace.revealLeaf(leaves[0]);
