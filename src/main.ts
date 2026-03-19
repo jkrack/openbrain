@@ -12,6 +12,7 @@ import { logSummary as logPerfSummary } from "./perf";
 import { TaskDashboardView, TASK_DASHBOARD_VIEW } from "./taskDashboard";
 import { SkillScheduler } from "./scheduler";
 import { checkNotifications } from "./notifications";
+import { FloatingRecorder } from "./floatingRecorder";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -20,6 +21,7 @@ export default class OpenBrainPlugin extends Plugin {
   private statusBarEl: HTMLElement | null = null;
   private openclawNode: OpenClawNode | null = null;
   private scheduler: SkillScheduler | null = null;
+  private floatingRecorder: FloatingRecorder | null = null;
 
   async onload() {
     await this.loadSettings();
@@ -56,6 +58,13 @@ export default class OpenBrainPlugin extends Plugin {
 
       // Run notification checks
       void checkNotifications(this.app, this.settings);
+
+      // Initialize floating recorder
+      this.floatingRecorder = new FloatingRecorder(this.app, this.settings);
+      if (this.floatingRecorder.isAvailable) {
+        this.floatingRecorder.registerHotkey();
+        void this.floatingRecorder.recoverIncompleteSessions();
+      }
 
       // Connect to OpenClaw gateway if enabled
       if (this.settings.openclawEnabled) {
@@ -222,6 +231,19 @@ export default class OpenBrainPlugin extends Plugin {
       name: "Search chat history",
       callback: () => {
         new ChatSearchModal(this.app, this.settings).open();
+      },
+    });
+
+    this.addCommand({
+      id: "toggle-floating-recorder",
+      name: "Toggle floating recorder",
+      icon: "mic",
+      callback: () => {
+        if (this.floatingRecorder?.isAvailable) {
+          void this.floatingRecorder.toggle();
+        } else {
+          new Notice("Floating recorder is not available (requires Electron).");
+        }
       },
     });
 
@@ -398,6 +420,7 @@ export default class OpenBrainPlugin extends Plugin {
   onunload() {
     this.scheduler?.stop();
     this.openclawNode?.disconnect();
+    this.floatingRecorder?.destroy();
   }
 }
 
