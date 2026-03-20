@@ -43,7 +43,8 @@ export class FloatingRecorder {
   private settings: OpenBrainSettings;
   private window: any = null;
   private sessionDir: string | null = null;
-  private skills: SkillInfo[] = [];
+  /** Provides the current skill list. Called when the overlay opens. */
+  getSkills: (() => SkillInfo[]) | null = null;
 
   /** Called after a recording is transcribed and saved as a note. Receives the vault note path. */
   onRecordingComplete: ((notePath: string) => void) | null = null;
@@ -55,10 +56,6 @@ export class FloatingRecorder {
   constructor(app: App, settings: OpenBrainSettings) {
     this.app = app;
     this.settings = settings;
-  }
-
-  setSkills(skills: SkillInfo[]): void {
-    this.skills = skills;
   }
 
   get isAvailable(): boolean {
@@ -183,7 +180,7 @@ export class FloatingRecorder {
         segmentDuration: this.settings.floatingRecorderSegmentDuration,
         deviceId: this.settings.audioDeviceId,
         sessionDir: this.sessionDir,
-        skills: this.skills,
+        skills: this.getSkills?.() || [],
         defaultMode: this.settings.floatingRecorderDefaultMode || "clipboard",
       });
     });

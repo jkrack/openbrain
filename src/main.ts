@@ -64,7 +64,7 @@ export default class OpenBrainPlugin extends Plugin {
 
       // Initialize floating recorder
       this.floatingRecorder = new FloatingRecorder(this.app, this.settings);
-      this.floatingRecorder.setSkills(this.skills.map((s) => ({ id: s.id, name: s.name })));
+      this.floatingRecorder.getSkills = () => this.skills.map((s) => ({ id: s.id, name: s.name }));
       this.floatingRecorder.onStatusChange = (status) => {
         const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
         if (leaves.length > 0 && leaves[0].view instanceof OpenBrainView) {
