@@ -59,8 +59,8 @@ export default class OpenBrainPlugin extends Plugin {
       // Right folds
       '<path d="M72 36 C67 34 60 36 52 32"/>',
       '<path d="M78 50 C72 48 64 52 52 48"/>',
-      // Checkmark (bottom right, bolder)
-      '<polyline points="56 64 64 74 82 54" stroke-width="7"/>',
+      // Checkmark (large, bold, overlapping bottom-right)
+      '<polyline points="48 68 60 82 86 48" stroke-width="9"/>',
       '</g>',
     ].join(""));
 
