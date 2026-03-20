@@ -6,7 +6,7 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
     background: transparent;
-    overflow: hidden;
+    overflow: visible;
     font-family: 'Courier New', monospace;
     user-select: none;
   }
@@ -15,8 +15,10 @@
     display: flex;
     flex-direction: column;
     min-width: 340px;
+    position: relative;
   }
 
+  /* Title bar */
   .titlebar {
     background: linear-gradient(90deg, #1a3a5a, #0a1a2a, #1a3a5a);
     border-radius: 6px 6px 0 0;
@@ -62,6 +64,7 @@
   .titlebar-btn:hover { background: rgba(100,180,255,0.4); }
   .titlebar-btn.close:hover { background: rgba(255,80,80,0.5); }
 
+  /* Recording body */
   .body {
     background: linear-gradient(180deg, #0e1a28, #0a1420);
     border: 1px solid rgba(100,180,255,0.12);
@@ -149,69 +152,127 @@
     border-top: none;
     border-radius: 0 0 6px 6px;
     padding: 4px 8px;
+    position: relative;
+  }
+
+  .dest-trigger {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: background 0.15s;
   }
 
-  .dest-btn {
-    flex: 1;
-    padding: 3px 8px;
-    border: 1px solid rgba(100,180,255,0.12);
-    border-radius: 3px;
-    background: rgba(100,180,255,0.04);
-    color: rgba(100,180,255,0.5);
-    font-family: 'Courier New', monospace;
-    font-size: 9px;
-    letter-spacing: 0.5px;
-    cursor: pointer;
+  .dest-trigger:hover {
+    background: rgba(100,180,255,0.06);
+  }
+
+  .dest-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+    width: 16px;
     text-align: center;
-    transition: all 0.15s;
   }
 
-  .dest-btn:hover {
-    background: rgba(100,180,255,0.08);
-    color: rgba(100,180,255,0.7);
-  }
-
-  .dest-btn.active {
-    background: rgba(100,180,255,0.12);
-    border-color: rgba(100,180,255,0.3);
-    color: #6be;
-    text-shadow: 0 0 4px rgba(100,180,255,0.2);
-  }
-
-  .dest-select {
+  .dest-label {
     flex: 1;
-    padding: 3px 6px;
-    border: 1px solid rgba(100,180,255,0.12);
-    border-radius: 3px;
-    background: rgba(100,180,255,0.04);
-    color: rgba(100,180,255,0.5);
-    font-family: 'Courier New', monospace;
-    font-size: 9px;
+    font-size: 10px;
+    color: #6be;
+    letter-spacing: 0.5px;
+  }
+
+  .dest-chevron {
+    font-size: 8px;
+    color: rgba(100,180,255,0.4);
+    flex-shrink: 0;
+    transition: transform 0.2s;
+  }
+
+  .dest-trigger.open .dest-chevron {
+    transform: rotate(180deg);
+  }
+
+  /* Dropdown menu */
+  .dest-menu {
+    display: none;
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: 100%;
+    margin-bottom: 2px;
+    background: #0c1520;
+    border: 1px solid rgba(100,180,255,0.2);
+    border-radius: 4px;
+    padding: 4px 0;
+    box-shadow: 0 -4px 16px rgba(0,0,0,0.5);
+    z-index: 100;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .dest-menu.visible {
+    display: block;
+  }
+
+  .dest-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
     cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
+    transition: background 0.1s;
   }
 
-  .dest-select:focus {
-    outline: none;
-    border-color: rgba(100,180,255,0.3);
+  .dest-item:hover {
+    background: rgba(100,180,255,0.08);
   }
 
-  .dest-select.active {
-    background: rgba(100,180,255,0.12);
-    border-color: rgba(100,180,255,0.3);
+  .dest-item-icon {
+    font-size: 11px;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .dest-item-label {
+    flex: 1;
+    font-size: 10px;
+    color: rgba(100,180,255,0.7);
+    letter-spacing: 0.3px;
+  }
+
+  .dest-item-check {
+    font-size: 10px;
+    color: #6be;
+    flex-shrink: 0;
+    visibility: hidden;
+  }
+
+  .dest-item.selected .dest-item-check {
+    visibility: visible;
+  }
+
+  .dest-item.selected .dest-item-label {
     color: #6be;
   }
 
-  .dest-select option {
-    background: #0e1a28;
-    color: #6be;
+  .dest-divider {
+    height: 1px;
+    background: rgba(100,180,255,0.1);
+    margin: 3px 8px;
   }
 
-  /* Stopping state */
+  .dest-section-label {
+    font-size: 8px;
+    color: rgba(100,180,255,0.3);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 10px 2px;
+  }
+
+  /* States */
   .state-stopping .rec-dot {
     animation: none;
     opacity: 0.3;
@@ -263,15 +324,17 @@
     </div>
   </div>
   <div class="dest-bar">
-    <div class="dest-btn active" id="clipboardBtn" title="Transcribe to clipboard">&#128203; Clipboard</div>
-    <select class="dest-select" id="skillSelect" title="Send to skill">
-      <option value="">&#128221; Skill...</option>
-    </select>
+    <div class="dest-menu" id="destMenu"></div>
+    <div class="dest-trigger" id="destTrigger">
+      <span class="dest-icon" id="destIcon">&#128203;</span>
+      <span class="dest-label" id="destLabel">Clipboard</span>
+      <span class="dest-chevron">&#9650;</span>
+    </div>
   </div>
 </div>
 
 <script>
-  const { ipcRenderer, clipboard } = require('electron');
+  const { ipcRenderer } = require('electron');
   const fs = require('fs');
   const path = require('path');
 
@@ -290,37 +353,88 @@
   let deviceId = '';
   let mimeType = 'audio/webm';
   let sessionDir = '';
-  let selectedMode = 'clipboard'; // 'clipboard' or skill id
+  let selectedMode = 'clipboard';
+  let menuOpen = false;
+  let allOptions = []; // { id, name, icon }
 
   // --- DOM refs ---
   const timerEl = document.getElementById('timer');
   const metaEl = document.getElementById('meta');
   const waveLine = document.getElementById('waveLine');
   const recorderEl = document.getElementById('recorder');
-  const clipboardBtn = document.getElementById('clipboardBtn');
-  const skillSelect = document.getElementById('skillSelect');
+  const destTrigger = document.getElementById('destTrigger');
+  const destMenu = document.getElementById('destMenu');
+  const destIcon = document.getElementById('destIcon');
+  const destLabel = document.getElementById('destLabel');
 
-  // --- Destination selection ---
-  clipboardBtn.addEventListener('click', () => {
-    selectedMode = 'clipboard';
-    clipboardBtn.classList.add('active');
-    skillSelect.classList.remove('active');
-    skillSelect.value = '';
-    writeMode();
-  });
-
-  skillSelect.addEventListener('change', () => {
-    if (skillSelect.value) {
-      selectedMode = skillSelect.value;
-      skillSelect.classList.add('active');
-      clipboardBtn.classList.remove('active');
-    } else {
-      selectedMode = 'clipboard';
-      clipboardBtn.classList.add('active');
-      skillSelect.classList.remove('active');
+  // --- Destination picker ---
+  function buildMenu(skills) {
+    allOptions = [
+      { id: 'clipboard', name: 'Clipboard', icon: '\u{1F4CB}' },
+    ];
+    for (const s of skills) {
+      allOptions.push({ id: s.id, name: s.name, icon: '\u{1F4DD}' });
     }
+    renderMenu();
+  }
+
+  function renderMenu() {
+    destMenu.innerHTML = '';
+
+    // Clipboard option
+    const clipItem = makeItem(allOptions[0]);
+    destMenu.appendChild(clipItem);
+
+    if (allOptions.length > 1) {
+      const divider = document.createElement('div');
+      divider.className = 'dest-divider';
+      destMenu.appendChild(divider);
+
+      const label = document.createElement('div');
+      label.className = 'dest-section-label';
+      label.textContent = 'Skills';
+      destMenu.appendChild(label);
+
+      for (let i = 1; i < allOptions.length; i++) {
+        destMenu.appendChild(makeItem(allOptions[i]));
+      }
+    }
+  }
+
+  function makeItem(opt) {
+    const item = document.createElement('div');
+    item.className = 'dest-item' + (opt.id === selectedMode ? ' selected' : '');
+    item.innerHTML = `<span class="dest-item-icon">${opt.icon}</span><span class="dest-item-label">${opt.name}</span><span class="dest-item-check">\u2713</span>`;
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectMode(opt.id);
+      toggleMenu(false);
+    });
+    return item;
+  }
+
+  function selectMode(id) {
+    selectedMode = id;
+    const opt = allOptions.find(o => o.id === id) || allOptions[0];
+    destIcon.textContent = opt.icon;
+    destLabel.textContent = opt.name;
+    renderMenu();
     writeMode();
+  }
+
+  function toggleMenu(show) {
+    menuOpen = typeof show === 'boolean' ? show : !menuOpen;
+    destMenu.classList.toggle('visible', menuOpen);
+    destTrigger.classList.toggle('open', menuOpen);
+  }
+
+  destTrigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleMenu();
   });
+
+  // Close menu on outside click
+  document.addEventListener('click', () => toggleMenu(false));
 
   function writeMode() {
     if (!sessionDir) return;
@@ -357,25 +471,11 @@
     deviceId = config.deviceId || '';
     sessionDir = config.sessionDir || '';
 
-    // Populate skill dropdown
-    const skills = config.skills || [];
-    for (const skill of skills) {
-      const opt = document.createElement('option');
-      opt.value = skill.id;
-      opt.textContent = skill.name;
-      skillSelect.appendChild(opt);
-    }
+    buildMenu(config.skills || []);
 
     // Restore last mode
     const defaultMode = config.defaultMode || 'clipboard';
-    if (defaultMode !== 'clipboard') {
-      selectedMode = defaultMode;
-      skillSelect.value = defaultMode;
-      if (skillSelect.value === defaultMode) {
-        skillSelect.classList.add('active');
-        clipboardBtn.classList.remove('active');
-      }
-    }
+    selectMode(defaultMode);
 
     startRecording();
   });
@@ -410,7 +510,6 @@
         ? 'audio/webm;codecs=opus'
         : 'audio/webm';
 
-      // Write initial mode to session
       writeMode();
 
       startMediaRecorder();
@@ -572,11 +671,11 @@
 
     clearInterval(timerInterval);
     cancelAnimationFrame(animFrame);
+    toggleMenu(false);
 
     recorderEl.classList.add('state-stopping');
     timerEl.textContent = 'Saving...';
 
-    // Write final mode to session
     writeMode();
 
     try {
@@ -599,12 +698,10 @@
     setTimeout(() => window.close(), 500);
   }
 
-  // --- IPC: hotkey stop from main plugin ---
   ipcRenderer.on('recorder:request-stop', () => {
     stopRecording();
   });
 
-  // --- Button handlers ---
   document.getElementById('stopBtn').addEventListener('click', stopRecording);
   document.getElementById('closeBtn').addEventListener('click', stopRecording);
 </script>
