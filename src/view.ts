@@ -50,7 +50,7 @@ export class OpenBrainView extends ItemView {
   }
 
   getIcon(): string {
-    return "brain";
+    return "openbrain";
   }
 
   setInitialPrompt(prompt: string) {

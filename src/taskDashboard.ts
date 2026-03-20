@@ -9,7 +9,7 @@ export class TaskDashboardView extends ItemView {
 
   getViewType() { return TASK_DASHBOARD_VIEW; }
   getDisplayText() { return "Tasks"; }
-  getIcon() { return "check-square"; }
+  getIcon() { return "openbrain-tasks"; }
 
   async onOpen() {
     const container = this.containerEl.children[1];

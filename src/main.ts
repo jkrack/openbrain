@@ -25,7 +25,18 @@ export default class OpenBrainPlugin extends Plugin {
 
   async onload() {
     // Register custom icon: brain with checkmark
-    addIcon("brain-check", `<g transform="translate(10,6) scale(3.5)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a7 7 0 0 0-7 7c0 2.5 1.3 4.7 3.2 6l.8.6V22h6v-3.4l.8-.6A7 7 0 0 0 12 5z"/><path d="M12 5V2"/><path d="M9 9c0-1 .6-2 2-2"/><path d="M15 13l-4 4-2-2" stroke-width="2.5"/></g>`);
+    // OpenBrain icon family — consistent brain silhouette across all surfaces
+    // Brain with folds + stem, designed for 100x100 Obsidian canvas
+    const brainPath = `
+      <path d="M50 12 C50 12 42 12 36 18 C30 24 28 32 28 38 C28 44 30 48 28 52 C26 56 22 58 22 64 C22 72 28 78 36 78 L36 82 C36 86 40 88 44 88 L56 88 C60 88 64 86 64 82 L64 78 C72 78 78 72 78 64 C78 58 74 56 72 52 C70 48 72 44 72 38 C72 32 70 24 64 18 C58 12 50 12 50 12Z"/>
+      <path d="M50 12 L50 38"/>
+      <path d="M50 38 C50 38 38 34 34 42"/>
+      <path d="M50 38 C50 38 62 34 66 42"/>
+      <path d="M50 52 C50 52 40 50 36 56"/>
+      <path d="M50 52 C50 52 60 50 64 56"/>
+    `;
+    addIcon("openbrain", `<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${brainPath}</g>`);
+    addIcon("openbrain-tasks", `<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${brainPath}<polyline points="38 62 46 70 64 52" stroke-width="6"/></g>`);
 
     await this.loadSettings();
     configureObsidianCli(this.settings.obsidianCliPath);
@@ -128,11 +139,11 @@ export default class OpenBrainPlugin extends Plugin {
       })
     );
 
-    this.addRibbonIcon("brain", "OpenBrain", () => {
+    this.addRibbonIcon("openbrain", "OpenBrain", () => {
       void this.activateView();
     });
 
-    this.addRibbonIcon("brain-check", "OpenBrain Tasks", () => {
+    this.addRibbonIcon("openbrain-tasks", "OpenBrain Tasks", () => {
       const leaves = this.app.workspace.getLeavesOfType(TASK_DASHBOARD_VIEW);
       if (leaves.length > 0) {
         void this.app.workspace.revealLeaf(leaves[0]);
