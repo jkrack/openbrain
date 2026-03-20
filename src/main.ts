@@ -52,6 +52,9 @@ export default class OpenBrainPlugin extends Plugin {
       // Load system prompt from file (falls back to settings default)
       await this.loadSystemPrompt();
 
+      // Reload skills now that vault is ready (initial load in onload may have been too early)
+      this.skills = await loadSkills(this.app, this.settings.skillsFolder);
+
       this.vaultIndex = new VaultIndex(this.app);
       this.refreshViews();
 
