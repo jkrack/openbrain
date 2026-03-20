@@ -25,7 +25,7 @@ export default class OpenBrainPlugin extends Plugin {
 
   async onload() {
     // Register custom icon: brain with checkmark
-    addIcon("brain-check", `<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a7 7 0 0 0-7 7c0 2.5 1.3 4.7 3.2 6l.8.6V22h6v-3.4l.8-.6A7 7 0 0 0 12 5z"/><path d="M12 5V2"/><path d="M9 9c0-1 .6-2 2-2"/><path d="M15 13l-4 4-2-2" stroke-width="2.5"/></g>`);
+    addIcon("brain-check", `<g transform="translate(10,6) scale(3.5)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a7 7 0 0 0-7 7c0 2.5 1.3 4.7 3.2 6l.8.6V22h6v-3.4l.8-.6A7 7 0 0 0 12 5z"/><path d="M12 5V2"/><path d="M9 9c0-1 .6-2 2-2"/><path d="M15 13l-4 4-2-2" stroke-width="2.5"/></g>`);
 
     await this.loadSettings();
     configureObsidianCli(this.settings.obsidianCliPath);
