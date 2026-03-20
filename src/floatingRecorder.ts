@@ -36,6 +36,7 @@ function getRecordingsDir(settings: OpenBrainSettings): string {
 export interface SkillInfo {
   id: string;
   name: string;
+  input: string;
 }
 
 export class FloatingRecorder {
