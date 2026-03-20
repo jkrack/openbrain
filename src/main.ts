@@ -25,18 +25,44 @@ export default class OpenBrainPlugin extends Plugin {
 
   async onload() {
     // Register custom icon: brain with checkmark
-    // OpenBrain icon family — consistent brain silhouette across all surfaces
-    // Brain with folds + stem, designed for 100x100 Obsidian canvas
-    const brainPath = `
-      <path d="M50 12 C50 12 42 12 36 18 C30 24 28 32 28 38 C28 44 30 48 28 52 C26 56 22 58 22 64 C22 72 28 78 36 78 L36 82 C36 86 40 88 44 88 L56 88 C60 88 64 86 64 82 L64 78 C72 78 78 72 78 64 C78 58 74 56 72 52 C70 48 72 44 72 38 C72 32 70 24 64 18 C58 12 50 12 50 12Z"/>
-      <path d="M50 12 L50 38"/>
-      <path d="M50 38 C50 38 38 34 34 42"/>
-      <path d="M50 38 C50 38 62 34 66 42"/>
-      <path d="M50 52 C50 52 40 50 36 56"/>
-      <path d="M50 52 C50 52 60 50 64 56"/>
-    `;
-    addIcon("openbrain", `<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${brainPath}</g>`);
-    addIcon("openbrain-tasks", `<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">${brainPath}<polyline points="38 62 46 70 64 52" stroke-width="6"/></g>`);
+    // OpenBrain icon family — proper brain with hemispheres and folds
+    // Designed for Obsidian's 100x100 icon canvas
+    addIcon("openbrain", [
+      '<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">',
+      // Left hemisphere outline
+      '<path d="M50 15 C40 15 32 18 27 25 C22 32 18 40 18 48 C18 56 20 62 25 68 C28 72 30 75 32 78 C34 82 38 86 44 86 L50 86"/>',
+      // Right hemisphere outline
+      '<path d="M50 15 C60 15 68 18 73 25 C78 32 82 40 82 48 C82 56 80 62 75 68 C72 72 70 75 68 78 C66 82 62 86 56 86 L50 86"/>',
+      // Central fissure
+      '<path d="M50 15 L50 86"/>',
+      // Left hemisphere folds (sulci)
+      '<path d="M28 36 C33 34 40 36 48 32"/>',
+      '<path d="M22 50 C28 48 36 52 48 48"/>',
+      '<path d="M26 64 C32 62 40 65 48 62"/>',
+      // Right hemisphere folds (sulci)
+      '<path d="M72 36 C67 34 60 36 52 32"/>',
+      '<path d="M78 50 C72 48 64 52 52 48"/>',
+      '<path d="M74 64 C68 62 60 65 52 62"/>',
+      '</g>',
+    ].join(""));
+    addIcon("openbrain-tasks", [
+      '<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">',
+      // Left hemisphere
+      '<path d="M50 15 C40 15 32 18 27 25 C22 32 18 40 18 48 C18 56 20 62 25 68 C28 72 30 75 32 78 C34 82 38 86 44 86 L50 86"/>',
+      // Right hemisphere
+      '<path d="M50 15 C60 15 68 18 73 25 C78 32 82 40 82 48 C82 56 80 62 75 68 C72 72 70 75 68 78 C66 82 62 86 56 86 L50 86"/>',
+      // Central fissure
+      '<path d="M50 15 L50 86"/>',
+      // Left folds
+      '<path d="M28 36 C33 34 40 36 48 32"/>',
+      '<path d="M22 50 C28 48 36 52 48 48"/>',
+      // Right folds
+      '<path d="M72 36 C67 34 60 36 52 32"/>',
+      '<path d="M78 50 C72 48 64 52 52 48"/>',
+      // Checkmark (bottom right, bolder)
+      '<polyline points="56 64 64 74 82 54" stroke-width="7"/>',
+      '</g>',
+    ].join(""));
 
     await this.loadSettings();
     configureObsidianCli(this.settings.obsidianCliPath);
