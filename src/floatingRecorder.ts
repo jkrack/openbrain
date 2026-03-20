@@ -148,7 +148,7 @@ export class FloatingRecorder {
 
     this.window = new BrowserWindow({
       width: 360,
-      height: 95,
+      height: 120,
       x: pos.x,
       y: pos.y,
       frame: false,
@@ -299,7 +299,7 @@ export class FloatingRecorder {
       const { width, height } = display.workAreaSize;
       return {
         x: Math.round((width - 360) / 2),
-        y: height - 95 - 60,
+        y: height - 120 - 60,
       };
     }
 
