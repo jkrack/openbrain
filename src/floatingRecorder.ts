@@ -33,20 +33,32 @@ function getRecordingsDir(settings: OpenBrainSettings): string {
   return join(sttHome, "recordings");
 }
 
+export interface SkillInfo {
+  id: string;
+  name: string;
+}
+
 export class FloatingRecorder {
   private app: App;
   private settings: OpenBrainSettings;
   private window: any = null;
   private sessionDir: string | null = null;
+  private skills: SkillInfo[] = [];
 
-  /** Called after a recording is transcribed and saved. Receives the vault note path. */
+  /** Called after a recording is transcribed and saved as a note. Receives the vault note path. */
   onRecordingComplete: ((notePath: string) => void) | null = null;
+  /** Called when transcription is copied to clipboard (no note created). */
+  onClipboardCopy: (() => void) | null = null;
   /** Called when processing status changes (for UI feedback). Null clears the status. */
   onStatusChange: ((status: string | null) => void) | null = null;
 
   constructor(app: App, settings: OpenBrainSettings) {
     this.app = app;
     this.settings = settings;
+  }
+
+  setSkills(skills: SkillInfo[]): void {
+    this.skills = skills;
   }
 
   get isAvailable(): boolean {
@@ -136,7 +148,7 @@ export class FloatingRecorder {
 
     this.window = new BrowserWindow({
       width: 360,
-      height: 68,
+      height: 95,
       x: pos.x,
       y: pos.y,
       frame: false,
@@ -171,6 +183,8 @@ export class FloatingRecorder {
         segmentDuration: this.settings.floatingRecorderSegmentDuration,
         deviceId: this.settings.audioDeviceId,
         sessionDir: this.sessionDir,
+        skills: this.skills,
+        defaultMode: this.settings.floatingRecorderDefaultMode || "clipboard",
       });
     });
 
@@ -223,11 +237,13 @@ export class FloatingRecorder {
    */
   private async processSession(dir: string): Promise<void> {
     try {
-      const session = await readSession(dir);
-      if (session.segments.length === 0) {
-        // No segments recorded — nothing to process
-        return;
-      }
+      const session = await readSession(dir) as any;
+      if (session.segments.length === 0) return;
+
+      const mode: string = session.mode || "clipboard";
+
+      // Remember the user's choice for next time
+      this.settings.floatingRecorderDefaultMode = mode;
 
       const segCount = session.segments.length;
       this.onStatusChange?.(`Transcribing ${segCount} segment${segCount > 1 ? "s" : ""}...`);
@@ -235,17 +251,29 @@ export class FloatingRecorder {
       const transcribeFn = this.getTranscribeFn();
       await transcribeAllPending(dir, transcribeFn);
 
-      this.onStatusChange?.("Saving note...");
+      const text = await assembleTranscription(dir);
 
-      const totalDuration = session.segments.reduce((sum, s) => sum + s.duration, 0);
-      const notePath = await this.createVaultNote(dir, totalDuration);
-      await markCompleted(dir);
+      if (mode === "clipboard") {
+        // Clipboard mode — copy text, no note, no OpenBrain
+        const { clipboard } = require("electron");
+        clipboard.writeText(text);
+        await markCompleted(dir);
+        this.onStatusChange?.(null);
+        new Notice("Recording transcribed — copied to clipboard");
+        this.onClipboardCopy?.();
+      } else {
+        // Skill mode — create note and hand off to OpenBrain
+        this.onStatusChange?.("Saving note...");
 
-      this.onStatusChange?.(null); // Clear status
+        const totalDuration = session.segments.reduce((sum: number, s: any) => sum + s.duration, 0);
+        const notePath = await this.createVaultNote(dir, totalDuration);
+        await markCompleted(dir);
 
-      // Open the recording note in the OpenBrain panel
-      if (notePath && this.onRecordingComplete) {
-        this.onRecordingComplete(notePath);
+        this.onStatusChange?.(null);
+
+        if (notePath && this.onRecordingComplete) {
+          this.onRecordingComplete(notePath);
+        }
       }
 
       const recBaseDir = getRecordingsDir(this.settings);
@@ -271,7 +299,7 @@ export class FloatingRecorder {
       const { width, height } = display.workAreaSize;
       return {
         x: Math.round((width - 360) / 2),
-        y: height - 68 - 60,
+        y: height - 95 - 60,
       };
     }
 

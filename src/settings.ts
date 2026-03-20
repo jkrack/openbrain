@@ -38,6 +38,7 @@ export interface OpenBrainSettings {
   floatingRecorderSegmentDuration: number;
   floatingRecorderOutputFolder: string;
   floatingRecorderRetentionDays: number;
+  floatingRecorderDefaultMode: string;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -76,6 +77,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   floatingRecorderSegmentDuration: 300,
   floatingRecorderOutputFolder: "OpenBrain/recordings",
   floatingRecorderRetentionDays: 7,
+  floatingRecorderDefaultMode: "clipboard",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {

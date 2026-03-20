@@ -66,14 +66,12 @@
     background: linear-gradient(180deg, #0e1a28, #0a1420);
     border: 1px solid rgba(100,180,255,0.12);
     border-top: none;
-    border-radius: 0 0 6px 6px;
     padding: 8px 12px;
     display: flex;
     align-items: center;
     gap: 10px;
   }
 
-  /* Recording indicator — clearly a circle, not a square */
   .rec-dot {
     width: 12px;
     height: 12px;
@@ -121,7 +119,6 @@
     opacity: 0.7;
   }
 
-  /* Stop button — clearly a square inside a rounded container */
   .stop-btn {
     width: 26px;
     height: 26px;
@@ -145,6 +142,75 @@
     background: #e44;
   }
 
+  /* Destination bar */
+  .dest-bar {
+    background: #080e16;
+    border: 1px solid rgba(100,180,255,0.12);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    padding: 4px 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .dest-btn {
+    flex: 1;
+    padding: 3px 8px;
+    border: 1px solid rgba(100,180,255,0.12);
+    border-radius: 3px;
+    background: rgba(100,180,255,0.04);
+    color: rgba(100,180,255,0.5);
+    font-family: 'Courier New', monospace;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+
+  .dest-btn:hover {
+    background: rgba(100,180,255,0.08);
+    color: rgba(100,180,255,0.7);
+  }
+
+  .dest-btn.active {
+    background: rgba(100,180,255,0.12);
+    border-color: rgba(100,180,255,0.3);
+    color: #6be;
+    text-shadow: 0 0 4px rgba(100,180,255,0.2);
+  }
+
+  .dest-select {
+    flex: 1;
+    padding: 3px 6px;
+    border: 1px solid rgba(100,180,255,0.12);
+    border-radius: 3px;
+    background: rgba(100,180,255,0.04);
+    color: rgba(100,180,255,0.5);
+    font-family: 'Courier New', monospace;
+    font-size: 9px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+
+  .dest-select:focus {
+    outline: none;
+    border-color: rgba(100,180,255,0.3);
+  }
+
+  .dest-select.active {
+    background: rgba(100,180,255,0.12);
+    border-color: rgba(100,180,255,0.3);
+    color: #6be;
+  }
+
+  .dest-select option {
+    background: #0e1a28;
+    color: #6be;
+  }
+
   /* Stopping state */
   .state-stopping .rec-dot {
     animation: none;
@@ -162,6 +228,11 @@
   .state-stopping .stop-btn {
     pointer-events: none;
     opacity: 0.3;
+  }
+
+  .state-stopping .dest-bar {
+    pointer-events: none;
+    opacity: 0.5;
   }
 </style>
 </head>
@@ -191,10 +262,16 @@
       <div class="stop-icon"></div>
     </div>
   </div>
+  <div class="dest-bar">
+    <div class="dest-btn active" id="clipboardBtn" title="Transcribe to clipboard">&#128203; Clipboard</div>
+    <select class="dest-select" id="skillSelect" title="Send to skill">
+      <option value="">&#128221; Skill...</option>
+    </select>
+  </div>
 </div>
 
 <script>
-  const { ipcRenderer } = require('electron');
+  const { ipcRenderer, clipboard } = require('electron');
   const fs = require('fs');
   const path = require('path');
 
@@ -213,14 +290,48 @@
   let deviceId = '';
   let mimeType = 'audio/webm';
   let sessionDir = '';
+  let selectedMode = 'clipboard'; // 'clipboard' or skill id
 
   // --- DOM refs ---
   const timerEl = document.getElementById('timer');
   const metaEl = document.getElementById('meta');
   const waveLine = document.getElementById('waveLine');
   const recorderEl = document.getElementById('recorder');
+  const clipboardBtn = document.getElementById('clipboardBtn');
+  const skillSelect = document.getElementById('skillSelect');
 
-  // --- Session JSON helpers (direct file I/O, no IPC) ---
+  // --- Destination selection ---
+  clipboardBtn.addEventListener('click', () => {
+    selectedMode = 'clipboard';
+    clipboardBtn.classList.add('active');
+    skillSelect.classList.remove('active');
+    skillSelect.value = '';
+    writeMode();
+  });
+
+  skillSelect.addEventListener('change', () => {
+    if (skillSelect.value) {
+      selectedMode = skillSelect.value;
+      skillSelect.classList.add('active');
+      clipboardBtn.classList.remove('active');
+    } else {
+      selectedMode = 'clipboard';
+      clipboardBtn.classList.add('active');
+      skillSelect.classList.remove('active');
+    }
+    writeMode();
+  });
+
+  function writeMode() {
+    if (!sessionDir) return;
+    try {
+      const session = readSessionJson();
+      session.mode = selectedMode;
+      writeSessionJson(session);
+    } catch { /* session may not exist yet */ }
+  }
+
+  // --- Session JSON helpers ---
   function readSessionJson() {
     const raw = fs.readFileSync(path.join(sessionDir, 'session.json'), 'utf-8');
     return JSON.parse(raw);
@@ -240,11 +351,32 @@
     return filename;
   }
 
-  // --- Init: receive config from main plugin ---
+  // --- Init ---
   ipcRenderer.on('recorder:config', (_e, config) => {
     segmentDuration = config.segmentDuration || 300;
     deviceId = config.deviceId || '';
     sessionDir = config.sessionDir || '';
+
+    // Populate skill dropdown
+    const skills = config.skills || [];
+    for (const skill of skills) {
+      const opt = document.createElement('option');
+      opt.value = skill.id;
+      opt.textContent = skill.name;
+      skillSelect.appendChild(opt);
+    }
+
+    // Restore last mode
+    const defaultMode = config.defaultMode || 'clipboard';
+    if (defaultMode !== 'clipboard') {
+      selectedMode = defaultMode;
+      skillSelect.value = defaultMode;
+      if (skillSelect.value === defaultMode) {
+        skillSelect.classList.add('active');
+        clipboardBtn.classList.remove('active');
+      }
+    }
+
     startRecording();
   });
 
@@ -267,7 +399,6 @@
       }
 
       audioCtx = new AudioContext();
-      // Resume AudioContext — required in Electron when no user gesture initiated it
       await audioCtx.resume();
 
       const source = audioCtx.createMediaStreamSource(stream);
@@ -278,6 +409,9 @@
       mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
         : 'audio/webm';
+
+      // Write initial mode to session
+      writeMode();
 
       startMediaRecorder();
       startTimer();
@@ -442,7 +576,9 @@
     recorderEl.classList.add('state-stopping');
     timerEl.textContent = 'Saving...';
 
-    // Finalize last segment and write to disk
+    // Write final mode to session
+    writeMode();
+
     try {
       const blob = await finalizeSegment();
       if (blob.size > 0) {
@@ -458,10 +594,8 @@
       console.error('Failed to finalize last segment:', err);
     }
 
-    // Stop mic
     if (stream) stream.getTracks().forEach((t) => t.stop());
 
-    // Close window — plugin detects close and processes the session
     setTimeout(() => window.close(), 500);
   }
 
