@@ -25,43 +25,25 @@ export default class OpenBrainPlugin extends Plugin {
 
   async onload() {
     // Register custom icon: brain with checkmark
-    // OpenBrain icon family — proper brain with hemispheres and folds
-    // Designed for Obsidian's 100x100 icon canvas
-    addIcon("openbrain", [
-      '<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">',
-      // Left hemisphere outline
-      '<path d="M50 15 C40 15 32 18 27 25 C22 32 18 40 18 48 C18 56 20 62 25 68 C28 72 30 75 32 78 C34 82 38 86 44 86 L50 86"/>',
-      // Right hemisphere outline
-      '<path d="M50 15 C60 15 68 18 73 25 C78 32 82 40 82 48 C82 56 80 62 75 68 C72 72 70 75 68 78 C66 82 62 86 56 86 L50 86"/>',
-      // Central fissure
-      '<path d="M50 15 L50 86"/>',
-      // Left hemisphere folds (sulci)
-      '<path d="M28 36 C33 34 40 36 48 32"/>',
-      '<path d="M22 50 C28 48 36 52 48 48"/>',
-      '<path d="M26 64 C32 62 40 65 48 62"/>',
-      // Right hemisphere folds (sulci)
-      '<path d="M72 36 C67 34 60 36 52 32"/>',
-      '<path d="M78 50 C72 48 64 52 52 48"/>',
-      '<path d="M74 64 C68 62 60 65 52 62"/>',
+    // OpenBrain icon family — Lucide-style brain, scaled for 100x100 canvas
+    // Uses the built-in "brain" Lucide icon paths, scaled 4.17x from 24x24
+    const s = 4.17; // scale factor: 100/24
+    const brainSvg = [
+      '<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"',
+      ` transform="scale(${s})">`,
+      '<path d="M9.5 2a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>',
+      '<path d="M14.5 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/>',
+      '<path d="M7 8.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>',
+      '<path d="M17 8.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/>',
+      '<path d="M8 14.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>',
+      '<path d="M16 14.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/>',
+      '<path d="M12 2v20"/>',
       '</g>',
-    ].join(""));
+    ].join("");
+    addIcon("openbrain", brainSvg);
     addIcon("openbrain-tasks", [
-      '<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">',
-      // Left hemisphere
-      '<path d="M50 15 C40 15 32 18 27 25 C22 32 18 40 18 48 C18 56 20 62 25 68 C28 72 30 75 32 78 C34 82 38 86 44 86 L50 86"/>',
-      // Right hemisphere
-      '<path d="M50 15 C60 15 68 18 73 25 C78 32 82 40 82 48 C82 56 80 62 75 68 C72 72 70 75 68 78 C66 82 62 86 56 86 L50 86"/>',
-      // Central fissure
-      '<path d="M50 15 L50 86"/>',
-      // Left folds
-      '<path d="M28 36 C33 34 40 36 48 32"/>',
-      '<path d="M22 50 C28 48 36 52 48 48"/>',
-      // Right folds
-      '<path d="M72 36 C67 34 60 36 52 32"/>',
-      '<path d="M78 50 C72 48 64 52 52 48"/>',
-      // Checkmark (large, bold, overlapping bottom-right)
-      '<polyline points="48 68 60 82 86 48" stroke-width="9"/>',
-      '</g>',
+      brainSvg,
+      '<polyline points="44 66 58 82 84 48" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>',
     ].join(""));
 
     await this.loadSettings();
