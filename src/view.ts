@@ -68,6 +68,14 @@ export class OpenBrainView extends ItemView {
     this.rerender();
   }
 
+  /** Activate a skill and auto-send with the attached file */
+  activateSkillAndSend(skillId: string) {
+    this.pendingSkillSend = skillId;
+    this.rerender();
+  }
+
+  private pendingSkillSend: string | null = null;
+
   updateSkills(skills: Skill[]) {
     this.skills = skills;
     this.rerender();
@@ -115,6 +123,7 @@ export class OpenBrainView extends ItemView {
         initialPrompt: this.initialPrompt,
         initialAttachedFile: this.initialAttachedFile,
         floatingRecorderStatus: this.floatingRecorderStatus,
+        pendingSkillSend: this.pendingSkillSend,
         component: this,
         skills: this.skills,
         registerToggleRecording: (fn: () => void) => {

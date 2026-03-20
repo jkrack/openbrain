@@ -47,8 +47,8 @@ export class FloatingRecorder {
   /** Provides the current skill list. Called when the overlay opens. */
   getSkills: (() => SkillInfo[]) | null = null;
 
-  /** Called after a recording is transcribed and saved as a note. Receives the vault note path. */
-  onRecordingComplete: ((notePath: string) => void) | null = null;
+  /** Called after a recording is transcribed and saved as a note. Receives the vault note path and optional skill ID. */
+  onRecordingComplete: ((notePath: string, skillId?: string) => void) | null = null;
   /** Called when transcription is copied to clipboard (no note created). */
   onClipboardCopy: (() => void) | null = null;
   /** Called when processing status changes (for UI feedback). Null clears the status. */
@@ -270,7 +270,7 @@ export class FloatingRecorder {
         this.onStatusChange?.(null);
 
         if (notePath && this.onRecordingComplete) {
-          this.onRecordingComplete(notePath);
+          this.onRecordingComplete(notePath, mode);
         }
       }
 

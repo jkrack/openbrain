@@ -35,6 +35,7 @@ interface PanelProps {
   initialPrompt?: string;
   initialAttachedFile?: string;
   floatingRecorderStatus?: string | null;
+  pendingSkillSend?: string | null;
   component: Component;
   skills: Skill[];
   registerToggleRecording?: (fn: () => void) => void;
@@ -60,7 +61,7 @@ interface SetupStatus {
   obsidianCli: boolean;
 }
 
-export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFile, floatingRecorderStatus, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
+export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFile, floatingRecorderStatus, pendingSkillSend, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(initialPrompt || "");
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
@@ -191,6 +192,24 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       );
     }
   }, [initialAttachedFile]);
+
+  // Auto-activate skill and send when triggered by floating recorder
+  const pendingSkillSendRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (pendingSkillSend && pendingSkillSend !== pendingSkillSendRef.current) {
+      pendingSkillSendRef.current = pendingSkillSend;
+
+      // Activate the skill
+      setActiveSkillId(pendingSkillSend);
+
+      // Wait a tick for the skill to set the auto_prompt, then send
+      setTimeout(() => {
+        const skill = skills.find((s) => s.id === pendingSkillSend);
+        const prompt = skill?.autoPrompt || `Process this recording with the ${skill?.name || "selected"} skill.`;
+        void sendMessage(prompt);
+      }, 200);
+    }
+  }, [pendingSkillSend, skills]);
 
   // Handle image paste (Cmd+V)
   useEffect(() => {

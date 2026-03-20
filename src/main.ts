@@ -80,11 +80,17 @@ export default class OpenBrainPlugin extends Plugin {
           void this.activateView();
         }
       };
-      this.floatingRecorder.onRecordingComplete = (notePath) => {
+      this.floatingRecorder.onRecordingComplete = (notePath, skillId) => {
         void this.activateView().then(() => {
           const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
           if (leaves.length > 0 && leaves[0].view instanceof OpenBrainView) {
             leaves[0].view.setInitialAttachedFile(notePath);
+            if (skillId && skillId !== "clipboard") {
+              // Small delay to let the file attach first
+              setTimeout(() => {
+                (leaves[0].view as OpenBrainView).activateSkillAndSend(skillId);
+              }, 300);
+            }
           }
         });
       };
