@@ -39,10 +39,15 @@ export function createEmbeddingEngine(): EmbeddingEngine {
       // Dynamic import — @huggingface/transformers is a large module
       const { pipeline, env } = await import("@huggingface/transformers");
 
-      // Don't try local file paths (resolves to app://obsidian.md/ which fails)
-      // Let it download from HuggingFace and cache via browser Cache Storage API
-      env.allowLocalModels = false;
+      // Use filesystem cache at ~/.openbrain/models/embed/ for performance
+      // (avoids Chromium Cache Storage overhead for large model files)
+      const cacheDir = getModelCacheDir();
+      env.localModelPath = cacheDir;
+      env.cacheDir = cacheDir;
+      env.allowLocalModels = true;
       env.allowRemoteModels = true;
+      // Disable browser Cache Storage — we use filesystem instead
+      env.useBrowserCache = false;
 
       extractor = await pipeline("feature-extraction", modelId, {
         dtype: "q8",
