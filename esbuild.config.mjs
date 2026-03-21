@@ -1,7 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
-import { copyFileSync, existsSync } from "fs";
+import { copyFileSync } from "fs";
 
 const prod = process.argv[2] === "production";
 
@@ -25,7 +25,7 @@ const context = await esbuild.context({
     ...builtins,
   ],
   format: "cjs",
-  target: "es2018",
+  target: "es2020",
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
@@ -39,27 +39,9 @@ try {
   copyFileSync("src/floatingRecorder.html", "floatingRecorder.html");
 } catch { /* file may not exist yet */ }
 
-// Build embedding worker as a separate bundle (skip if file doesn't exist yet)
-let workerContext = null;
-if (existsSync("src/embeddingWorker.ts")) {
-  workerContext = await esbuild.context({
-    entryPoints: ["src/embeddingWorker.ts"],
-    bundle: true,
-    platform: "node",
-    format: "iife",
-    target: "es2020",
-    logLevel: "info",
-    sourcemap: prod ? false : "inline",
-    treeShaking: true,
-    outfile: "embeddingWorker.js",
-  });
-}
-
 if (prod) {
   await context.rebuild();
-  if (workerContext) await workerContext.rebuild();
   process.exit(0);
 } else {
   await context.watch();
-  if (workerContext) await workerContext.watch();
 }

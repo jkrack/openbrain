@@ -15,7 +15,6 @@ export interface EmbeddingEngine {
   isReady(): boolean;
   getDimensions(): number;
   destroy(): void;
-  /** Callback for download progress during init */
   onDownloadProgress: ((progress: DownloadProgress) => void) | null;
 }
 
@@ -23,80 +22,59 @@ export function getModelCacheDir(): string {
   return join(homedir(), ".openbrain", "models", "embed");
 }
 
-export function createEmbeddingEngine(workerPath: string): EmbeddingEngine {
-  let worker: Worker | null = null;
+/**
+ * Create an embedding engine that runs Transformers.js directly in the main thread.
+ * No Web Worker — embeddings are fast enough (<50ms per call for small models)
+ * and the indexer yields between batches to keep the UI responsive.
+ */
+export function createEmbeddingEngine(): EmbeddingEngine {
+  let extractor: any = null;
   let ready = false;
   let dimensions = 0;
-  let nextId = 1;
-  const pending = new Map<number, {
-    resolve: (value: any) => void;
-    reject: (reason: any) => void;
-  }>();
 
   const engine: EmbeddingEngine = {
     onDownloadProgress: null,
 
     async init(modelId: string): Promise<void> {
-      // Electron requires file:// URL for Web Workers
-      const workerUrl = workerPath.startsWith("file://")
-        ? workerPath
-        : `file://${workerPath}`;
-      worker = new Worker(workerUrl);
+      // Dynamic import — @huggingface/transformers is a large module
+      const { pipeline, env } = await import("@huggingface/transformers");
 
-      worker.onmessage = (e: MessageEvent) => {
-        const { type, id, vector, vectors, error, progress } = e.data;
+      env.cacheDir = getModelCacheDir();
+      env.allowLocalModels = true;
+      env.allowRemoteModels = true;
 
-        // Download progress doesn't resolve promises — just fire callback
-        if (type === "progress") {
-          engine.onDownloadProgress?.(progress as DownloadProgress);
-          return;
-        }
-
-        const handler = pending.get(id);
-        if (!handler) return;
-        pending.delete(id);
-
-        if (type === "error") {
-          handler.reject(new Error(error));
-        } else if (type === "ready") {
-          handler.resolve(undefined);
-        } else if (type === "result") {
-          if (vector) {
-            handler.resolve(new Float32Array(vector));
-          } else if (vectors) {
-            handler.resolve(vectors.map((v: number[]) => new Float32Array(v)));
-          }
-        }
-      };
-
-      worker.onerror = (err) => {
-        console.error("[OpenBrain] Embedding worker error:", err);
-        for (const [, handler] of pending) {
-          handler.reject(new Error(`Worker error: ${err.message || "unknown"}`));
-        }
-        pending.clear();
-      };
-
-      await sendMessage({
-        type: "init",
-        modelId,
-        cacheDir: getModelCacheDir(),
+      extractor = await pipeline("feature-extraction", modelId, {
+        dtype: "q8",
+        progress_callback: (p: any) => {
+          engine.onDownloadProgress?.({
+            status: p.status || "loading",
+            file: p.file,
+            loaded: p.loaded,
+            total: p.total,
+          });
+        },
       });
 
-      // Detect dimensions by embedding a test string
-      const testVec = await sendMessage({ type: "embed", text: "test" }) as Float32Array;
-      dimensions = testVec.length;
+      // Detect dimensions with a test embedding
+      const output = await extractor("test", { pooling: "mean", normalize: true });
+      dimensions = output.data.length;
       ready = true;
     },
 
     async embed(text: string): Promise<Float32Array> {
-      if (!ready) throw new Error("Engine not ready");
-      return sendMessage({ type: "embed", text }) as Promise<Float32Array>;
+      if (!extractor) throw new Error("Engine not ready");
+      const output = await extractor(text, { pooling: "mean", normalize: true });
+      return new Float32Array(output.data);
     },
 
     async embedBatch(texts: string[]): Promise<Float32Array[]> {
-      if (!ready) throw new Error("Engine not ready");
-      return sendMessage({ type: "embedBatch", texts }) as Promise<Float32Array[]>;
+      if (!extractor) throw new Error("Engine not ready");
+      const results: Float32Array[] = [];
+      for (const text of texts) {
+        const output = await extractor(text, { pooling: "mean", normalize: true });
+        results.push(new Float32Array(output.data));
+      }
+      return results;
     },
 
     isReady(): boolean {
@@ -108,27 +86,11 @@ export function createEmbeddingEngine(workerPath: string): EmbeddingEngine {
     },
 
     destroy(): void {
+      extractor = null;
       ready = false;
       dimensions = 0;
-      if (worker) {
-        worker.terminate();
-        worker = null;
-      }
-      pending.clear();
     },
   };
-
-  function sendMessage(msg: any): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if (!worker) {
-        reject(new Error("Worker not initialized"));
-        return;
-      }
-      const id = nextId++;
-      pending.set(id, { resolve, reject });
-      worker.postMessage({ ...msg, id });
-    });
-  }
 
   return engine;
 }
