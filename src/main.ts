@@ -13,6 +13,11 @@ import { TaskDashboardView, TASK_DASHBOARD_VIEW } from "./taskDashboard";
 import { SkillScheduler } from "./scheduler";
 import { checkNotifications } from "./notifications";
 import { FloatingRecorder } from "./floatingRecorder";
+import { createEmbeddingEngine } from "./embeddingEngine";
+import { createEmbeddingIndex } from "./embeddingIndex";
+import { createEmbeddingIndexer } from "./embeddingIndexer";
+import { createEmbeddingSearch } from "./embeddingSearch";
+import { setEmbeddingSearch } from "./toolEngine";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -22,6 +27,9 @@ export default class OpenBrainPlugin extends Plugin {
   private openclawNode: OpenClawNode | null = null;
   private scheduler: SkillScheduler | null = null;
   private floatingRecorder: FloatingRecorder | null = null;
+  private embeddingEngine: ReturnType<typeof createEmbeddingEngine> | null = null;
+  private embeddingIndexer: ReturnType<typeof createEmbeddingIndexer> | null = null;
+  private embeddingStatusBarEl: HTMLElement | null = null;
 
   async onload() {
     // OpenBrain icon — actual Lucide brain outline, scaled for 100x100 canvas
@@ -120,6 +128,11 @@ export default class OpenBrainPlugin extends Plugin {
         void this.floatingRecorder.recoverIncompleteSessions();
       }
 
+      // Initialize embedding system
+      if (this.settings.embeddingsEnabled) {
+        void this.initEmbeddings();
+      }
+
       // Connect to OpenClaw gateway if enabled
       if (this.settings.openclawEnabled) {
         this.openclawNode = new OpenClawNode(this.app, this.settings);
@@ -131,21 +144,26 @@ export default class OpenBrainPlugin extends Plugin {
     this.registerEvent(
       this.app.vault.on("create", (file) => {
         if (file instanceof TFile) this.vaultIndex?.update(file.path);
+        if (file instanceof TFile) this.embeddingIndexer?.queueFile(file.path);
       })
     );
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
         if (file instanceof TFile) this.vaultIndex?.update(file.path);
+        if (file instanceof TFile) this.embeddingIndexer?.queueFile(file.path);
       })
     );
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
         this.vaultIndex?.remove(file.path);
+        this.embeddingIndexer?.removeFile(file.path);
       })
     );
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
         this.vaultIndex?.rename(oldPath, file.path);
+        this.embeddingIndexer?.removeFile(oldPath);
+        this.embeddingIndexer?.queueFile(file.path);
       })
     );
 
@@ -362,6 +380,61 @@ export default class OpenBrainPlugin extends Plugin {
     );
   }
 
+  private async initEmbeddings(): Promise<void> {
+    try {
+      const { join } = await import("path");
+      const workerPath = join(
+        (this.app as any).vault.adapter.basePath,
+        ".obsidian", "plugins", "open-brain", "embeddingWorker.js"
+      );
+
+      this.embeddingEngine = createEmbeddingEngine(workerPath);
+      await this.embeddingEngine.init(this.settings.embeddingsModel);
+
+      const index = createEmbeddingIndex(this.embeddingEngine.getDimensions());
+      const indexer = createEmbeddingIndexer(
+        this.app, this.embeddingEngine, index, this.settings.embeddingsModel
+      );
+
+      // Pause indexing during recording
+      indexer.shouldPause = () =>
+        this.floatingRecorder?.isRecording ?? false;
+
+      // Update status bar
+      indexer.onProgress = (progress) => {
+        this.updateEmbeddingStatus(progress);
+      };
+
+      this.embeddingIndexer = indexer;
+
+      // Make search available to tools and smart context
+      const search = createEmbeddingSearch(this.embeddingEngine, index);
+      setEmbeddingSearch(search);
+
+      // Start indexing
+      await indexer.start();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[OpenBrain] Failed to initialize embeddings: ${message}`);
+    }
+  }
+
+  private updateEmbeddingStatus(progress: { indexed: number; total: number; status: string }): void {
+    // Use a SEPARATE status bar element (don't overwrite recording status)
+    if (!this.embeddingStatusBarEl) {
+      this.embeddingStatusBarEl = this.addStatusBarItem();
+      this.embeddingStatusBarEl.addClass("openbrain-embed-status");
+    }
+
+    if (progress.status === "indexing") {
+      this.embeddingStatusBarEl.setText(`Indexing ${progress.indexed}/${progress.total}`);
+    } else if (progress.status === "ready") {
+      this.embeddingStatusBarEl.setText("");
+    } else if (progress.status === "paused") {
+      this.embeddingStatusBarEl.setText("Index paused");
+    }
+  }
+
   private refreshViews() {
     const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
     for (const leaf of leaves) {
@@ -475,6 +548,9 @@ export default class OpenBrainPlugin extends Plugin {
     this.scheduler?.stop();
     this.openclawNode?.disconnect();
     this.floatingRecorder?.destroy();
+    this.embeddingIndexer?.stop();
+    this.embeddingEngine?.destroy();
+    setEmbeddingSearch(null);
   }
 }
 
