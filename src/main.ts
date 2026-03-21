@@ -389,7 +389,19 @@ export default class OpenBrainPlugin extends Plugin {
       );
 
       this.embeddingEngine = createEmbeddingEngine(workerPath);
-      await this.embeddingEngine.init(this.settings.embeddingsModel);
+
+      // Show download status before init (which downloads the model)
+      this.updateEmbeddingStatus({ indexed: 0, total: 0, status: "downloading" });
+
+      // Timeout after 5 minutes — model download may fail silently
+      const initTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Model initialization timed out after 5 minutes")), 300000)
+      );
+
+      await Promise.race([
+        this.embeddingEngine.init(this.settings.embeddingsModel),
+        initTimeout,
+      ]);
 
       const index = createEmbeddingIndex(this.embeddingEngine.getDimensions());
       const indexer = createEmbeddingIndexer(
@@ -416,6 +428,8 @@ export default class OpenBrainPlugin extends Plugin {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[OpenBrain] Failed to initialize embeddings: ${message}`);
+      this.updateEmbeddingStatus({ indexed: 0, total: 0, status: "error" });
+      new Notice(`Embedding init failed: ${message}`);
     }
   }
 

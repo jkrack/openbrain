@@ -38,7 +38,11 @@ export function createEmbeddingEngine(workerPath: string): EmbeddingEngine {
 
   return {
     async init(modelId: string): Promise<void> {
-      worker = new Worker(workerPath);
+      // Electron requires file:// URL for Web Workers
+      const workerUrl = workerPath.startsWith("file://")
+        ? workerPath
+        : `file://${workerPath}`;
+      worker = new Worker(workerUrl);
 
       worker.onmessage = (e: MessageEvent) => {
         const { type, id, vector, vectors, error } = e.data;
@@ -61,6 +65,11 @@ export function createEmbeddingEngine(workerPath: string): EmbeddingEngine {
 
       worker.onerror = (err) => {
         console.error("[OpenBrain] Embedding worker error:", err);
+        // Reject all pending promises on worker error
+        for (const [id, handler] of pending) {
+          handler.reject(new Error(`Worker error: ${err.message || "unknown"}`));
+          pending.delete(id);
+        }
       };
 
       await sendMessage({
