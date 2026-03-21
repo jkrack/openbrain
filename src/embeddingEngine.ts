@@ -36,22 +36,30 @@ export function createEmbeddingEngine(): EmbeddingEngine {
     onDownloadProgress: null,
 
     async init(modelId: string): Promise<void> {
+      console.log("[OpenBrain] Embedding init starting, model:", modelId);
+
       // Dynamic import — @huggingface/transformers is a large module
       const { pipeline, env } = await import("@huggingface/transformers");
 
-      // Use filesystem cache at ~/.openbrain/models/embed/ for performance
-      // (avoids Chromium Cache Storage overhead for large model files)
-      const cacheDir = getModelCacheDir();
-      env.localModelPath = cacheDir;
-      env.cacheDir = cacheDir;
-      env.allowLocalModels = true;
+      console.log("[OpenBrain] Transformers.js loaded, configuring env...");
+      console.log("[OpenBrain] env.backends:", Object.keys(env.backends || {}));
+
+      // Download from HuggingFace, cache via browser Cache Storage
+      // (filesystem caching requires Node.js fs which isn't available
+      // in Obsidian's Electron renderer for Transformers.js internals)
+      env.allowLocalModels = false;
       env.allowRemoteModels = true;
-      // Disable browser Cache Storage — we use filesystem instead
-      env.useBrowserCache = false;
+
+      console.log("[OpenBrain] Calling pipeline('feature-extraction', '" + modelId + "')...");
 
       extractor = await pipeline("feature-extraction", modelId, {
         dtype: "q8",
         progress_callback: (p: any) => {
+          if (p.status === "download") {
+            console.log(`[OpenBrain] Download: ${p.file} ${p.loaded}/${p.total}`);
+          } else {
+            console.log(`[OpenBrain] Progress: ${p.status} ${p.file || ""}`);
+          }
           engine.onDownloadProgress?.({
             status: p.status || "loading",
             file: p.file,
@@ -61,10 +69,14 @@ export function createEmbeddingEngine(): EmbeddingEngine {
         },
       });
 
+      console.log("[OpenBrain] Pipeline created, testing embed...");
+
       // Detect dimensions with a test embedding
+      console.log("[OpenBrain] Running test embedding...");
       const output = await extractor("test", { pooling: "mean", normalize: true });
       dimensions = output.data.length;
       ready = true;
+      console.log(`[OpenBrain] Embedding engine ready. Dimensions: ${dimensions}`);
     },
 
     async embed(text: string): Promise<Float32Array> {
