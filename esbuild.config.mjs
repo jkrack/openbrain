@@ -45,6 +45,7 @@ if (existsSync("src/embeddingWorker.ts")) {
   workerContext = await esbuild.context({
     entryPoints: ["src/embeddingWorker.ts"],
     bundle: true,
+    platform: "node",
     format: "iife",
     target: "es2020",
     logLevel: "info",
