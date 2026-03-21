@@ -67,7 +67,7 @@
 .ca-header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -108,8 +108,17 @@
 .ca-header-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
+}
+
+/* Visual separator between header groups */
+.ca-header-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--background-modifier-border);
+  flex-shrink: 0;
+  opacity: 0.6;
 }
 
 /* --- Segmented mode toggle --- */
@@ -224,11 +233,11 @@
 .ca-perm-dots {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
 }
 .ca-perm-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   border: none;
   padding: 0;
@@ -1458,19 +1467,19 @@
   padding: 40px;
 }
 .ca-task-section {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .ca-task-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 0;
+  padding: 8px 0 6px;
   border-bottom: 1px solid var(--background-modifier-border);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 .ca-task-folder {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-normal);
 }
 .ca-task-section-count {
@@ -1480,12 +1489,47 @@
   padding: 1px 7px;
   border-radius: 10px;
 }
+/* Source file sub-groups within a folder */
+.ca-task-source-group {
+  margin-bottom: 8px;
+}
+.ca-task-source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 4px 26px;
+}
+.ca-task-source-link {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.ca-task-source-link:hover {
+  color: var(--interactive-accent);
+  text-decoration: underline;
+}
+.ca-task-source-count {
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+/* Task rows — full-width text, clickable */
 .ca-task-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 10px;
+  padding: 5px 6px;
   font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ca-task-row:hover {
+  background: var(--background-modifier-hover);
 }
 .ca-task-row input[type="checkbox"] {
   margin-top: 3px;
@@ -1493,18 +1537,13 @@
 }
 .ca-task-text {
   flex: 1;
+  min-width: 0;
   line-height: 1.5;
   color: var(--text-normal);
 }
-.ca-task-source {
-  font-size: 11px;
-  color: var(--text-muted);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.ca-task-source:hover {
-  color: var(--interactive-accent);
-  text-decoration: underline;
+.ca-task-text strong {
+  font-weight: 600;
+  color: var(--text-accent);
 }
 
 /* ============================================================

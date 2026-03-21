@@ -24,26 +24,28 @@ export default class OpenBrainPlugin extends Plugin {
   private floatingRecorder: FloatingRecorder | null = null;
 
   async onload() {
-    // Register custom icon: brain with checkmark
-    // OpenBrain icon family — Lucide-style brain, scaled for 100x100 canvas
-    // Uses the built-in "brain" Lucide icon paths, scaled 4.17x from 24x24
+    // OpenBrain icon — actual Lucide brain outline, scaled for 100x100 canvas
     const s = 4.17; // scale factor: 100/24
     const brainSvg = [
-      '<g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"',
-      ` transform="scale(${s})">`,
-      '<path d="M9.5 2a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>',
-      '<path d="M14.5 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/>',
-      '<path d="M7 8.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>',
-      '<path d="M17 8.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/>',
-      '<path d="M8 14.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5Z"/>',
-      '<path d="M16 14.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/>',
-      '<path d="M12 2v20"/>',
+      `<g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" transform="scale(${s})">`,
+      // Left hemisphere
+      '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/>',
+      // Right hemisphere
+      '<path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/>',
+      // Central sulcus
+      '<path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/>',
       '</g>',
     ].join("");
     addIcon("openbrain", brainSvg);
+    // Task dashboard — Lucide list-checks, visually distinct from brain
     addIcon("openbrain-tasks", [
-      brainSvg,
-      '<polyline points="44 66 58 82 84 48" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>',
+      `<g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" transform="scale(${s})">`,
+      '<path d="m3 17 2 2 4-4"/>',
+      '<path d="m3 7 2 2 4-4"/>',
+      '<path d="M13 6h8"/>',
+      '<path d="M13 12h8"/>',
+      '<path d="M13 18h8"/>',
+      '</g>',
     ].join(""));
 
     await this.loadSettings();

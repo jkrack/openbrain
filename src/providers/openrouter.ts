@@ -60,7 +60,8 @@ export class OpenRouterProvider implements LLMProvider {
     if (tools && tools.length > 0) body.tools = tools;
 
     try {
-      const response = await globalThis.fetch("https://openrouter.ai/api/v1/chat/completions", {
+      // eslint-disable-next-line no-restricted-globals -- Obsidian's requestUrl does not support streaming responses (ReadableStream). Streaming is required for real-time token delivery.
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -53,6 +53,7 @@ export function ChatHeader({
 
   return (
     <div className="ca-header">
+      {/* Left: branding + mode toggle (always stable) */}
       <div className="ca-header-left">
         <span className="ca-title">OpenBrain</span>
         {noteContext && (
@@ -70,9 +71,6 @@ export function ChatHeader({
             local
           </span>
         )}
-      </div>
-      <div className="ca-header-right">
-        {/* Segmented mode toggle: Vault | Chat */}
         {onboardingComplete && (
           <div className="ca-mode-toggle-group">
             <button
@@ -91,65 +89,70 @@ export function ChatHeader({
             </button>
           </div>
         )}
+      </div>
 
-        {/* Skill selector — minimal pill */}
-        {onboardingComplete && skills.length > 0 && chatMode === "agent" && (
-          <div className="ca-skill-selector">
-            <button
-              className={`ca-skill-pill ${activeSkill ? "has-skill" : ""}`}
-              onClick={onSkillMenuToggle}
-              aria-label={tip(activeSkill?.description || "Choose a skill — specialized workflows for meetings, reviews, etc.")}
-            >
-              {activeSkill?.name || "General"}
-              <span className="ca-skill-pill-chevron">{"\u25BE"}</span>
-            </button>
-            {showSkillMenu && (
-              <div className="ca-skill-menu" role="listbox">
+      {/* Right: contextual controls + actions */}
+      <div className="ca-header-right">
+        {/* Skill + permissions (vault mode only) */}
+        {onboardingComplete && chatMode === "agent" && (
+          <>
+            {skills.length > 0 && (
+              <div className="ca-skill-selector">
                 <button
-                  className={`ca-skill-option ${!activeSkill ? "active" : ""}`}
-                  onClick={() => onSkillSelect(null)}
-                  role="option"
+                  className={`ca-skill-pill ${activeSkill ? "has-skill" : ""}`}
+                  onClick={onSkillMenuToggle}
+                  aria-label={tip(activeSkill?.description || "Choose a skill — specialized workflows for meetings, reviews, etc.")}
                 >
-                  General
+                  {activeSkill?.name || "General"}
+                  <span className="ca-skill-pill-chevron">{"\u25BE"}</span>
                 </button>
-                {skills.map((skill) => (
-                  <button
-                    key={skill.id}
-                    className={`ca-skill-option ${activeSkillId === skill.id ? "active" : ""}`}
-                    onClick={() => onSkillSelect(skill.id)}
-                    aria-label={tip(skill.description)}
-                    role="option"
-                  >
-                    {skill.name}
-                  </button>
-                ))}
+                {showSkillMenu && (
+                  <div className="ca-skill-menu" role="listbox">
+                    <button
+                      className={`ca-skill-option ${!activeSkill ? "active" : ""}`}
+                      onClick={() => onSkillSelect(null)}
+                      role="option"
+                    >
+                      General
+                    </button>
+                    {skills.map((skill) => (
+                      <button
+                        key={skill.id}
+                        className={`ca-skill-option ${activeSkillId === skill.id ? "active" : ""}`}
+                        onClick={() => onSkillSelect(skill.id)}
+                        aria-label={tip(skill.description)}
+                        role="option"
+                      >
+                        {skill.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-          </div>
+            <div className="ca-perm-dots">
+              <button
+                className={`ca-perm-dot ${effectiveWrite ? "write-on" : "write-off"}`}
+                onClick={onToggleWrite}
+                aria-label={tip(effectiveWrite
+                  ? "Write ON — Claude can create and modify notes"
+                  : "Write OFF — read only"
+                )}
+              />
+              <button
+                className={`ca-perm-dot ${effectiveCli ? "cli-on" : "cli-off"}`}
+                onClick={onToggleCli}
+                aria-label={tip(effectiveCli
+                  ? "Shell ON — Claude can run commands"
+                  : "Shell OFF — no commands"
+                )}
+              />
+            </div>
+            <span className="ca-header-sep" />
+          </>
         )}
 
-        {/* Permission dots: write (green) and cli (accent) */}
-        {onboardingComplete && chatMode === "agent" && (
-          <div className="ca-perm-dots">
-            <button
-              className={`ca-perm-dot ${effectiveWrite ? "write-on" : "write-off"}`}
-              onClick={onToggleWrite}
-              aria-label={tip(effectiveWrite
-                ? "File editing ON — Claude can create and modify notes"
-                : "File editing OFF — Claude can only read"
-              )}
-            />
-            <button
-              className={`ca-perm-dot ${effectiveCli ? "cli-on" : "cli-off"}`}
-              onClick={onToggleCli}
-              aria-label={tip(effectiveCli
-                ? "Shell access ON — Claude can run commands and search your vault"
-                : "Shell access OFF — Claude cannot run commands"
-              )}
-            />
-          </div>
-        )}
-
+        {/* Actions (always visible) */}
         {onboardingComplete && (
           <button
             className={`ca-icon-btn ${taskTrayOpen ? "active" : ""}`}
@@ -162,14 +165,14 @@ export function ChatHeader({
         <button
           className="ca-icon-btn"
           onClick={onNewChat}
-          aria-label={tip("Start a new conversation (saves current chat first)")}
+          aria-label={tip("New chat")}
         >
           +
         </button>
         <button
           className="ca-icon-btn"
           onClick={onOpenSettings}
-          aria-label={tip("OpenBrain settings")}
+          aria-label={tip("Settings")}
         >
           {"\u2699"}
         </button>

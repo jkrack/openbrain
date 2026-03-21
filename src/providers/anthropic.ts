@@ -62,8 +62,8 @@ export class AnthropicProvider implements LLMProvider {
     if (tools && tools.length > 0) body.tools = tools;
 
     try {
-      // Must use globalThis.fetch for streaming (requestUrl doesn't support ReadableStream)
-      const response = await globalThis.fetch("https://api.anthropic.com/v1/messages", {
+      // eslint-disable-next-line no-restricted-globals -- Obsidian's requestUrl does not support streaming responses (ReadableStream). Streaming is required for real-time token delivery.
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

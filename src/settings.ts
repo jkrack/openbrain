@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice } from "obsidian";
+import { App, PluginSettingTab, Setting, Notice, requestUrl } from "obsidian";
 import OpenBrainPlugin from "./main";
 
 export interface OpenBrainSettings {
@@ -249,12 +249,12 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             btn.setDisabled(true);
             try {
               const baseUrl = this.plugin.settings.ollamaUrl || "http://localhost:11434";
-              const response = await globalThis.fetch(`${baseUrl}/api/tags`);
-              if (!response.ok) {
-                new Notice(`Ollama connection failed: ${response.statusText}`);
+              const response = await requestUrl({ url: `${baseUrl}/api/tags`, method: "GET" });
+              if (response.status !== 200) {
+                new Notice(`Ollama connection failed: HTTP ${response.status}`);
                 return;
               }
-              const data = await response.json() as { models?: { name: string }[] };
+              const data = response.json as { models?: { name: string }[] };
               const models = data.models || [];
               const modelName = this.plugin.settings.ollamaModel || "llama3";
               const found = models.some((m: { name: string }) => m.name.startsWith(modelName));

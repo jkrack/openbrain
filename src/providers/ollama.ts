@@ -57,8 +57,8 @@ export class OllamaProvider implements LLMProvider {
     if (tools && tools.length > 0) body.tools = tools;
 
     try {
-      // Use /api/chat endpoint (Ollama native) which supports streaming
-      const response = await globalThis.fetch(`${baseUrl}/api/chat`, {
+      // eslint-disable-next-line no-restricted-globals -- Obsidian's requestUrl does not support streaming responses (ReadableStream). Streaming is required for real-time token delivery.
+      const response = await fetch(`${baseUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
