@@ -4,6 +4,17 @@ import * as cli from "./obsidianCli";
 import { appendToDailySection } from "./chatHistory";
 import { startTimer } from "./perf";
 import { ToolResultData } from "./providers/types";
+import { EmbeddingSearch } from "./embeddingSearch";
+
+let embeddingSearchInstance: EmbeddingSearch | null = null;
+
+export function setEmbeddingSearch(search: EmbeddingSearch | null): void {
+  embeddingSearchInstance = search;
+}
+
+export function getEmbeddingSearch(): EmbeddingSearch | null {
+  return embeddingSearchInstance;
+}
 
 /**
  * Execute a tool call and return the result.
@@ -213,6 +224,33 @@ async function executeToolInner(
         }
       }
       return unresolved.length > 0 ? `${unresolved.length} unresolved links:\n${unresolved.join("\n")}` : "No unresolved links";
+    }
+    case "vault_semantic_search": {
+      if (!embeddingSearchInstance?.isReady()) {
+        return "Semantic search is not available. Enable it in Settings > OpenBrain > Semantic search.";
+      }
+      const query = input.query as string;
+      const limit = ((input.limit as unknown) as number) || 5;
+
+      const notes = await embeddingSearchInstance.searchNotes(query, limit);
+      const passages = await embeddingSearchInstance.searchPassages(query, limit);
+
+      let result = "";
+      if (passages.length > 0) {
+        result += "Relevant passages:\n";
+        for (const p of passages) {
+          const basename = p.path.split("/").pop()?.replace(/\.md$/, "") || p.path;
+          result += `\n"${basename}" > ${p.heading} (score: ${p.score.toFixed(2)}):\n${p.text}\n`;
+        }
+      }
+      if (notes.length > 0) {
+        result += "\nRelated notes:\n";
+        for (const n of notes) {
+          result += `- ${n.path} (score: ${n.score.toFixed(2)})\n`;
+        }
+      }
+      if (!result) result = "No semantically similar content found.";
+      return result;
     }
 
     // --- Write tools ---

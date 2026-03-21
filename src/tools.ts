@@ -108,7 +108,19 @@ export const READ_TOOLS: ToolDefinition[] = [
     name: "vault_unresolved",
     description: "Find unresolved wikilinks",
     input_schema: { type: "object", properties: {} }
-  }
+  },
+  {
+    name: "vault_semantic_search",
+    description: "Find notes and passages semantically related to a query. Uses embedding-based similarity, not keyword matching. Returns both relevant note paths and specific passage excerpts. Only available when semantic search is enabled.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Natural language search query" },
+        limit: { type: "number", description: "Max results per category (default 5)" }
+      },
+      required: ["query"]
+    }
+  },
 ];
 
 // Write tools — only included when write permission is enabled
