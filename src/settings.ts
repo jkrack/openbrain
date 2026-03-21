@@ -1,6 +1,14 @@
 import { App, PluginSettingTab, Setting, Notice, requestUrl } from "obsidian";
 import OpenBrainPlugin from "./main";
 
+const EMBEDDING_MODELS = [
+  { id: "TaylorAI/bge-micro-v2", name: "BGE-micro-v2", size: "~20MB", dims: 384, tokens: 512, quality: 1 },
+  { id: "Snowflake/snowflake-arctic-embed-xs", name: "Arctic Embed XS", size: "~25MB", dims: 384, tokens: 512, quality: 2 },
+  { id: "TaylorAI/gte-tiny", name: "GTE-tiny", size: "~25MB", dims: 384, tokens: 512, quality: 2 },
+  { id: "nomic-ai/nomic-embed-text-v1.5", name: "Nomic Embed v1.5", size: "~100MB", dims: 768, tokens: 2048, quality: 4 },
+  { id: "jinaai/jina-embeddings-v2-small-en", name: "Jina v2 Small", size: "~80MB", dims: 512, tokens: 8192, quality: 5 },
+];
+
 export interface OpenBrainSettings {
   apiKey: string;
   claudePath: string;
@@ -39,6 +47,9 @@ export interface OpenBrainSettings {
   floatingRecorderOutputFolder: string;
   floatingRecorderRetentionDays: number;
   floatingRecorderDefaultMode: string;
+  // Embeddings
+  embeddingsEnabled: boolean;
+  embeddingsModel: string;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -78,6 +89,8 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   floatingRecorderOutputFolder: "OpenBrain/recordings",
   floatingRecorderRetentionDays: 7,
   floatingRecorderDefaultMode: "clipboard",
+  embeddingsEnabled: false,
+  embeddingsModel: "TaylorAI/bge-micro-v2",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -676,6 +689,72 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
     } // end floatingRecorderEnabled
+
+    // ── Semantic Search ──
+    new Setting(containerEl).setName("Semantic search").setHeading();
+
+    new Setting(containerEl)
+      .setName("Enable semantic search")
+      .setDesc(
+        "Use local AI embeddings to find semantically related notes and passages. " +
+        "Runs entirely on your device — no data leaves your machine."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.embeddingsEnabled)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.embeddingsEnabled = value;
+            await this.plugin.saveSettings();
+            this.display();
+          })(); })
+      );
+
+    if (this.plugin.settings.embeddingsEnabled) {
+      // Model picker with Fast ↔ Accurate spectrum
+      const modelSection = containerEl.createDiv({ cls: "ca-embed-models" });
+
+      const scaleLabel = modelSection.createDiv({ cls: "ca-embed-scale" });
+      scaleLabel.createSpan({ text: "Fast", cls: "ca-embed-scale-fast" });
+      const scaleBar = scaleLabel.createSpan({ cls: "ca-embed-scale-bar" });
+      scaleBar.setText("◄─────────────────────►");
+      scaleLabel.createSpan({ text: "Accurate", cls: "ca-embed-scale-accurate" });
+
+      for (const model of EMBEDDING_MODELS) {
+        const isSelected = this.plugin.settings.embeddingsModel === model.id;
+        const row = modelSection.createDiv({
+          cls: `ca-embed-model-row${isSelected ? " selected" : ""}`,
+        });
+
+        const qualityBar = "\u25A0".repeat(model.quality) + "\u25A1".repeat(5 - model.quality);
+        row.createSpan({ text: model.name, cls: "ca-embed-model-name" });
+        row.createSpan({ text: model.size, cls: "ca-embed-model-size" });
+        row.createSpan({ text: `${model.dims}d`, cls: "ca-embed-model-dims" });
+        row.createSpan({ text: qualityBar, cls: "ca-embed-model-quality" });
+
+        if (!isSelected) {
+          row.style.cursor = "pointer";
+          row.addEventListener("click", () => {
+            const prev = this.plugin.settings.embeddingsModel;
+            if (prev !== model.id) {
+              const confirmed = confirm(
+                `Switching to ${model.name} requires re-indexing your entire vault. This will take a few minutes. Continue?`
+              );
+              if (!confirmed) return;
+            }
+            void (async () => {
+              this.plugin.settings.embeddingsModel = model.id;
+              await this.plugin.saveSettings();
+              this.display();
+            })();
+          });
+        }
+      }
+
+      // Index status placeholder (populated by main.ts)
+      const statusEl = containerEl.createDiv({ cls: "ca-embed-status" });
+      statusEl.setText("Checking index...");
+      (this.plugin as any)._embeddingStatusEl = statusEl;
+    }
 
     // ── OpenClaw ──
     new Setting(containerEl).setName("OpenClaw").setHeading();
