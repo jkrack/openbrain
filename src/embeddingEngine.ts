@@ -1,6 +1,13 @@
 import { join } from "path";
 import { homedir } from "os";
 
+export interface DownloadProgress {
+  status: string;
+  file?: string;
+  loaded?: number;
+  total?: number;
+}
+
 export interface EmbeddingEngine {
   init(modelId: string): Promise<void>;
   embed(text: string): Promise<Float32Array>;
@@ -8,6 +15,8 @@ export interface EmbeddingEngine {
   isReady(): boolean;
   getDimensions(): number;
   destroy(): void;
+  /** Callback for download progress during init */
+  onDownloadProgress: ((progress: DownloadProgress) => void) | null;
 }
 
 export function getModelCacheDir(): string {
@@ -24,19 +33,9 @@ export function createEmbeddingEngine(workerPath: string): EmbeddingEngine {
     reject: (reason: any) => void;
   }>();
 
-  function sendMessage(msg: any): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if (!worker) {
-        reject(new Error("Worker not initialized"));
-        return;
-      }
-      const id = nextId++;
-      pending.set(id, { resolve, reject });
-      worker.postMessage({ ...msg, id });
-    });
-  }
+  const engine: EmbeddingEngine = {
+    onDownloadProgress: null,
 
-  return {
     async init(modelId: string): Promise<void> {
       // Electron requires file:// URL for Web Workers
       const workerUrl = workerPath.startsWith("file://")
@@ -45,7 +44,14 @@ export function createEmbeddingEngine(workerPath: string): EmbeddingEngine {
       worker = new Worker(workerUrl);
 
       worker.onmessage = (e: MessageEvent) => {
-        const { type, id, vector, vectors, error } = e.data;
+        const { type, id, vector, vectors, error, progress } = e.data;
+
+        // Download progress doesn't resolve promises — just fire callback
+        if (type === "progress") {
+          engine.onDownloadProgress?.(progress as DownloadProgress);
+          return;
+        }
+
         const handler = pending.get(id);
         if (!handler) return;
         pending.delete(id);
@@ -65,11 +71,10 @@ export function createEmbeddingEngine(workerPath: string): EmbeddingEngine {
 
       worker.onerror = (err) => {
         console.error("[OpenBrain] Embedding worker error:", err);
-        // Reject all pending promises on worker error
-        for (const [id, handler] of pending) {
+        for (const [, handler] of pending) {
           handler.reject(new Error(`Worker error: ${err.message || "unknown"}`));
-          pending.delete(id);
         }
+        pending.clear();
       };
 
       await sendMessage({
@@ -112,4 +117,18 @@ export function createEmbeddingEngine(workerPath: string): EmbeddingEngine {
       pending.clear();
     },
   };
+
+  function sendMessage(msg: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!worker) {
+        reject(new Error("Worker not initialized"));
+        return;
+      }
+      const id = nextId++;
+      pending.set(id, { resolve, reject });
+      worker.postMessage({ ...msg, id });
+    });
+  }
+
+  return engine;
 }

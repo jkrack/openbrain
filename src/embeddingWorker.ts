@@ -12,11 +12,12 @@ interface WorkerMessage {
 }
 
 interface WorkerResponse {
-  type: "ready" | "result" | "error";
+  type: "ready" | "result" | "error" | "progress";
   id: number;
   vector?: number[];
   vectors?: number[][];
   error?: string;
+  progress?: { status: string; file?: string; loaded?: number; total?: number };
 }
 
 function respond(msg: WorkerResponse) {
@@ -37,6 +38,19 @@ onmessage = async (e: MessageEvent<WorkerMessage>) => {
 
       extractor = await pipeline("feature-extraction", modelId!, {
         dtype: "q8",
+        progress_callback: (p: any) => {
+          // Transformers.js fires progress events during download
+          respond({
+            type: "progress",
+            id,
+            progress: {
+              status: p.status || "loading",
+              file: p.file,
+              loaded: p.loaded,
+              total: p.total,
+            },
+          });
+        },
       });
 
       respond({ type: "ready", id });

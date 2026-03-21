@@ -760,18 +760,35 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       const progressFill = progressBarContainer.createDiv({ cls: "ca-embed-progress-fill" });
 
       // Store reference for main.ts to update
-      (this.plugin as any)._embeddingStatusEl = {
-        setStatus: (state: string, text: string, progress?: number) => {
-          statusDot.className = "ca-embed-status-dot " + state;
-          statusText.setText(text);
-          if (progress !== undefined && progress < 1) {
-            progressBarContainer.style.display = "block";
-            progressFill.style.width = `${Math.round(progress * 100)}%`;
-          } else {
-            progressBarContainer.style.display = "none";
-          }
-        },
+      const setStatus = (state: string, text: string, progress?: number) => {
+        statusDot.className = "ca-embed-status-dot " + state;
+        statusText.setText(text);
+        if (progress !== undefined && progress < 1) {
+          progressBarContainer.style.display = "block";
+          progressFill.style.width = `${Math.round(progress * 100)}%`;
+        } else {
+          progressBarContainer.style.display = "none";
+        }
       };
+      (this.plugin as any)._embeddingStatusEl = { setStatus };
+
+      // Replay last known status (init may have already run)
+      const lastProgress = (this.plugin as any).lastEmbeddingProgress as
+        { indexed: number; total: number; status: string } | null;
+      if (lastProgress) {
+        const pct = lastProgress.total > 0 ? lastProgress.indexed / lastProgress.total : 0;
+        if (lastProgress.status === "indexing") {
+          setStatus("indexing", `Indexing... ${lastProgress.indexed}/${lastProgress.total} notes`, pct);
+        } else if (lastProgress.status === "ready") {
+          setStatus("ready", `Ready — ${lastProgress.total} notes indexed`);
+        } else if (lastProgress.status === "downloading") {
+          setStatus("indexing", "Downloading model...");
+        } else if (lastProgress.status === "paused") {
+          setStatus("paused", "Paused");
+        } else if (lastProgress.status === "error") {
+          setStatus("error", "Failed — check console for details");
+        }
+      }
     }
 
     // ── OpenClaw ──

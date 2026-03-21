@@ -30,6 +30,7 @@ export default class OpenBrainPlugin extends Plugin {
   private embeddingEngine: ReturnType<typeof createEmbeddingEngine> | null = null;
   private embeddingIndexer: ReturnType<typeof createEmbeddingIndexer> | null = null;
   private embeddingStatusBarEl: HTMLElement | null = null;
+  private lastEmbeddingProgress: { indexed: number; total: number; status: string } | null = null;
 
   async onload() {
     // OpenBrain icon — actual Lucide brain outline, scaled for 100x100 canvas
@@ -390,8 +391,24 @@ export default class OpenBrainPlugin extends Plugin {
 
       this.embeddingEngine = createEmbeddingEngine(workerPath);
 
-      // Show download status before init (which downloads the model)
+      // Show download progress during model init
       this.updateEmbeddingStatus({ indexed: 0, total: 0, status: "downloading" });
+      this.embeddingEngine.onDownloadProgress = (p) => {
+        if (p.status === "download" && p.total && p.loaded) {
+          const mb = (p.loaded / 1024 / 1024).toFixed(1);
+          const totalMb = (p.total / 1024 / 1024).toFixed(1);
+          const pct = p.loaded / p.total;
+          const statusApi = (this as any)._embeddingStatusEl as any;
+          statusApi?.setStatus?.("indexing", `Downloading model... ${mb}/${totalMb} MB`, pct);
+          if (this.embeddingStatusBarEl) {
+            this.embeddingStatusBarEl.setText(`Downloading ${mb}/${totalMb} MB`);
+          }
+        } else if (p.status === "initiate") {
+          const file = p.file?.split("/").pop() || "";
+          const statusApi = (this as any)._embeddingStatusEl as any;
+          statusApi?.setStatus?.("indexing", `Loading ${file}...`);
+        }
+      };
 
       // Timeout after 5 minutes — model download may fail silently
       const initTimeout = new Promise<never>((_, reject) =>
@@ -434,6 +451,7 @@ export default class OpenBrainPlugin extends Plugin {
   }
 
   private updateEmbeddingStatus(progress: { indexed: number; total: number; status: string }): void {
+    this.lastEmbeddingProgress = progress;
     // Status bar (bottom of Obsidian)
     if (!this.embeddingStatusBarEl) {
       this.embeddingStatusBarEl = this.addStatusBarItem();
