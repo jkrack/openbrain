@@ -39,6 +39,12 @@ try {
   copyFileSync("src/floatingRecorder.html", "floatingRecorder.html");
 } catch { /* file may not exist yet */ }
 
+// Copy ONNX Runtime WASM files alongside the bundle
+try {
+  copyFileSync("node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm", "ort-wasm-simd-threaded.wasm");
+  copyFileSync("node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm", "ort-wasm-simd-threaded.jsep.wasm");
+} catch { /* onnxruntime-web may not be installed */ }
+
 if (prod) {
   await context.rebuild();
   process.exit(0);

@@ -27,7 +27,7 @@ export function getModelCacheDir(): string {
  * No Web Worker — embeddings are fast enough (<50ms per call for small models)
  * and the indexer yields between batches to keep the UI responsive.
  */
-export function createEmbeddingEngine(): EmbeddingEngine {
+export function createEmbeddingEngine(wasmDir: string): EmbeddingEngine {
   let extractor: any = null;
   let ready = false;
   let dimensions = 0;
@@ -44,11 +44,16 @@ export function createEmbeddingEngine(): EmbeddingEngine {
       console.log("[OpenBrain] Transformers.js loaded, configuring env...");
       console.log("[OpenBrain] env.backends:", Object.keys(env.backends || {}));
 
-      // Download from HuggingFace, cache via browser Cache Storage
-      // (filesystem caching requires Node.js fs which isn't available
-      // in Obsidian's Electron renderer for Transformers.js internals)
       env.allowLocalModels = false;
       env.allowRemoteModels = true;
+
+      // Configure ONNX Runtime WASM backend path
+      // The WASM files are copied to the plugin directory during build
+      const ort = await import("onnxruntime-web");
+      if (ort?.env?.wasm) {
+        ort.env.wasm.wasmPaths = wasmDir + "/";
+        console.log("[OpenBrain] ONNX WASM path set to:", ort.env.wasm.wasmPaths);
+      }
 
       console.log("[OpenBrain] Calling pipeline('feature-extraction', '" + modelId + "')...");
 
