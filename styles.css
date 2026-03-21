@@ -1784,7 +1784,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 4px 12px 4px 24px;
+  padding: 5px 12px 5px 24px;
   font-size: 12px;
   transition: background var(--ca-transition);
 }
@@ -1793,16 +1793,35 @@
 }
 
 .ca-tray-task-checkbox {
-  margin-top: 2px;
+  margin-top: 3px;
   flex-shrink: 0;
   cursor: pointer;
 }
 
-.ca-tray-task-text {
+/* Stacked body: text on top, source below */
+.ca-tray-task-body {
   flex: 1;
-  line-height: 1.5;
+  min-width: 0;
+}
+
+.ca-tray-task-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.45;
   color: var(--text-normal);
   word-break: break-word;
+  cursor: pointer;
+}
+.ca-tray-task-text.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.ca-tray-task-text strong {
+  font-weight: 600;
+  color: var(--text-accent);
 }
 .ca-tray-task-text.ca-tray-task-done {
   text-decoration: line-through;
@@ -1811,15 +1830,14 @@
 }
 
 .ca-tray-task-source {
+  display: block;
   font-size: 10px;
   color: var(--text-faint);
   cursor: pointer;
-  flex-shrink: 0;
-  max-width: 80px;
+  margin-top: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-top: 2px;
 }
 .ca-tray-task-source:hover {
   color: var(--interactive-accent);
@@ -1861,4 +1879,145 @@
   padding: 24px;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+/* --- Embedding Model Picker --- */
+.ca-embed-models {
+  margin: 8px 0 16px;
+}
+
+.ca-embed-scale {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+
+.ca-embed-scale-fast,
+.ca-embed-scale-accurate {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.ca-embed-scale-bar {
+  flex: 1;
+  text-align: center;
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 1px;
+}
+
+.ca-embed-model-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-s);
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+  transition: all 0.15s;
+}
+
+.ca-embed-model-row:hover {
+  background: var(--background-secondary);
+}
+
+.ca-embed-model-row.selected {
+  background: var(--background-secondary);
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
+.ca-embed-model-row.selected .ca-embed-model-name {
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+
+.ca-embed-model-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.ca-embed-model-size {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 50px;
+  text-align: right;
+}
+
+.ca-embed-model-dims {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--font-monospace);
+  min-width: 36px;
+  text-align: right;
+}
+
+.ca-embed-model-quality {
+  font-size: 10px;
+  color: var(--interactive-accent);
+  letter-spacing: 2px;
+  min-width: 50px;
+  text-align: right;
+}
+
+/* Index status */
+.ca-embed-status {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ca-embed-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ca-embed-status-dot.indexing {
+  background: var(--interactive-accent);
+  animation: ca-pulse-glow 1.5s ease-in-out infinite;
+}
+
+.ca-embed-status-dot.ready {
+  background: var(--color-green);
+}
+
+.ca-embed-status-dot.paused {
+  background: var(--text-faint);
+}
+
+.ca-embed-status-dot.error {
+  background: var(--color-red);
+}
+
+.ca-embed-status-text {
+  flex: 1;
+}
+
+.ca-embed-progress-bar {
+  height: 3px;
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.ca-embed-progress-fill {
+  height: 100%;
+  background: var(--interactive-accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
 }

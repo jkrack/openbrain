@@ -420,7 +420,7 @@ export default class OpenBrainPlugin extends Plugin {
   }
 
   private updateEmbeddingStatus(progress: { indexed: number; total: number; status: string }): void {
-    // Use a SEPARATE status bar element (don't overwrite recording status)
+    // Status bar (bottom of Obsidian)
     if (!this.embeddingStatusBarEl) {
       this.embeddingStatusBarEl = this.addStatusBarItem();
       this.embeddingStatusBarEl.addClass("openbrain-embed-status");
@@ -432,6 +432,25 @@ export default class OpenBrainPlugin extends Plugin {
       this.embeddingStatusBarEl.setText("");
     } else if (progress.status === "paused") {
       this.embeddingStatusBarEl.setText("Index paused");
+    }
+
+    // Settings panel (if open)
+    const statusApi = (this as any)._embeddingStatusEl as {
+      setStatus?: (state: string, text: string, progress?: number) => void;
+    } | undefined;
+    if (statusApi?.setStatus) {
+      const pct = progress.total > 0 ? progress.indexed / progress.total : 0;
+      if (progress.status === "indexing") {
+        statusApi.setStatus("indexing", `Indexing... ${progress.indexed}/${progress.total} notes`, pct);
+      } else if (progress.status === "ready") {
+        statusApi.setStatus("ready", `Ready — ${progress.total} notes indexed`);
+      } else if (progress.status === "paused") {
+        statusApi.setStatus("paused", "Paused — recording in progress");
+      } else if (progress.status === "downloading") {
+        statusApi.setStatus("indexing", "Downloading model...");
+      } else if (progress.status === "error") {
+        statusApi.setStatus("error", "Indexing failed — check console");
+      }
     }
   }
 

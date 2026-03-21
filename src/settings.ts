@@ -750,10 +750,28 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         }
       }
 
-      // Index status placeholder (populated by main.ts)
+      // Index status display
       const statusEl = containerEl.createDiv({ cls: "ca-embed-status" });
-      statusEl.setText("Checking index...");
-      (this.plugin as any)._embeddingStatusEl = statusEl;
+      const statusDot = statusEl.createDiv({ cls: "ca-embed-status-dot" });
+      const statusText = statusEl.createSpan({ cls: "ca-embed-status-text" });
+      statusText.setText("Initializing...");
+      const progressBarContainer = statusEl.createDiv({ cls: "ca-embed-progress-bar" });
+      progressBarContainer.style.display = "none";
+      const progressFill = progressBarContainer.createDiv({ cls: "ca-embed-progress-fill" });
+
+      // Store reference for main.ts to update
+      (this.plugin as any)._embeddingStatusEl = {
+        setStatus: (state: string, text: string, progress?: number) => {
+          statusDot.className = "ca-embed-status-dot " + state;
+          statusText.setText(text);
+          if (progress !== undefined && progress < 1) {
+            progressBarContainer.style.display = "block";
+            progressFill.style.width = `${Math.round(progress * 100)}%`;
+          } else {
+            progressBarContainer.style.display = "none";
+          }
+        },
+      };
     }
 
     // ── OpenClaw ──
