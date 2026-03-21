@@ -39,8 +39,9 @@ export function createEmbeddingEngine(): EmbeddingEngine {
       // Dynamic import — @huggingface/transformers is a large module
       const { pipeline, env } = await import("@huggingface/transformers");
 
-      env.cacheDir = getModelCacheDir();
-      env.allowLocalModels = true;
+      // Don't try local file paths (resolves to app://obsidian.md/ which fails)
+      // Let it download from HuggingFace and cache via browser Cache Storage API
+      env.allowLocalModels = false;
       env.allowRemoteModels = true;
 
       extractor = await pipeline("feature-extraction", modelId, {
