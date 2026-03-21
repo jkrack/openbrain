@@ -20,6 +20,7 @@ import {
 } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 import { buildSmartContext } from "./smartContext";
+import { getEmbeddingSearch } from "./toolEngine";
 import { PersonProfile, loadPeople, getPersonMeetingFolder } from "./people";
 import { createFromTemplate } from "./templates";
 import { ChatHeader } from "./components/ChatHeader";
@@ -664,7 +665,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           recentContext = await getRecentChatContext();
         }
 
-        const smartCtx = buildSmartContext(app, userText, attachedFiles);
+        const smartCtx = await buildSmartContext(app, userText, attachedFiles, getEmbeddingSearch());
         const allContext = [noteContext, recentContext, smartCtx].filter(Boolean).join("");
 
         let fullPrompt = userText;

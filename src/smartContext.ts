@@ -1,5 +1,6 @@
 import { App } from "obsidian";
 import { startTimer } from "./perf";
+import { EmbeddingSearch } from "./embeddingSearch";
 
 /**
  * Smart context: automatically find vault notes relevant to the user's message.
@@ -113,13 +114,44 @@ export function findRelevantFiles(
 
 /**
  * Build a context string for injection into the prompt.
- * Returns file paths formatted for Claude to read.
+ * Uses embedding search when available, falls back to keyword matching.
  */
-export function buildSmartContext(
+export async function buildSmartContext(
   app: App,
   message: string,
-  existingFiles: string[] = []
-): string {
+  existingFiles: string[] = [],
+  embeddingSearch?: EmbeddingSearch | null
+): Promise<string> {
+  // If embeddings are available, use semantic search
+  if (embeddingSearch?.isReady()) {
+    const passages = await embeddingSearch.searchPassages(message, 3);
+    const notes = await embeddingSearch.searchNotes(message, 3);
+
+    // Filter out already-attached files
+    const newPassages = passages.filter((p) => !existingFiles.includes(p.path));
+    const newNotes = notes.filter((n) =>
+      !existingFiles.includes(n.path) &&
+      !newPassages.some((p) => p.path === n.path)
+    );
+
+    if (newPassages.length === 0 && newNotes.length === 0) return "";
+
+    let context = "\n\n--- Relevant context from your vault ---\n";
+
+    for (const p of newPassages) {
+      const basename = p.path.split("/").pop()?.replace(/\.md$/, "") || p.path;
+      context += `\nFrom "${basename}" > ${p.heading}:\n${p.text}\n`;
+    }
+
+    if (newNotes.length > 0) {
+      context += "\nRelated notes (read if helpful):\n";
+      context += newNotes.map((n) => `- ${n.path}`).join("\n");
+    }
+
+    return context;
+  }
+
+  // Fallback: keyword matching
   const relevant = findRelevantFiles(app, message);
 
   // Filter out files already attached via @ mentions
