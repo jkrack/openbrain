@@ -81,12 +81,12 @@ export function createEmbeddingEngine(): EmbeddingEngine {
                 });
                 window.parent.postMessage({ type: "ready", id }, "*");
               } else if (type === "embed") {
-                const output = await extractor(text, { pooling: "mean", normalize: true });
+                const output = await extractor(text, { pooling: "mean", normalize: true, truncation: true });
                 window.parent.postMessage({ type: "result", id, vector: Array.from(output.data) }, "*");
               } else if (type === "embedBatch") {
                 const vectors = [];
                 for (const t of texts) {
-                  const output = await extractor(t, { pooling: "mean", normalize: true });
+                  const output = await extractor(t, { pooling: "mean", normalize: true, truncation: true });
                   vectors.push(Array.from(output.data));
                 }
                 window.parent.postMessage({ type: "result", id, vectors }, "*");
