@@ -90,7 +90,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   floatingRecorderRetentionDays: 7,
   floatingRecorderDefaultMode: "clipboard",
   embeddingsEnabled: false,
-  embeddingsModel: "TaylorAI/bge-micro-v2",
+  embeddingsModel: "Xenova/all-MiniLM-L6-v2",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
