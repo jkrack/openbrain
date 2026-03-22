@@ -47,12 +47,15 @@ export function createEmbeddingEngine(wasmDir: string): EmbeddingEngine {
       env.allowLocalModels = false;
       env.allowRemoteModels = true;
 
-      // Configure ONNX Runtime WASM backend path
-      // The WASM files are copied to the plugin directory during build
-      const ort = await import("onnxruntime-web");
-      if (ort?.env?.wasm) {
-        ort.env.wasm.wasmPaths = wasmDir + "/";
-        console.log("[OpenBrain] ONNX WASM path set to:", ort.env.wasm.wasmPaths);
+      // Configure ONNX WASM paths — env.backends.onnx is the bundled ort env
+      // Must be set BEFORE pipeline() which creates the inference session
+      const onnxBackend = (env as any).backends?.onnx;
+      if (onnxBackend?.wasm) {
+        onnxBackend.wasm.wasmPaths = `file://${wasmDir}/`;
+        console.log("[OpenBrain] ONNX WASM path:", onnxBackend.wasm.wasmPaths);
+      } else {
+        console.warn("[OpenBrain] env.backends.onnx not found, keys:", Object.keys((env as any).backends || {}));
+        console.warn("[OpenBrain] env.backends.onnx value:", onnxBackend);
       }
 
       console.log("[OpenBrain] Calling pipeline('feature-extraction', '" + modelId + "')...");
