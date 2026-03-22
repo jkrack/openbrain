@@ -710,56 +710,16 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.embeddingsEnabled) {
-      // Model picker with Fast ↔ Accurate spectrum
-      const modelSection = containerEl.createDiv({ cls: "ca-embed-models" });
-
-      const scaleLabel = modelSection.createDiv({ cls: "ca-embed-scale" });
-      scaleLabel.createSpan({ text: "Fast", cls: "ca-embed-scale-fast" });
-      const scaleBar = scaleLabel.createSpan({ cls: "ca-embed-scale-bar" });
-      scaleBar.setText("◄─────────────────────►");
-      scaleLabel.createSpan({ text: "Accurate", cls: "ca-embed-scale-accurate" });
-
-      for (const model of EMBEDDING_MODELS) {
-        const isSelected = this.plugin.settings.embeddingsModel === model.id;
-        const row = modelSection.createDiv({
-          cls: `ca-embed-model-row${isSelected ? " selected" : ""}`,
-        });
-
-        const qualityBar = "\u25A0".repeat(model.quality) + "\u25A1".repeat(5 - model.quality);
-        row.createSpan({ text: model.name, cls: "ca-embed-model-name" });
-        row.createSpan({ text: model.size, cls: "ca-embed-model-size" });
-        row.createSpan({ text: `${model.dims}d`, cls: "ca-embed-model-dims" });
-        row.createSpan({ text: qualityBar, cls: "ca-embed-model-quality" });
-
-        if (!isSelected) {
-          row.style.cursor = "pointer";
-          row.addEventListener("click", () => {
-            const prev = this.plugin.settings.embeddingsModel;
-            if (prev !== model.id) {
-              const confirmed = confirm(
-                `Switching to ${model.name} requires re-indexing your entire vault. This will take a few minutes. Continue?`
-              );
-              if (!confirmed) return;
-            }
-            void (async () => {
-              this.plugin.settings.embeddingsModel = model.id;
-              await this.plugin.saveSettings();
-              this.display();
-            })();
-          });
-        }
-      }
-
-      // Index status display
+      // Index status display — shown FIRST so user sees current state immediately
       const statusEl = containerEl.createDiv({ cls: "ca-embed-status" });
       const statusDot = statusEl.createDiv({ cls: "ca-embed-status-dot" });
-      const statusText = statusEl.createSpan({ cls: "ca-embed-status-text" });
+      const statusTextContainer = statusEl.createDiv({ cls: "ca-embed-status-content" });
+      const statusText = statusTextContainer.createSpan({ cls: "ca-embed-status-text" });
       statusText.setText("Initializing...");
-      const progressBarContainer = statusEl.createDiv({ cls: "ca-embed-progress-bar" });
+      const progressBarContainer = statusTextContainer.createDiv({ cls: "ca-embed-progress-bar" });
       progressBarContainer.style.display = "none";
       const progressFill = progressBarContainer.createDiv({ cls: "ca-embed-progress-fill" });
 
-      // Store reference for main.ts to update
       const setStatus = (state: string, text: string, progress?: number) => {
         statusDot.className = "ca-embed-status-dot " + state;
         statusText.setText(text);
@@ -772,21 +732,83 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       };
       (this.plugin as any)._embeddingStatusEl = { setStatus };
 
-      // Replay last known status (init may have already run)
+      // Replay last known status
       const lastProgress = (this.plugin as any).lastEmbeddingProgress as
         { indexed: number; total: number; status: string } | null;
       if (lastProgress) {
+        const vaultTotal = this.app.vault.getMarkdownFiles().length;
         const pct = lastProgress.total > 0 ? lastProgress.indexed / lastProgress.total : 0;
         if (lastProgress.status === "indexing") {
-          setStatus("indexing", `Indexing... ${lastProgress.indexed}/${lastProgress.total} notes`, pct);
+          const remaining = lastProgress.total - lastProgress.indexed;
+          setStatus("indexing", `Indexing... ${lastProgress.indexed}/${lastProgress.total} notes (${remaining} remaining)`, pct);
         } else if (lastProgress.status === "ready") {
-          setStatus("ready", `Ready — ${lastProgress.total} notes indexed`);
+          const skipped = vaultTotal - lastProgress.indexed;
+          const skippedText = skipped > 0 ? ` · ${skipped} skipped` : "";
+          setStatus("ready", `Ready — ${lastProgress.indexed}/${vaultTotal} notes indexed${skippedText}`);
         } else if (lastProgress.status === "downloading") {
           setStatus("indexing", "Downloading model...");
         } else if (lastProgress.status === "paused") {
           setStatus("paused", "Paused");
         } else if (lastProgress.status === "error") {
           setStatus("error", "Failed — check console for details");
+        }
+      }
+
+      // Model picker
+      new Setting(containerEl)
+        .setName("Embedding model")
+        .setDesc("Smaller models are faster. Switching models requires re-downloading and re-indexing.");
+
+      const modelSection = containerEl.createDiv({ cls: "ca-embed-models" });
+
+      const scaleLabel = modelSection.createDiv({ cls: "ca-embed-scale" });
+      scaleLabel.createSpan({ text: "Fast", cls: "ca-embed-scale-fast" });
+      scaleLabel.createSpan({ text: "◄─────────────────────►", cls: "ca-embed-scale-bar" });
+      scaleLabel.createSpan({ text: "Accurate", cls: "ca-embed-scale-accurate" });
+
+      for (const model of EMBEDDING_MODELS) {
+        const isSelected = this.plugin.settings.embeddingsModel === model.id;
+        const row = modelSection.createDiv({
+          cls: `ca-embed-model-row${isSelected ? " selected" : ""}`,
+        });
+
+        const leftCol = row.createDiv({ cls: "ca-embed-model-left" });
+        const qualityBar = "\u25A0".repeat(model.quality) + "\u25A1".repeat(5 - model.quality);
+        leftCol.createSpan({ text: model.name, cls: "ca-embed-model-name" });
+        if (isSelected) {
+          leftCol.createSpan({ text: "Active", cls: "ca-embed-model-badge" });
+        }
+
+        const rightCol = row.createDiv({ cls: "ca-embed-model-right" });
+        rightCol.createSpan({ text: model.size, cls: "ca-embed-model-size" });
+        rightCol.createSpan({ text: `${model.dims}d`, cls: "ca-embed-model-dims" });
+        rightCol.createSpan({ text: qualityBar, cls: "ca-embed-model-quality" });
+
+        if (!isSelected) {
+          row.style.cursor = "pointer";
+          row.addEventListener("click", () => {
+            const confirmed = confirm(
+              `Switch to ${model.name}?\n\nThis will download the model (${model.size}) and re-index your entire vault. The current index will be cleared.`
+            );
+            if (!confirmed) return;
+            void (async () => {
+              this.plugin.settings.embeddingsModel = model.id;
+              await this.plugin.saveSettings();
+              // Trigger re-init without restart
+              const p = this.plugin as any;
+              if (p.embeddingEngine) {
+                p.embeddingEngine.destroy();
+                p.embeddingEngine = null;
+              }
+              if (p.embeddingIndexer) {
+                p.embeddingIndexer.stop();
+                p.embeddingIndexer = null;
+              }
+              setStatus("indexing", `Downloading ${model.name}...`);
+              void p.initEmbeddings?.();
+              this.display();
+            })();
+          });
         }
       }
     }
