@@ -383,26 +383,6 @@ export default class OpenBrainPlugin extends Plugin {
 
   private async initEmbeddings(): Promise<void> {
     try {
-      // Add plugin's node_modules to require path so onnxruntime-node resolves
-      const basePath = (this.app as any).vault.adapter.basePath as string;
-      const pluginModules = `${basePath}/.obsidian/plugins/open-brain/node_modules`;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const Module = require("module");
-        if (Module.globalPaths && !Module.globalPaths.includes(pluginModules)) {
-          Module.globalPaths.push(pluginModules);
-        }
-      } catch {
-        // Fallback: try module.paths
-        try {
-          if (typeof module !== "undefined" && Array.isArray(module.paths)) {
-            if (!module.paths.includes(pluginModules)) {
-              module.paths.push(pluginModules);
-            }
-          }
-        } catch { /* not available */ }
-      }
-
       this.embeddingEngine = createEmbeddingEngine();
 
       // Show download progress during model init

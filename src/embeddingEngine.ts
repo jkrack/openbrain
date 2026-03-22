@@ -23,76 +23,152 @@ export function getModelCacheDir(): string {
 }
 
 /**
- * Create an embedding engine that runs Transformers.js directly in the main thread.
- * No Web Worker — embeddings are fast enough (<50ms per call for small models)
- * and the indexer yields between batches to keep the UI responsive.
+ * Embedding engine using an iframe to run Transformers.js.
+ * Same approach as Smart Connections — loads Transformers.js from CDN
+ * inside an isolated iframe, avoiding all WASM/module resolution issues
+ * in Obsidian's plugin protocol.
  */
 export function createEmbeddingEngine(): EmbeddingEngine {
-  let extractor: any = null;
+  let iframe: HTMLIFrameElement | null = null;
   let ready = false;
   let dimensions = 0;
+  let nextId = 1;
+  const pending = new Map<number, {
+    resolve: (value: any) => void;
+    reject: (reason: any) => void;
+  }>();
+
+  const TRANSFORMERS_CDN = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4.1";
 
   const engine: EmbeddingEngine = {
     onDownloadProgress: null,
 
     async init(modelId: string): Promise<void> {
-      console.log("[OpenBrain] Embedding init starting, model:", modelId);
+      console.log("[OpenBrain] Embedding init starting (iframe), model:", modelId);
 
-      // Dynamic import — @huggingface/transformers is a large module
-      const { pipeline, env } = await import("@huggingface/transformers");
+      // Create hidden iframe
+      iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.sandbox.add("allow-scripts", "allow-same-origin");
+      document.body.appendChild(iframe);
 
-      console.log("[OpenBrain] Transformers.js loaded, configuring env...");
-      console.log("[OpenBrain] env.backends:", Object.keys(env.backends || {}));
+      const iframeDoc = iframe.contentDocument!;
 
-      env.allowLocalModels = false;
-      env.allowRemoteModels = true;
+      // Write the connector script into the iframe
+      const script = `
+        <script type="module">
+          import { pipeline, env } from "${TRANSFORMERS_CDN}";
 
-      // onnxruntime-node is marked as external in esbuild — resolved at runtime
-      // via Node.js require(). Uses native bindings, no WASM needed.
+          env.allowLocalModels = false;
+          env.allowRemoteModels = true;
 
-      console.log("[OpenBrain] Calling pipeline('feature-extraction', '" + modelId + "')...");
+          let extractor = null;
 
-      extractor = await pipeline("feature-extraction", modelId, {
-        dtype: "q8",
-        progress_callback: (p: any) => {
-          if (p.status === "download") {
-            console.log(`[OpenBrain] Download: ${p.file} ${p.loaded}/${p.total}`);
-          } else {
-            console.log(`[OpenBrain] Progress: ${p.status} ${p.file || ""}`);
+          async function handleMessage(e) {
+            const { type, id, modelId, text, texts } = e.data;
+            if (e.source !== window.parent) return;
+
+            try {
+              if (type === "init") {
+                extractor = await pipeline("feature-extraction", modelId, {
+                  dtype: "q8",
+                  progress_callback: (p) => {
+                    window.parent.postMessage({
+                      type: "progress", id,
+                      progress: { status: p.status, file: p.file, loaded: p.loaded, total: p.total }
+                    }, "*");
+                  }
+                });
+                window.parent.postMessage({ type: "ready", id }, "*");
+              } else if (type === "embed") {
+                const output = await extractor(text, { pooling: "mean", normalize: true });
+                window.parent.postMessage({ type: "result", id, vector: Array.from(output.data) }, "*");
+              } else if (type === "embedBatch") {
+                const vectors = [];
+                for (const t of texts) {
+                  const output = await extractor(t, { pooling: "mean", normalize: true });
+                  vectors.push(Array.from(output.data));
+                }
+                window.parent.postMessage({ type: "result", id, vectors }, "*");
+              }
+            } catch (err) {
+              window.parent.postMessage({ type: "error", id, error: err.message }, "*");
+            }
           }
-          engine.onDownloadProgress?.({
-            status: p.status || "loading",
-            file: p.file,
-            loaded: p.loaded,
-            total: p.total,
-          });
-        },
+
+          window.addEventListener("message", handleMessage);
+          window.parent.postMessage({ type: "iframe-ready" }, "*");
+        </script>
+      `;
+
+      iframeDoc.open();
+      iframeDoc.write(`<!DOCTYPE html><html><head></head><body>${script}</body></html>`);
+      iframeDoc.close();
+
+      // Listen for messages from iframe
+      const messageHandler = (e: MessageEvent) => {
+        if (e.source !== iframe?.contentWindow) return;
+        const { type, id, vector, vectors, error, progress } = e.data;
+
+        if (type === "progress") {
+          engine.onDownloadProgress?.(progress);
+          return;
+        }
+
+        if (type === "iframe-ready") {
+          // Iframe is loaded, send init
+          return;
+        }
+
+        const handler = pending.get(id);
+        if (!handler) return;
+        pending.delete(id);
+
+        if (type === "error") {
+          handler.reject(new Error(error));
+        } else if (type === "ready") {
+          handler.resolve(undefined);
+        } else if (type === "result") {
+          if (vector) {
+            handler.resolve(new Float32Array(vector));
+          } else if (vectors) {
+            handler.resolve(vectors.map((v: number[]) => new Float32Array(v)));
+          }
+        }
+      };
+      window.addEventListener("message", messageHandler);
+
+      // Wait for iframe to be ready, then init
+      await new Promise<void>((resolve) => {
+        const checkReady = (e: MessageEvent) => {
+          if (e.data?.type === "iframe-ready" && e.source === iframe?.contentWindow) {
+            window.removeEventListener("message", checkReady);
+            resolve();
+          }
+        };
+        window.addEventListener("message", checkReady);
       });
 
-      console.log("[OpenBrain] Pipeline created, testing embed...");
+      // Send init command
+      console.log("[OpenBrain] Iframe ready, loading model...");
+      await sendMessage({ type: "init", modelId });
 
-      // Detect dimensions with a test embedding
-      console.log("[OpenBrain] Running test embedding...");
-      const output = await extractor("test", { pooling: "mean", normalize: true });
-      dimensions = output.data.length;
+      // Test embedding to get dimensions
+      console.log("[OpenBrain] Model loaded, testing embed...");
+      const testVec = await sendMessage({ type: "embed", text: "test" }) as Float32Array;
+      dimensions = testVec.length;
       ready = true;
       console.log(`[OpenBrain] Embedding engine ready. Dimensions: ${dimensions}`);
     },
 
     async embed(text: string): Promise<Float32Array> {
-      if (!extractor) throw new Error("Engine not ready");
-      const output = await extractor(text, { pooling: "mean", normalize: true });
-      return new Float32Array(output.data);
+      if (!ready) throw new Error("Engine not ready");
+      return sendMessage({ type: "embed", text }) as Promise<Float32Array>;
     },
 
     async embedBatch(texts: string[]): Promise<Float32Array[]> {
-      if (!extractor) throw new Error("Engine not ready");
-      const results: Float32Array[] = [];
-      for (const text of texts) {
-        const output = await extractor(text, { pooling: "mean", normalize: true });
-        results.push(new Float32Array(output.data));
-      }
-      return results;
+      if (!ready) throw new Error("Engine not ready");
+      return sendMessage({ type: "embedBatch", texts }) as Promise<Float32Array[]>;
     },
 
     isReady(): boolean {
@@ -104,11 +180,27 @@ export function createEmbeddingEngine(): EmbeddingEngine {
     },
 
     destroy(): void {
-      extractor = null;
       ready = false;
       dimensions = 0;
+      if (iframe) {
+        iframe.remove();
+        iframe = null;
+      }
+      pending.clear();
     },
   };
+
+  function sendMessage(msg: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!iframe?.contentWindow) {
+        reject(new Error("Iframe not initialized"));
+        return;
+      }
+      const id = nextId++;
+      pending.set(id, { resolve, reject });
+      iframe.contentWindow.postMessage({ ...msg, id }, "*");
+    });
+  }
 
   return engine;
 }
