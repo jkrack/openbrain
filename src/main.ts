@@ -18,6 +18,7 @@ import { createEmbeddingIndex } from "./embeddingIndex";
 import { createEmbeddingIndexer } from "./embeddingIndexer";
 import { createEmbeddingSearch } from "./embeddingSearch";
 import { setEmbeddingSearch } from "./toolEngine";
+import { loadWelcomeCache, refreshWelcomeIfStale } from "./welcomeMessages";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -84,6 +85,10 @@ export default class OpenBrainPlugin extends Plugin {
 
       // Reload skills now that vault is ready (initial load in onload may have been too early)
       this.skills = await loadSkills(this.app, this.settings.skillsFolder);
+
+      // Load cached welcome messages, then regenerate in background if stale
+      await loadWelcomeCache(this.app);
+      void refreshWelcomeIfStale(this.app, this.settings, this.skills);
 
       this.vaultIndex = new VaultIndex(this.app);
       this.refreshViews();
@@ -452,10 +457,13 @@ export default class OpenBrainPlugin extends Plugin {
       this.embeddingStatusBarEl.addClass("openbrain-embed-status");
     }
 
+    const vaultTotal = this.app.vault.getMarkdownFiles().length;
+
     if (progress.status === "indexing") {
-      this.embeddingStatusBarEl.setText(`Indexing ${progress.indexed}/${progress.total}`);
+      const pct = Math.round((progress.indexed / progress.total) * 100);
+      this.embeddingStatusBarEl.setText(`Indexing ${progress.indexed}/${progress.total} (${pct}%)`);
     } else if (progress.status === "ready") {
-      this.embeddingStatusBarEl.setText("");
+      this.embeddingStatusBarEl.setText(`${progress.indexed}/${vaultTotal} indexed`);
     } else if (progress.status === "paused") {
       this.embeddingStatusBarEl.setText("Index paused");
     }
@@ -467,9 +475,12 @@ export default class OpenBrainPlugin extends Plugin {
     if (statusApi?.setStatus) {
       const pct = progress.total > 0 ? progress.indexed / progress.total : 0;
       if (progress.status === "indexing") {
-        statusApi.setStatus("indexing", `Indexing... ${progress.indexed}/${progress.total} notes`, pct);
+        const remaining = progress.total - progress.indexed;
+        statusApi.setStatus("indexing", `Indexing... ${progress.indexed}/${progress.total} notes (${remaining} remaining)`, pct);
       } else if (progress.status === "ready") {
-        statusApi.setStatus("ready", `Ready — ${progress.total} notes indexed`);
+        const skipped = vaultTotal - progress.indexed;
+        const skippedText = skipped > 0 ? ` · ${skipped} skipped` : "";
+        statusApi.setStatus("ready", `Ready — ${progress.indexed}/${vaultTotal} notes indexed${skippedText}`);
       } else if (progress.status === "paused") {
         statusApi.setStatus("paused", "Paused — recording in progress");
       } else if (progress.status === "downloading") {

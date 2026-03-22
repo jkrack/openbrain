@@ -199,7 +199,13 @@ export function createEmbeddingIndexer(
   };
 
   function reportProgress() {
-    indexer.onProgress?.({ indexed, total, status });
+    // Report the total notes in the index (not just the current batch)
+    const stats = index.stats();
+    indexer.onProgress?.({
+      indexed: status === "indexing" ? indexed : stats.noteCount,
+      total: status === "indexing" ? total : stats.noteCount,
+      status,
+    });
   }
 
   async function processBatch(files: TFile[], startIdx: number) {
