@@ -95,6 +95,9 @@ export function createEmbeddingIndexer(
   let status: IndexerStatus = "idle";
   let batchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // Sanitize model ID for use in filenames (TaylorAI/bge-micro-v2 → TaylorAI--bge-micro-v2)
+  const safeModelId = modelId.replace(/\//g, "--");
+
   const indexer: EmbeddingIndexer = {
     onProgress: null,
     shouldPause: null,
@@ -103,7 +106,7 @@ export function createEmbeddingIndexer(
       running = true;
 
       // Load persisted index
-      const indexPath = join(getEmbeddingsDir(), `index-${modelId}.bin`);
+      const indexPath = join(getEmbeddingsDir(), `index-${safeModelId}.bin`);
       try {
         await index.load(indexPath);
       } catch {
@@ -244,7 +247,7 @@ export function createEmbeddingIndexer(
     const stripped = stripFrontmatter(content);
 
     // Whole-note embedding (truncate to avoid exceeding model's token limit)
-    const truncated = stripped.slice(0, 4000); // ~1000 tokens, safe for all models
+    const truncated = stripped.slice(0, 1500); // ~375 tokens, safe for 512-token models
     const noteVector = await engine.embed(truncated);
 
     // Section-level embeddings
@@ -252,7 +255,7 @@ export function createEmbeddingIndexer(
     const sections: SectionVector[] = [];
 
     for (const section of rawSections) {
-      const sectionTruncated = section.text.slice(0, 2000);
+      const sectionTruncated = section.text.slice(0, 1500);
       const vector = await engine.embed(sectionTruncated);
       sections.push({
         heading: section.heading,
@@ -304,7 +307,7 @@ export function createEmbeddingIndexer(
     try {
       const dir = getEmbeddingsDir();
       await mkdir(dir, { recursive: true });
-      await index.save(join(dir, `index-${modelId}.bin`));
+      await index.save(join(dir, `index-${safeModelId}.bin`));
     } catch (err: unknown) {
       console.error("[OpenBrain] Failed to save embedding index:", err);
     }
