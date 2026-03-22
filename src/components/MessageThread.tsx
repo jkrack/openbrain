@@ -5,6 +5,7 @@ import { PersonProfile } from "../people";
 import { App, Component, MarkdownRenderer } from "obsidian";
 import { ObsidianIcon } from "./ObsidianIcon";
 import { getLastResponseTiming } from "../perf";
+import { getWelcomeForToday } from "../welcomeMessages";
 
 const MESSAGES_PER_PAGE = 50;
 
@@ -151,15 +152,20 @@ export function MessageThread({
               <div className="ca-empty-sub">Type a message or record audio to begin</div>
             </>
           ) : (
-            <>
-              <div className="ca-empty-text">Ask anything about your vault</div>
-              <div className="ca-empty-hints">
-                <span className="ca-hint">Type a message to chat</span>
-                <span className="ca-hint"><b>@</b> to reference a file</span>
-                <span className="ca-hint"><b>/</b> to activate a skill</span>
-                <span className="ca-hint">Mic button to record voice</span>
-              </div>
-            </>
+            (() => {
+              const welcome = getWelcomeForToday();
+              return (
+                <>
+                  <div className="ca-empty-text">{welcome.headline}</div>
+                  <div className="ca-empty-sub">{welcome.sub}</div>
+                  <div className="ca-empty-hints">
+                    {welcome.tips.map((tip, i) => (
+                      <span className="ca-hint" key={i}>{tip}</span>
+                    ))}
+                  </div>
+                </>
+              );
+            })()
           )}
         </div>
       )}

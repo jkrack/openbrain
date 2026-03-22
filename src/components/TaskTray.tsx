@@ -79,6 +79,7 @@ export function TaskTray({ app, settings, isOpen, onClose, onFocusTask }: TaskTr
     all: true,
   });
   const [loading, setLoading] = useState(false);
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const quickInputRef = useRef<HTMLInputElement>(null);
 
   const today = moment().format("YYYY-MM-DD");
@@ -271,39 +272,68 @@ export function TaskTray({ app, settings, isOpen, onClose, onFocusTask }: TaskTr
     void app.workspace.openLinkText(filePath, "");
   };
 
+  /** Render inline markdown — converts **bold** to <strong> */
+  const renderMarkdown = (text: string): React.ReactNode => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+        return <strong key={i}>{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  const toggleExpand = (taskKey: string) => {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskKey)) next.delete(taskKey);
+      else next.add(taskKey);
+      return next;
+    });
+  };
+
   const renderTaskList = (items: TaskItem[]) => (
     <div className="ca-tray-task-list">
-      {items.map((task) => (
-        <div key={`${task.file}:${task.line}`} className="ca-tray-task">
-          <input
-            type="checkbox"
-            checked={task.done}
-            onChange={() => void toggleTask(task)}
-            className="ca-tray-task-checkbox"
-          />
-          <span className={`ca-tray-task-text ${task.done ? "ca-tray-task-done" : ""}`}>
-            {task.text}
-          </span>
-          <span
-            className="ca-tray-task-source"
-            onClick={() => openFile(task.file)}
-          >
-            {task.file.split("/").pop()?.replace(".md", "") || task.file}
-          </span>
-          {!task.done && onFocusTask && (
-            <button
-              className="ca-tray-task-focus"
-              onClick={() => {
-                onFocusTask({ text: task.text, file: task.file });
-                onClose();
-              }}
-              aria-label="Work on this task in chat"
-            >
-              <ObsidianIcon name="arrow-right" />
-            </button>
-          )}
-        </div>
-      ))}
+      {items.map((task) => {
+        const taskKey = `${task.file}:${task.line}`;
+        const isExpanded = expandedTasks.has(taskKey);
+        return (
+          <div key={taskKey} className="ca-tray-task">
+            <input
+              type="checkbox"
+              checked={task.done}
+              onChange={() => void toggleTask(task)}
+              className="ca-tray-task-checkbox"
+            />
+            <div className="ca-tray-task-body">
+              <span
+                className={`ca-tray-task-text ${task.done ? "ca-tray-task-done" : ""} ${isExpanded ? "expanded" : ""}`}
+                onClick={() => toggleExpand(taskKey)}
+              >
+                {renderMarkdown(task.text)}
+              </span>
+              <span
+                className="ca-tray-task-source"
+                onClick={() => openFile(task.file)}
+              >
+                {task.file.split("/").pop()?.replace(".md", "") || task.file}
+              </span>
+            </div>
+            {!task.done && onFocusTask && (
+              <button
+                className="ca-tray-task-focus"
+                onClick={() => {
+                  onFocusTask({ text: task.text, file: task.file });
+                  onClose();
+                }}
+                aria-label="Work on this task in chat"
+              >
+                <ObsidianIcon name="arrow-right" />
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 
