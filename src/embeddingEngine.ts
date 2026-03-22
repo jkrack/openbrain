@@ -71,7 +71,6 @@ export function createEmbeddingEngine(): EmbeddingEngine {
             try {
               if (type === "init") {
                 extractor = await pipeline("feature-extraction", modelId, {
-                  dtype: "q8",
                   progress_callback: (p) => {
                     window.parent.postMessage({
                       type: "progress", id,
