@@ -50,6 +50,7 @@ export interface OpenBrainSettings {
   // Embeddings
   embeddingsEnabled: boolean;
   embeddingsModel: string;
+  embeddingsDownloadedModels: string[];
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -91,6 +92,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   floatingRecorderDefaultMode: "clipboard",
   embeddingsEnabled: false,
   embeddingsModel: "Xenova/all-MiniLM-L6-v2",
+  embeddingsDownloadedModels: [],
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -766,8 +768,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       scaleLabel.createSpan({ text: "◄─────────────────────►", cls: "ca-embed-scale-bar" });
       scaleLabel.createSpan({ text: "Accurate", cls: "ca-embed-scale-accurate" });
 
+      const downloadedModels = this.plugin.settings.embeddingsDownloadedModels || [];
+
       for (const model of EMBEDDING_MODELS) {
         const isSelected = this.plugin.settings.embeddingsModel === model.id;
+        const isDownloaded = downloadedModels.includes(model.id);
         const row = modelSection.createDiv({
           cls: `ca-embed-model-row${isSelected ? " selected" : ""}`,
         });
@@ -777,6 +782,8 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         leftCol.createSpan({ text: model.name, cls: "ca-embed-model-name" });
         if (isSelected) {
           leftCol.createSpan({ text: "Active", cls: "ca-embed-model-badge" });
+        } else if (isDownloaded) {
+          leftCol.createSpan({ text: "Downloaded", cls: "ca-embed-model-badge downloaded" });
         }
 
         const rightCol = row.createDiv({ cls: "ca-embed-model-right" });

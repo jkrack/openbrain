@@ -1966,6 +1966,11 @@
   letter-spacing: 0.5px;
 }
 
+.ca-embed-model-badge.downloaded {
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+}
+
 .ca-embed-model-size {
   font-size: 11px;
   color: var(--text-muted);

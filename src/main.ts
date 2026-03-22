@@ -419,6 +419,14 @@ export default class OpenBrainPlugin extends Plugin {
         initTimeout,
       ]);
 
+      // Mark model as downloaded
+      const downloaded = this.settings.embeddingsDownloadedModels || [];
+      if (!downloaded.includes(this.settings.embeddingsModel)) {
+        downloaded.push(this.settings.embeddingsModel);
+        this.settings.embeddingsDownloadedModels = downloaded;
+        void this.saveSettings();
+      }
+
       const index = createEmbeddingIndex(this.embeddingEngine.getDimensions());
       const indexer = createEmbeddingIndexer(
         this.app, this.embeddingEngine, index, this.settings.embeddingsModel
