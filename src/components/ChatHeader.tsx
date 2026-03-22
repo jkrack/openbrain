@@ -16,6 +16,7 @@ export interface ChatHeaderProps {
   chatMode: "agent" | "chat";
   onboardingComplete: boolean;
   taskTrayOpen: boolean;
+  showCliToggle?: boolean;
   onChatModeToggle: () => void;
   onSkillMenuToggle: () => void;
   onSkillSelect: (skillId: string | null) => void;
@@ -40,6 +41,7 @@ export function ChatHeader({
   chatMode,
   onboardingComplete,
   taskTrayOpen,
+  showCliToggle = true,
   onChatModeToggle,
   onSkillMenuToggle,
   onSkillSelect,
@@ -139,14 +141,16 @@ export function ChatHeader({
                   : "Write OFF — read only"
                 )}
               />
-              <button
-                className={`ca-perm-dot ${effectiveCli ? "cli-on" : "cli-off"}`}
-                onClick={onToggleCli}
-                aria-label={tip(effectiveCli
-                  ? "Shell ON — Claude can run commands"
-                  : "Shell OFF — no commands"
-                )}
-              />
+              {showCliToggle && (
+                <button
+                  className={`ca-perm-dot ${effectiveCli ? "cli-on" : "cli-off"}`}
+                  onClick={onToggleCli}
+                  aria-label={tip(effectiveCli
+                    ? "Shell ON — Claude can run commands"
+                    : "Shell OFF — no commands"
+                  )}
+                />
+              )}
             </div>
             <span className="ca-header-sep" />
           </>

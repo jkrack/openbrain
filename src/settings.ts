@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice, requestUrl } from "obsidian";
+import { App, Platform, PluginSettingTab, Setting, Notice, requestUrl } from "obsidian";
 import OpenBrainPlugin from "./main";
 
 const EMBEDDING_MODELS = [
@@ -110,21 +110,23 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     // ── Setup ──
     new Setting(containerEl).setName("Setup").setHeading();
 
-    new Setting(containerEl)
-      .setName("Obsidian CLI path")
-      .setDesc(
-        "Path to the Obsidian CLI. Enable it in Obsidian Settings → General → Command line interface. " +
-        "Used for vault search, task queries, and daily note management."
-      )
-      .addText((text) =>
-        text
-          .setPlaceholder("obsidian")
-          .setValue(this.plugin.settings.obsidianCliPath)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.obsidianCliPath = value || "obsidian";
-            await this.plugin.saveSettings();
-          })(); })
-      );
+    if (Platform.isDesktop) {
+      new Setting(containerEl)
+        .setName("Obsidian CLI path")
+        .setDesc(
+          "Path to the Obsidian CLI. Enable it in Obsidian Settings → General → Command line interface. " +
+          "Used for vault search, task queries, and daily note management."
+        )
+        .addText((text) =>
+          text
+            .setPlaceholder("obsidian")
+            .setValue(this.plugin.settings.obsidianCliPath)
+            .onChange((value) => { void (async () => {
+              this.plugin.settings.obsidianCliPath = value || "obsidian";
+              await this.plugin.saveSettings();
+            })(); })
+        );
+    }
 
     new Setting(containerEl)
       .setName("Anthropic API key")
@@ -349,21 +351,23 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
-      .setName("Allow shell commands")
-      .setDesc(
-        "Let Claude run terminal commands and use the Obsidian CLI. " +
-        "Required for vault search, task queries, and some skills. " +
-        "Can also be toggled per-chat from the header."
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.allowCliExec)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.allowCliExec = value;
-            await this.plugin.saveSettings();
-          })(); })
-      );
+    if (Platform.isDesktop) {
+      new Setting(containerEl)
+        .setName("Allow shell commands")
+        .setDesc(
+          "Let Claude run terminal commands and use the Obsidian CLI. " +
+          "Required for vault search, task queries, and some skills. " +
+          "Can also be toggled per-chat from the header."
+        )
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.allowCliExec)
+            .onChange((value) => { void (async () => {
+              this.plugin.settings.allowCliExec = value;
+              await this.plugin.saveSettings();
+            })(); })
+        );
+    }
 
     // ── Folders ──
     new Setting(containerEl).setName("Folders").setHeading();
@@ -413,45 +417,47 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    // --- Local Speech-to-Text Section ---
-    new Setting(containerEl).setName("Local speech-to-text").setHeading();
+    // --- Local Speech-to-Text Section (desktop only) ---
+    if (Platform.isDesktop) {
+      new Setting(containerEl).setName("Local speech-to-text").setHeading();
 
-    new Setting(containerEl)
-      .setName("Use local transcription")
-      .setDesc(
-        "Transcribe audio locally with sherpa-onnx (free, private, offline). " +
-          "Falls back to Anthropic API if not installed."
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.useLocalStt)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.useLocalStt = value;
-            await this.plugin.saveSettings();
-            this.display(); // Re-render to show/hide STT options
-          })(); })
-      );
-
-    if (this.plugin.settings.useLocalStt) {
       new Setting(containerEl)
-        .setName("sherpa-onnx home directory")
+        .setName("Use local transcription")
         .setDesc(
-          "Where binary and model files are stored. Leave empty for default (~/.openbrain)."
+          "Transcribe audio locally with sherpa-onnx (free, private, offline). " +
+            "Falls back to Anthropic API if not installed."
         )
-        .addText((text) =>
-          text
-            .setPlaceholder("~/.openbrain")
-            .setValue(this.plugin.settings.sttHomePath)
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.useLocalStt)
             .onChange((value) => { void (async () => {
-              this.plugin.settings.sttHomePath = value;
+              this.plugin.settings.useLocalStt = value;
               await this.plugin.saveSettings();
+              this.display(); // Re-render to show/hide STT options
             })(); })
         );
 
-      // Installation status + install button
-      const statusEl = containerEl.createDiv({ cls: "ca-stt-status" });
-      statusEl.setText("Checking installation...");
-      void this.renderSttStatus(statusEl);
+      if (this.plugin.settings.useLocalStt) {
+        new Setting(containerEl)
+          .setName("sherpa-onnx home directory")
+          .setDesc(
+            "Where binary and model files are stored. Leave empty for default (~/.openbrain)."
+          )
+          .addText((text) =>
+            text
+              .setPlaceholder("~/.openbrain")
+              .setValue(this.plugin.settings.sttHomePath)
+              .onChange((value) => { void (async () => {
+                this.plugin.settings.sttHomePath = value;
+                await this.plugin.saveSettings();
+              })(); })
+          );
+
+        // Installation status + install button
+        const statusEl = containerEl.createDiv({ cls: "ca-stt-status" });
+        statusEl.setText("Checking installation...");
+        void this.renderSttStatus(statusEl);
+      }
     }
 
     // --- Audio Input Section ---
@@ -517,7 +523,8 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         })
       );
 
-    // ── Floating Recorder ──
+    // ── Floating Recorder (desktop only) ──
+    if (Platform.isDesktop) {
     new Setting(containerEl).setName("Floating recorder").setHeading();
 
     new Setting(containerEl)
@@ -691,8 +698,10 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
     } // end floatingRecorderEnabled
+    } // end Platform.isDesktop (floating recorder)
 
-    // ── Semantic Search ──
+    // ── Semantic Search (desktop only) ──
+    if (Platform.isDesktop) {
     new Setting(containerEl).setName("Semantic search").setHeading();
 
     new Setting(containerEl)
@@ -819,6 +828,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         }
       }
     }
+    } // end Platform.isDesktop (semantic search)
 
     // ── OpenClaw ──
     new Setting(containerEl).setName("OpenClaw").setHeading();

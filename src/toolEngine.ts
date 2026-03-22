@@ -2,11 +2,14 @@ import { App, TFile } from "obsidian";
 import { OpenBrainSettings } from "./settings";
 import * as cli from "./obsidianCli";
 import { appendToDailySection } from "./chatHistory";
+import { getDailyNotePath } from "./skills";
 import { startTimer } from "./perf";
 import { ToolResultData } from "./providers/types";
 import { EmbeddingSearch } from "./embeddingSearch";
+import { VaultIndex } from "./vaultIndex";
 
 let embeddingSearchInstance: EmbeddingSearch | null = null;
+let vaultIndexInstance: VaultIndex | null = null;
 
 export function setEmbeddingSearch(search: EmbeddingSearch | null): void {
   embeddingSearchInstance = search;
@@ -14,6 +17,10 @@ export function setEmbeddingSearch(search: EmbeddingSearch | null): void {
 
 export function getEmbeddingSearch(): EmbeddingSearch | null {
   return embeddingSearchInstance;
+}
+
+export function setVaultIndex(index: VaultIndex | null): void {
+  vaultIndexInstance = index;
 }
 
 /**
@@ -49,14 +56,52 @@ async function executeToolInner(
     // --- Read tools ---
     case "vault_search": {
       if (!input.query) throw new Error("query required");
-      const result = cli.search(input.query);
-      return result || "No results found";
+      if (cli.isAvailable()) {
+        const result = cli.search(input.query);
+        return result || "No results found";
+      }
+      // Fallback: VaultIndex metadata search + content scan
+      const query = input.query.toLowerCase();
+      const matches: string[] = [];
+      if (vaultIndexInstance) {
+        const indexed = vaultIndexInstance.search(query, 20);
+        for (const entry of indexed) {
+          matches.push(entry.path);
+        }
+      }
+      if (matches.length === 0) {
+        // Content scan fallback
+        const allFiles = app.vault.getMarkdownFiles();
+        for (const f of allFiles.slice(0, 200)) {
+          const content = await app.vault.cachedRead(f);
+          if (content.toLowerCase().includes(query)) {
+            matches.push(f.path);
+            if (matches.length >= 20) break;
+          }
+        }
+      }
+      return matches.length > 0 ? matches.join("\n") : "No results found";
     }
     case "vault_search_context": {
-      // Use obsidian search:context if available
-      // For now, fall back to regular search
-      const result = cli.search(input.query);
-      return result || "No results found";
+      if (!input.query) throw new Error("query required");
+      if (cli.isAvailable()) {
+        const result = cli.search(input.query);
+        return result || "No results found";
+      }
+      // Same fallback as vault_search
+      const query = input.query.toLowerCase();
+      const matches: string[] = [];
+      const allFiles = app.vault.getMarkdownFiles();
+      for (const f of allFiles.slice(0, 200)) {
+        const content = await app.vault.cachedRead(f);
+        const idx = content.toLowerCase().indexOf(query);
+        if (idx !== -1) {
+          const snippet = content.slice(Math.max(0, idx - 50), idx + 100).replace(/\n/g, " ");
+          matches.push(`${f.path}: ...${snippet}...`);
+          if (matches.length >= 20) break;
+        }
+      }
+      return matches.length > 0 ? matches.join("\n") : "No results found";
     }
     case "vault_read": {
       if (!input.path) throw new Error("path required");
@@ -161,14 +206,31 @@ async function executeToolInner(
         const result = cli.dailyTasks(filter);
         return result || "No tasks found";
       }
-      return "Obsidian CLI not available for task queries";
+      // Fallback: read daily note and extract tasks
+      const dailyPath = getDailyNotePath(app, settings);
+      const dailyFile = app.vault.getAbstractFileByPath(dailyPath);
+      if (dailyFile instanceof TFile) {
+        const content = await app.vault.read(dailyFile);
+        const tasks = content.match(/- \[[ x]\] .+/g) || [];
+        const filtered = filter === "todo" ? tasks.filter(t => t.startsWith("- [ ]"))
+          : filter === "done" ? tasks.filter(t => t.startsWith("- [x]"))
+          : tasks;
+        return filtered.join("\n") || "No tasks found";
+      }
+      return "No daily note found";
     }
     case "daily_read": {
       if (cli.isAvailable()) {
         const result = cli.dailyRead();
         return result || "No daily note found";
       }
-      return "Obsidian CLI not available for daily note access";
+      // Fallback: read daily note via vault API
+      const dailyPath = getDailyNotePath(app, settings);
+      const dailyFile = app.vault.getAbstractFileByPath(dailyPath);
+      if (dailyFile instanceof TFile) {
+        return await app.vault.read(dailyFile);
+      }
+      return "No daily note found";
     }
     case "vault_orphans": {
       // Find files with no backlinks via metadataCache

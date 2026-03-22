@@ -1,24 +1,26 @@
-import { addIcon, App, Plugin, TFile, WorkspaceLeaf, Modal, Notice, Setting } from "obsidian";
+import { addIcon, App, Platform, Plugin, TFile, WorkspaceLeaf, Modal, Notice, Setting } from "obsidian";
 import { OpenBrainView, OPEN_BRAIN_VIEW_TYPE, RecordingStatus } from "./view";
 import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./settings";
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
 import { appendToDailySection } from "./chatHistory";
 import { VaultIndex } from "./vaultIndex";
 import { initVault } from "./initVault";
-import { configure as configureObsidianCli } from "./obsidianCli";
 import { encrypt, decrypt } from "./secureStorage";
 import { OpenClawNode } from "./openclawNode";
 import { logSummary as logPerfSummary } from "./perf";
 import { TaskDashboardView, TASK_DASHBOARD_VIEW } from "./taskDashboard";
 import { SkillScheduler } from "./scheduler";
 import { checkNotifications } from "./notifications";
-import { FloatingRecorder } from "./floatingRecorder";
-import { createEmbeddingEngine } from "./embeddingEngine";
-import { createEmbeddingIndex } from "./embeddingIndex";
-import { createEmbeddingIndexer } from "./embeddingIndexer";
-import { createEmbeddingSearch } from "./embeddingSearch";
-import { setEmbeddingSearch } from "./toolEngine";
+import { setEmbeddingSearch, setVaultIndex } from "./toolEngine";
 import { loadWelcomeCache, refreshWelcomeIfStale } from "./welcomeMessages";
+
+// Desktop-only modules — imported dynamically to avoid crashing on mobile
+// import { configure as configureObsidianCli } from "./obsidianCli";
+// import { FloatingRecorder } from "./floatingRecorder";
+// import { createEmbeddingEngine } from "./embeddingEngine";
+// import { createEmbeddingIndex } from "./embeddingIndex";
+// import { createEmbeddingIndexer } from "./embeddingIndexer";
+// import { createEmbeddingSearch } from "./embeddingSearch";
 
 export default class OpenBrainPlugin extends Plugin {
   settings: OpenBrainSettings;
@@ -27,9 +29,9 @@ export default class OpenBrainPlugin extends Plugin {
   private statusBarEl: HTMLElement | null = null;
   private openclawNode: OpenClawNode | null = null;
   private scheduler: SkillScheduler | null = null;
-  private floatingRecorder: FloatingRecorder | null = null;
-  private embeddingEngine: ReturnType<typeof createEmbeddingEngine> | null = null;
-  private embeddingIndexer: ReturnType<typeof createEmbeddingIndexer> | null = null;
+  private floatingRecorder: any | null = null;
+  private embeddingEngine: any | null = null;
+  private embeddingIndexer: any | null = null;
   private embeddingStatusBarEl: HTMLElement | null = null;
   private lastEmbeddingProgress: { indexed: number; total: number; status: string } | null = null;
 
@@ -59,7 +61,10 @@ export default class OpenBrainPlugin extends Plugin {
     ].join(""));
 
     await this.loadSettings();
-    configureObsidianCli(this.settings.obsidianCliPath);
+    if (Platform.isDesktop) {
+      const { configure } = await import("./obsidianCli");
+      configure(this.settings.obsidianCliPath);
+    }
     this.skills = await loadSkills(this.app, this.settings.skillsFolder);
 
     this.registerView(
@@ -91,6 +96,7 @@ export default class OpenBrainPlugin extends Plugin {
       void refreshWelcomeIfStale(this.app, this.settings, this.skills);
 
       this.vaultIndex = new VaultIndex(this.app);
+      setVaultIndex(this.vaultIndex);
       this.refreshViews();
 
       // Start skill scheduler
@@ -100,42 +106,44 @@ export default class OpenBrainPlugin extends Plugin {
       // Run notification checks
       void checkNotifications(this.app, this.settings);
 
-      // Initialize floating recorder
-      this.floatingRecorder = new FloatingRecorder(this.app, this.settings);
-      this.floatingRecorder.getSkills = () =>
-        this.skills
-          .filter((s) => s.input === "audio" || s.input === "auto")
-          .map((s) => ({ id: s.id, name: s.name, input: s.input }));
-      this.floatingRecorder.onStatusChange = (status) => {
-        const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
-        if (leaves.length > 0 && leaves[0].view instanceof OpenBrainView) {
-          leaves[0].view.setFloatingRecorderStatus(status);
-        }
-        if (status) {
-          void this.activateView();
-        }
-      };
-      this.floatingRecorder.onRecordingComplete = (notePath, skillId) => {
-        void this.activateView().then(() => {
+      // Initialize floating recorder (desktop only — requires Electron)
+      if (Platform.isDesktopApp) {
+        const { FloatingRecorder } = await import("./floatingRecorder");
+        this.floatingRecorder = new FloatingRecorder(this.app, this.settings);
+        this.floatingRecorder.getSkills = () =>
+          this.skills
+            .filter((s: Skill) => s.input === "audio" || s.input === "auto")
+            .map((s: Skill) => ({ id: s.id, name: s.name, input: s.input }));
+        this.floatingRecorder.onStatusChange = (status: string | null) => {
           const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
           if (leaves.length > 0 && leaves[0].view instanceof OpenBrainView) {
-            leaves[0].view.setInitialAttachedFile(notePath);
-            if (skillId && skillId !== "clipboard") {
-              // Small delay to let the file attach first
-              setTimeout(() => {
-                (leaves[0].view as OpenBrainView).activateSkillAndSend(skillId);
-              }, 300);
-            }
+            leaves[0].view.setFloatingRecorderStatus(status);
           }
-        });
-      };
-      if (this.floatingRecorder.isAvailable && this.settings.floatingRecorderEnabled) {
-        this.floatingRecorder.registerHotkey();
-        void this.floatingRecorder.recoverIncompleteSessions();
+          if (status) {
+            void this.activateView();
+          }
+        };
+        this.floatingRecorder.onRecordingComplete = (notePath: string, skillId: string) => {
+          void this.activateView().then(() => {
+            const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
+            if (leaves.length > 0 && leaves[0].view instanceof OpenBrainView) {
+              leaves[0].view.setInitialAttachedFile(notePath);
+              if (skillId && skillId !== "clipboard") {
+                setTimeout(() => {
+                  (leaves[0].view as OpenBrainView).activateSkillAndSend(skillId);
+                }, 300);
+              }
+            }
+          });
+        };
+        if (this.floatingRecorder.isAvailable && this.settings.floatingRecorderEnabled) {
+          this.floatingRecorder.registerHotkey();
+          void this.floatingRecorder.recoverIncompleteSessions();
+        }
       }
 
-      // Initialize embedding system
-      if (this.settings.embeddingsEnabled) {
+      // Initialize embedding system (desktop only — requires Node.js)
+      if (Platform.isDesktop && this.settings.embeddingsEnabled) {
         void this.initEmbeddings();
       }
 
@@ -312,18 +320,20 @@ export default class OpenBrainPlugin extends Plugin {
       },
     });
 
-    this.addCommand({
-      id: "toggle-floating-recorder",
-      name: "Toggle floating recorder",
-      icon: "mic",
-      callback: () => {
-        if (this.floatingRecorder?.isAvailable) {
-          void this.floatingRecorder.toggle();
-        } else {
-          new Notice("Floating recorder is not available (requires Electron).");
-        }
-      },
-    });
+    if (Platform.isDesktopApp) {
+      this.addCommand({
+        id: "toggle-floating-recorder",
+        name: "Toggle floating recorder",
+        icon: "mic",
+        callback: () => {
+          if (this.floatingRecorder?.isAvailable) {
+            void this.floatingRecorder.toggle();
+          } else {
+            new Notice("Floating recorder is not available (requires Electron).");
+          }
+        },
+      });
+    }
 
     this.addSettingTab(new OpenBrainSettingTab(this.app, this));
 
@@ -388,11 +398,16 @@ export default class OpenBrainPlugin extends Plugin {
 
   private async initEmbeddings(): Promise<void> {
     try {
+      const { createEmbeddingEngine } = await import("./embeddingEngine");
+      const { createEmbeddingIndex } = await import("./embeddingIndex");
+      const { createEmbeddingIndexer } = await import("./embeddingIndexer");
+      const { createEmbeddingSearch } = await import("./embeddingSearch");
+
       this.embeddingEngine = createEmbeddingEngine();
 
       // Show download progress during model init
       this.updateEmbeddingStatus({ indexed: 0, total: 0, status: "downloading" });
-      this.embeddingEngine.onDownloadProgress = (p) => {
+      this.embeddingEngine.onDownloadProgress = (p: any) => {
         if (p.status === "download" && p.total && p.loaded) {
           const mb = (p.loaded / 1024 / 1024).toFixed(1);
           const totalMb = (p.total / 1024 / 1024).toFixed(1);
@@ -573,10 +588,18 @@ export default class OpenBrainPlugin extends Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
     // Decrypt API keys on load
     if (this.settings.apiKey) {
-      this.settings.apiKey = decrypt(this.settings.apiKey);
+      const decrypted = decrypt(this.settings.apiKey);
+      if (Platform.isMobile && !decrypted && data?.apiKey) {
+        new Notice("OpenBrain: API key from desktop could not be decrypted. Please re-enter it in Settings.");
+      }
+      this.settings.apiKey = decrypted;
     }
     if (this.settings.openrouterApiKey) {
-      this.settings.openrouterApiKey = decrypt(this.settings.openrouterApiKey);
+      const decrypted = decrypt(this.settings.openrouterApiKey);
+      if (Platform.isMobile && !decrypted && data?.openrouterApiKey) {
+        new Notice("OpenBrain: OpenRouter API key from desktop could not be decrypted. Please re-enter it in Settings.");
+      }
+      this.settings.openrouterApiKey = decrypted;
     }
   }
 
@@ -611,10 +634,12 @@ export default class OpenBrainPlugin extends Plugin {
   onunload() {
     this.scheduler?.stop();
     this.openclawNode?.disconnect();
-    this.floatingRecorder?.destroy();
-    this.embeddingIndexer?.stop();
-    this.embeddingEngine?.destroy();
-    setEmbeddingSearch(null);
+    if (Platform.isDesktop) {
+      this.floatingRecorder?.destroy();
+      this.embeddingIndexer?.stop();
+      this.embeddingEngine?.destroy();
+      setEmbeddingSearch(null);
+    }
   }
 }
 

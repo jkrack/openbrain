@@ -5,9 +5,8 @@ import { runChat, summarizeChat } from "./chatEngine";
 import { useAudioRecorder, formatDuration } from "./useAudioRecorder";
 import { OpenBrainSettings } from "./settings";
 import { Skill, executePostActions } from "./skills";
-import { transcribeBlob, transcribeSegments } from "./stt";
 import { RecordingStatus } from "./view";
-import { App, Component, Notice } from "obsidian";
+import { App, Component, Notice, Platform } from "obsidian";
 import {
   ChatMeta,
   saveChat,
@@ -115,7 +114,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
   const recorder = useAudioRecorder();
 
-  const activeSkill = skills.find((s) => s.id === activeSkillId) || null;
+  const availableSkills = Platform.isMobile ? skills.filter(s => !s.tools.cli) : skills;
+  const activeSkill = availableSkills.find((s) => s.id === activeSkillId) || null;
 
   const effectiveWrite = activeSkill?.tools.write ?? allowWrite;
   const effectiveCli = activeSkill?.tools.cli ?? allowCli;
@@ -135,14 +135,16 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       if (settings.chatProvider === "ollama") hasProvider = true; // Ollama just needs to be running
 
       let obsidianCli = false;
-      try {
-        const { execSync } = require("child_process") as typeof import("child_process");
-        const home = process.env.HOME || "";
-        const extraPaths = ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`, "/Applications/Obsidian.app/Contents/MacOS"];
-        const env = { ...process.env, PATH: [...extraPaths, process.env.PATH].filter(Boolean).join(":") };
-        execSync("obsidian version", { timeout: 5000, encoding: "utf-8", env });
-        obsidianCli = true;
-      } catch { /* expected — CLI may not be installed */ }
+      if (Platform.isDesktop) {
+        try {
+          const { execSync } = require("child_process") as typeof import("child_process");
+          const home = process.env.HOME || "";
+          const extraPaths = ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`, "/Applications/Obsidian.app/Contents/MacOS"];
+          const env = { ...process.env, PATH: [...extraPaths, process.env.PATH].filter(Boolean).join(":") };
+          execSync("obsidian version", { timeout: 5000, encoding: "utf-8", env });
+          obsidianCli = true;
+        } catch { /* expected — CLI may not be installed */ }
+      }
 
       setSetupStatus({ hasProvider, obsidianCli });
     };
@@ -487,8 +489,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         await runPostActions();
       };
 
-      if (hasAudioInput) {
-        // --- Audio path: try local STT first, fall back to API ---
+      if (hasAudioInput && settings.useLocalStt && Platform.isDesktop) {
+        // --- Audio path: local STT (desktop only) ---
         try {
           setMessages((prev) =>
             prev.map((m) =>
@@ -498,6 +500,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
             )
           );
 
+          const { transcribeBlob, transcribeSegments } = await import("./stt");
           const result = audioSegments.length > 1
             ? await transcribeSegments(audioSegments, settings, (current, total) => {
                 if (!abortRef.current) {
@@ -614,8 +617,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           setAudioPrompt("");
           setShowAudioPrompt(false);
         }
-      } else if (!settings.useLocalStt && hasAudioInput && settings.apiKey && audioSegments.length > 1) {
-        // --- Multi-segment API transcription fallback (requires Anthropic key) ---
+      } else if (hasAudioInput && settings.apiKey && audioSegments.length > 1) {
+        // --- Multi-segment API transcription (requires Anthropic key) ---
         await transcribeAudioSegments(settings, {
           onChunk: (chunk: string) => {
             if (!abortRef.current) appendAssistantChunk(assistantId, chunk);
@@ -639,8 +642,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           },
           onDone: () => void audioDone(),
         });
-      } else if (!settings.useLocalStt && hasAudioInput && settings.apiKey) {
-        // --- Single-segment API transcription fallback (requires Anthropic key) ---
+      } else if (hasAudioInput && settings.apiKey) {
+        // --- Single-segment API transcription (requires Anthropic key) ---
         await transcribeAudioSegments(settings, {
           onChunk: (chunk: string) => {
             if (!abortRef.current) appendAssistantChunk(assistantId, chunk);
@@ -869,10 +872,11 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       <ChatHeader
         activeSkill={activeSkill}
         activeSkillId={activeSkillId}
-        skills={skills}
+        skills={availableSkills}
         showSkillMenu={showSkillMenu}
         effectiveWrite={effectiveWrite}
         effectiveCli={effectiveCli}
+        showCliToggle={Platform.isDesktop}
         noteContext={noteContext}
         sessionId={sessionId}
         useLocalStt={settings.useLocalStt}
@@ -1091,7 +1095,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         attachedFiles={attachedFiles}
         onRemoveFile={(path) => setAttachedFiles((prev) => prev.filter((p) => p !== path))}
         onFileAttach={(path) => setAttachedFiles((prev) => prev.includes(path) ? prev : [...prev, path])}
-        skills={skills}
+        skills={availableSkills}
         vaultIndex={vaultIndex ?? null}
         onSkillActivate={(skill) => void handleSkillActivate(skill)}
         showTooltips={settings.showTooltips}

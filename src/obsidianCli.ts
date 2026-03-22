@@ -1,4 +1,7 @@
-import { execSync } from "child_process";
+let execSyncFn: ((cmd: string, opts?: any) => Buffer | string) | null = null;
+try {
+  execSyncFn = require("child_process").execSync;
+} catch { /* not available on mobile */ }
 
 let cliPath = "obsidian";
 let availableCache: boolean | null = null;
@@ -30,12 +33,13 @@ function getEnv(): Record<string, string | undefined> {
  * Returns null if the command fails.
  */
 function exec(command: string): string | null {
+  if (!execSyncFn) return null;
   try {
-    return execSync(`${cliPath} ${command}`, {
+    return (execSyncFn(`${cliPath} ${command}`, {
       encoding: "utf-8",
       timeout: 10000,
       env: getEnv(),
-    }).trim();
+    }) as string).trim();
   } catch { /* expected — CLI may not be installed or command failed */
     return null;
   }

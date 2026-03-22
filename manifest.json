@@ -6,5 +6,5 @@
   "description": "AI-powered vault assistant with chat, voice recording, skills, daily note integration, and knowledge management.",
   "author": "jkrack",
   "authorUrl": "https://github.com/jkrack",
-  "isDesktopOnly": true
+  "isDesktopOnly": false
 }

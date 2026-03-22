@@ -153,7 +153,11 @@ export function useAudioRecorder(): AudioRecorderResult {
 
       mimeTypeRef.current = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
-        : "audio/webm";
+        : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : MediaRecorder.isTypeSupported("audio/mp4")
+        ? "audio/mp4"
+        : "audio/wav";
 
       segmentsRef.current = [];
       setSegments([]);
