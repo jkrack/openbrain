@@ -230,8 +230,9 @@ export function createEmbeddingIndexer(
       const file = files[i];
       try {
         await indexFile(file);
-      } catch {
-        failedFiles.push(file.path);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        failedFiles.push(`${file.path} (${msg.slice(0, 80)})`);
       }
       indexed++;
       reportProgress();
@@ -264,8 +265,10 @@ export function createEmbeddingIndexer(
 
     if (stripped.length < 10) return; // Skip nearly-empty files
 
-    // Whole-note embedding (truncate to avoid exceeding model's token limit)
-    const truncated = stripped.slice(0, 1500); // ~375 tokens, safe for 512-token models
+    // Whole-note embedding (truncate to model's token limit)
+    // Nomic supports 2048 tokens, MiniLM supports 256, bge supports 512
+    // 500 chars is ~125 tokens — safe for all models
+    const truncated = stripped.slice(0, 500);
     const noteVector = await engine.embed(truncated);
 
     // Section-level embeddings
@@ -273,7 +276,7 @@ export function createEmbeddingIndexer(
     const sections: SectionVector[] = [];
 
     for (const section of rawSections) {
-      const sectionTruncated = section.text.slice(0, 1500);
+      const sectionTruncated = section.text.slice(0, 500);
       const vector = await engine.embed(sectionTruncated);
       sections.push({
         heading: section.heading,
