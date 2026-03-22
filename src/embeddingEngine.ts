@@ -55,6 +55,9 @@ export function createEmbeddingEngine(): EmbeddingEngine {
       const iframeDoc = iframe.contentDocument!;
 
       // Write the connector script into the iframe
+      // Error handling modeled after Smart Connections:
+      // - Retry individually on batch failure
+      // - Reset pipeline after ONNX errors to clear WASM memory corruption
       const script = `
         <script type="module">
           import { pipeline, env } from "${TRANSFORMERS_CDN}";
@@ -63,6 +66,39 @@ export function createEmbeddingEngine(): EmbeddingEngine {
           env.allowRemoteModels = true;
 
           let extractor = null;
+          let currentModelId = null;
+          let consecutiveErrors = 0;
+
+          async function initPipeline(modelId, progressCallback) {
+            currentModelId = modelId;
+            extractor = await pipeline("feature-extraction", modelId, {
+              dtype: "fp32",
+              progress_callback: progressCallback
+            });
+            consecutiveErrors = 0;
+          }
+
+          async function safeEmbed(text) {
+            try {
+              const output = await extractor(text, { pooling: "mean", normalize: true, truncation: true });
+              consecutiveErrors = 0;
+              return Array.from(output.data);
+            } catch (err) {
+              consecutiveErrors++;
+              console.warn("[OpenBrain iframe] Embed failed, attempt to recover:", err.message?.slice(0, 60));
+
+              // After 3 consecutive errors, reset the pipeline (clears WASM memory)
+              if (consecutiveErrors >= 3 && currentModelId) {
+                console.warn("[OpenBrain iframe] Resetting pipeline after consecutive errors");
+                try {
+                  if (extractor?.dispose) await extractor.dispose();
+                } catch {}
+                await initPipeline(currentModelId, () => {});
+              }
+
+              return null; // Return null for failed embeds
+            }
+          }
 
           async function handleMessage(e) {
             const { type, id, modelId, text, texts } = e.data;
@@ -70,24 +106,25 @@ export function createEmbeddingEngine(): EmbeddingEngine {
 
             try {
               if (type === "init") {
-                extractor = await pipeline("feature-extraction", modelId, {
-                  dtype: "fp32",
-                  progress_callback: (p) => {
-                    window.parent.postMessage({
-                      type: "progress", id,
-                      progress: { status: p.status, file: p.file, loaded: p.loaded, total: p.total }
-                    }, "*");
-                  }
+                await initPipeline(modelId, (p) => {
+                  window.parent.postMessage({
+                    type: "progress", id,
+                    progress: { status: p.status, file: p.file, loaded: p.loaded, total: p.total }
+                  }, "*");
                 });
                 window.parent.postMessage({ type: "ready", id }, "*");
               } else if (type === "embed") {
-                const output = await extractor(text, { pooling: "mean", normalize: true, truncation: true });
-                window.parent.postMessage({ type: "result", id, vector: Array.from(output.data) }, "*");
+                const vector = await safeEmbed(text);
+                if (vector) {
+                  window.parent.postMessage({ type: "result", id, vector }, "*");
+                } else {
+                  window.parent.postMessage({ type: "error", id, error: "Embed failed after retry" }, "*");
+                }
               } else if (type === "embedBatch") {
                 const vectors = [];
                 for (const t of texts) {
-                  const output = await extractor(t, { pooling: "mean", normalize: true, truncation: true });
-                  vectors.push(Array.from(output.data));
+                  const vec = await safeEmbed(t);
+                  vectors.push(vec || []);
                 }
                 window.parent.postMessage({ type: "result", id, vectors }, "*");
               }
