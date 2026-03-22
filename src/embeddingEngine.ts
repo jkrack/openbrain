@@ -27,7 +27,7 @@ export function getModelCacheDir(): string {
  * No Web Worker — embeddings are fast enough (<50ms per call for small models)
  * and the indexer yields between batches to keep the UI responsive.
  */
-export function createEmbeddingEngine(wasmDir: string): EmbeddingEngine {
+export function createEmbeddingEngine(): EmbeddingEngine {
   let extractor: any = null;
   let ready = false;
   let dimensions = 0;
@@ -47,16 +47,8 @@ export function createEmbeddingEngine(wasmDir: string): EmbeddingEngine {
       env.allowLocalModels = false;
       env.allowRemoteModels = true;
 
-      // Configure ONNX WASM paths — env.backends.onnx is the bundled ort env
-      // Must be set BEFORE pipeline() which creates the inference session
-      const onnxBackend = (env as any).backends?.onnx;
-      if (onnxBackend?.wasm) {
-        onnxBackend.wasm.wasmPaths = `file://${wasmDir}/`;
-        console.log("[OpenBrain] ONNX WASM path:", onnxBackend.wasm.wasmPaths);
-      } else {
-        console.warn("[OpenBrain] env.backends.onnx not found, keys:", Object.keys((env as any).backends || {}));
-        console.warn("[OpenBrain] env.backends.onnx value:", onnxBackend);
-      }
+      // onnxruntime-node is marked as external in esbuild — resolved at runtime
+      // via Node.js require(). Uses native bindings, no WASM needed.
 
       console.log("[OpenBrain] Calling pipeline('feature-extraction', '" + modelId + "')...");
 

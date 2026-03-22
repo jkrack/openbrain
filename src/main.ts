@@ -383,9 +383,7 @@ export default class OpenBrainPlugin extends Plugin {
 
   private async initEmbeddings(): Promise<void> {
     try {
-      const basePath = (this.app as any).vault.adapter.basePath as string;
-      const pluginDir = `${basePath}/.obsidian/plugins/open-brain`;
-      this.embeddingEngine = createEmbeddingEngine(pluginDir);
+      this.embeddingEngine = createEmbeddingEngine();
 
       // Show download progress during model init
       this.updateEmbeddingStatus({ indexed: 0, total: 0, status: "downloading" });
