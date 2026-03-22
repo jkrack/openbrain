@@ -94,6 +94,7 @@ export function createEmbeddingIndexer(
   let total = 0;
   let status: IndexerStatus = "idle";
   let batchTimeout: ReturnType<typeof setTimeout> | null = null;
+  let failedFiles: string[] = [];
 
   // Sanitize model ID for use in filenames (TaylorAI/bge-micro-v2 → TaylorAI--bge-micro-v2)
   const safeModelId = modelId.replace(/\//g, "--");
@@ -223,8 +224,8 @@ export function createEmbeddingIndexer(
       const file = files[i];
       try {
         await indexFile(file);
-      } catch (err: unknown) {
-        console.error(`[OpenBrain] Failed to index ${file.path}:`, err);
+      } catch {
+        failedFiles.push(file.path);
       }
       indexed++;
       reportProgress();
@@ -239,12 +240,23 @@ export function createEmbeddingIndexer(
     } else {
       status = "ready";
       reportProgress();
+      if (failedFiles.length > 0) {
+        console.warn(`[OpenBrain] Skipped ${failedFiles.length} files during indexing (incompatible content):`, failedFiles);
+        failedFiles = [];
+      }
     }
   }
 
   async function indexFile(file: TFile) {
     const content = await app.vault.cachedRead(file);
-    const stripped = stripFrontmatter(content);
+    let stripped = stripFrontmatter(content);
+
+    // Remove code blocks and XML-like content that cause ONNX errors
+    stripped = stripped.replace(/```[\s\S]*?```/g, " ");
+    stripped = stripped.replace(/<[^>]+>/g, " ");
+    stripped = stripped.replace(/\s+/g, " ").trim();
+
+    if (stripped.length < 10) return; // Skip nearly-empty files
 
     // Whole-note embedding (truncate to avoid exceeding model's token limit)
     const truncated = stripped.slice(0, 1500); // ~375 tokens, safe for 512-token models
