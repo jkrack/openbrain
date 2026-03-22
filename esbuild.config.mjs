@@ -23,9 +23,13 @@ const context = await esbuild.context({
     "@lezer/highlight",
     "@lezer/lr",
     ...builtins,
-    "onnxruntime-web",
     "onnxruntime-node",
   ],
+  alias: {
+    // Swap WASM-based runtime for native Node bindings
+    // onnxruntime-web can't load WASM in Obsidian's plugin protocol
+    "onnxruntime-web": "onnxruntime-node",
+  },
   format: "cjs",
   target: "es2020",
   logLevel: "info",
