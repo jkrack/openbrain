@@ -1,5 +1,6 @@
 import { App, TFile, Notice, moment } from "obsidian";
 import { Message } from "./providers/types";
+import type { ImageAttachment } from "./providers/types";
 import { OpenBrainSettings } from "./settings";
 import { createFromTemplate } from "./templates";
 import * as cli from "./obsidianCli";
@@ -27,6 +28,14 @@ export interface ChatFile {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
+
+function toBase64(s: string): string {
+  return btoa(unescape(encodeURIComponent(s)));
+}
+
+function fromBase64(s: string): string {
+  return decodeURIComponent(escape(atob(s)));
+}
 
 function stripMarkdown(text: string): string {
   return text
@@ -92,7 +101,10 @@ export function serializeChat(messages: Message[], meta: ChatMeta): string {
     const ts = m.timestamp instanceof Date ? m.timestamp.getTime() : new Date(m.timestamp).getTime();
     const audio = m.isAudio ? "true" : "false";
     const roleLabel = m.role === "user" ? "User" : "Assistant";
-    return `<!-- msg:${m.id}:${m.role}:${ts}:${audio} -->\n### ${roleLabel}\n${m.content}`;
+    const imagesField = m.images?.length
+      ? ":" + toBase64(JSON.stringify(m.images))
+      : "";
+    return `<!-- msg:${m.id}:${m.role}:${ts}:${audio}${imagesField} -->\n### ${roleLabel}\n${m.content}`;
   });
 
   return yamlLines.join("\n") + "\n\n" + messageParts.join("\n\n") + "\n";
@@ -119,7 +131,7 @@ export function parseChat(content: string, path: string): ChatFile | { error: st
   const unquote = (s: string): string => s.replace(/^["']|["']$/g, "");
 
   const formatVersion = parseInt(get("format_version"), 10);
-  if (formatVersion > 1) {
+  if (formatVersion > 2) {
     return { error: `Unsupported format_version: ${formatVersion}` };
   }
 
@@ -147,16 +159,23 @@ export function parseChat(content: string, path: string): ChatFile | { error: st
 
   // Parse messages from body
   const messages: Message[] = [];
-  const msgRegex = /<!-- msg:([^:]+):([^:]+):(\d+):(true|false) -->\n### (?:User|Assistant)\n([\s\S]*?)(?=\n\n<!-- msg:|$)/g;
+  const msgRegex = /<!-- msg:([^:]+):([^:]+):(\d+):(true|false)(?::([A-Za-z0-9+/=]+))? -->\n### (?:User|Assistant)\n([\s\S]*?)(?=\n\n<!-- msg:|$)/g;
   let match: RegExpExecArray | null;
 
   while ((match = msgRegex.exec(body)) !== null) {
+    let images: ImageAttachment[] | undefined;
+    if (match[5]) {
+      try {
+        images = JSON.parse(fromBase64(match[5]));
+      } catch { /* corrupt images data — skip */ }
+    }
     messages.push({
       id: match[1],
       role: match[2] as "user" | "assistant",
-      content: match[5].trimEnd(),
+      content: match[6].trimEnd(),
       isAudio: match[4] === "true",
       timestamp: new Date(parseInt(match[3], 10)),
+      images,
     });
   }
 
