@@ -110,7 +110,11 @@ export class AttachmentManager {
       const rawPath = match[1];
       // Resolve via metadataCache to get the actual vault path
       const resolved = this.app.metadataCache.getFirstLinkpathDest(rawPath, "");
-      const vaultPath = resolved instanceof TFile ? resolved.path : rawPath;
+
+      // Skip unresolved references — only include images that exist in the vault
+      if (!(resolved instanceof TFile)) continue;
+
+      const vaultPath = resolved.path;
 
       const ext = vaultPath.split(".").pop() ?? "png";
       const mediaType = mediaTypeFromExt(ext);

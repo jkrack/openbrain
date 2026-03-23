@@ -106,4 +106,75 @@ describe("AttachmentManager", () => {
       expect(result).toMatch(/^data:image\/png;base64,/);
     });
   });
+
+  describe("extractFromNote", () => {
+    it("extracts image references from markdown content", async () => {
+      const app = mockApp({
+        "images/diagram.png": new Uint8Array([1, 2, 3]).buffer,
+      });
+      app.metadataCache.getFirstLinkpathDest.mockImplementation((link: string) => {
+        if (link === "images/diagram.png") return Object.assign(Object.create(TFile.prototype), { path: "images/diagram.png", stat: { size: 3 } });
+        return null;
+      });
+      app.vault.getAbstractFileByPath.mockImplementation((p: string) => {
+        if (p === "images/diagram.png") return Object.assign(Object.create(TFile.prototype), { path: p, stat: { size: 3 } });
+        return null;
+      });
+
+      const mgr = new AttachmentManager(app);
+      const images = await mgr.extractFromNote("Here is a diagram:\n![[images/diagram.png]]\nAnd some text.");
+
+      expect(images).toHaveLength(1);
+      expect(images[0].source).toBe("context");
+      expect(images[0].vaultPath).toBe("images/diagram.png");
+    });
+
+    it("skips SVG files", async () => {
+      const app = mockApp();
+      const mgr = new AttachmentManager(app);
+      const images = await mgr.extractFromNote("![[logo.svg]]");
+      expect(images).toHaveLength(0);
+    });
+
+    it("handles case-insensitive extensions", async () => {
+      const app = mockApp({ "photo.JPG": new Uint8Array([1]).buffer });
+      app.metadataCache.getFirstLinkpathDest.mockImplementation((link: string) => {
+        if (link === "photo.JPG") return Object.assign(Object.create(TFile.prototype), { path: "photo.JPG", stat: { size: 1 } });
+        return null;
+      });
+      app.vault.getAbstractFileByPath.mockImplementation((p: string) => {
+        if (p === "photo.JPG") return Object.assign(Object.create(TFile.prototype), { path: p, stat: { size: 1 } });
+        return null;
+      });
+
+      const mgr = new AttachmentManager(app);
+      const images = await mgr.extractFromNote("![[photo.JPG]]");
+      expect(images).toHaveLength(1);
+    });
+
+    it("extracts images with alt text", async () => {
+      const app = mockApp({ "chart.png": new Uint8Array([1]).buffer });
+      app.metadataCache.getFirstLinkpathDest.mockImplementation((link: string) => {
+        if (link === "chart.png") return Object.assign(Object.create(TFile.prototype), { path: "chart.png", stat: { size: 1 } });
+        return null;
+      });
+      app.vault.getAbstractFileByPath.mockImplementation((p: string) => {
+        if (p === "chart.png") return Object.assign(Object.create(TFile.prototype), { path: p, stat: { size: 1 } });
+        return null;
+      });
+
+      const mgr = new AttachmentManager(app);
+      const images = await mgr.extractFromNote("![[chart.png|Revenue chart]]");
+      expect(images).toHaveLength(1);
+      expect(images[0].vaultPath).toBe("chart.png");
+    });
+
+    it("skips unresolved references", async () => {
+      const app = mockApp();
+      // getFirstLinkpathDest returns null for all links (default mock)
+      const mgr = new AttachmentManager(app);
+      const images = await mgr.extractFromNote("![[missing.png]]");
+      expect(images).toHaveLength(0);
+    });
+  });
 });
