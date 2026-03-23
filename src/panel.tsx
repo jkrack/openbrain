@@ -28,6 +28,7 @@ import { InputArea } from "./components/InputArea";
 import { MessageThread } from "./components/MessageThread";
 import { AudioControls } from "./components/AudioControls";
 import { TaskTray } from "./components/TaskTray";
+import { AttachmentManager } from "./attachmentManager";
 
 interface PanelProps {
   settings: OpenBrainSettings;
@@ -61,6 +62,34 @@ interface SetupStatus {
   obsidianCli: boolean;
 }
 
+function AttachmentPreview({ attachment, attachmentManager, onRemove }: {
+  attachment: ImageAttachment;
+  attachmentManager: AttachmentManager;
+  onRemove: () => void;
+}) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const url = await attachmentManager.readAsDataUrl(attachment);
+      setDataUrl(url);
+    })();
+  }, [attachment, attachmentManager]);
+
+  const filename = attachment.vaultPath?.split("/").pop()
+    || attachment.assetPath?.split("/").pop()
+    || "image";
+  const sizeKb = (attachment.sizeBytes / 1024).toFixed(0);
+
+  return (
+    <span className="ca-attached-file ca-image-preview">
+      {dataUrl ? <img src={dataUrl} alt={filename} className="ca-image-thumb" /> : null}
+      <span className="ca-attached-file-info">{filename} ({sizeKb}KB)</span>
+      <button className="ca-attached-remove" onClick={onRemove}>&#x2715;</button>
+    </span>
+  );
+}
+
 export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFile, floatingRecorderStatus, pendingSkillSend, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(initialPrompt || "");
@@ -85,7 +114,8 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [chatMode, setChatMode] = useState<"agent" | "chat">("agent");
-  const [pendingImages, setPendingImages] = useState<{ base64: string; mediaType: string; preview: string }[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<ImageAttachment[]>([]);
+  const attachmentManager = useRef(new AttachmentManager(app)).current;
   const [showTaskTray, setShowTaskTray] = useState(false);
 
   // Onboarding state
@@ -226,27 +256,22 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           const blob = item.getAsFile();
           if (!blob) continue;
 
-          const reader = new FileReader();
-          reader.onload = () => {
-            const dataUrl = reader.result as string;
-            const base64 = dataUrl.split(",")[1];
-            setPendingImages((prev) => [...prev, {
-              base64,
-              mediaType: item.type,
-              preview: dataUrl,
-            }]);
+          const chatId = chatFilePathRef.current
+            ?.split("/").pop()?.replace(".md", "") || generateId();
 
-            // Switch to chat mode if not already (images need API)
-            if (chatMode === "agent") setChatMode("chat");
-          };
-          reader.readAsDataURL(blob);
+          void (async () => {
+            const attachment = await attachmentManager.addFromClipboard(blob, chatId);
+            if (attachment) {
+              setPendingAttachments((prev) => [...prev, attachment]);
+            }
+          })();
         }
       }
     };
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [chatMode]);
+  }, [attachmentManager]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -453,6 +478,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         role: "user",
         content: hasAudioInput ? `🎙 ${userText || "Voice message"}` : userText,
         isAudio: !!hasAudioInput,
+        images: pendingAttachments.length > 0 ? [...pendingAttachments] : undefined,
         timestamp: new Date(),
       };
 
@@ -582,6 +608,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
               messages: apiMessages,
               systemPrompt: effectiveSystemPrompt,
               allowWrite: effectiveWrite,
+              attachmentManager,
               useTools: chatMode === "agent",
               onText: (text) => {
                 if (!abortRef.current) appendAssistantChunk(analysisId, text);
@@ -668,8 +695,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           recentContext = await getRecentChatContext();
         }
 
-        const smartCtx = await buildSmartContext(app, userText, attachedFiles, getEmbeddingSearch());
-        const allContext = [noteContext, recentContext, smartCtx].filter(Boolean).join("");
+        const smartCtx = await buildSmartContext(app, userText, attachedFiles, getEmbeddingSearch(), attachmentManager);
+        const contextImages = smartCtx.images;
+        const allContext = [noteContext, recentContext, smartCtx.text].filter(Boolean).join("");
+        const allImages = [...pendingAttachments, ...contextImages];
 
         let fullPrompt = userText;
 
@@ -692,22 +721,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         }));
         apiMessages.push({ role: "user", content: fullPrompt });
 
-        // Get images if any (full ImageAttachment wiring comes in Task 5)
-        const images = pendingImages.length > 0
-          ? pendingImages.map((img, i) => ({
-              id: `pending-${i}`,
-              source: "paste" as const,
-              mediaType: img.mediaType,
-              sizeBytes: 0,
-            } as ImageAttachment))
-          : undefined;
-        if (pendingImages.length > 0) setPendingImages([]);
-
         await runChat(app, settings, {
           messages: apiMessages,
           systemPrompt: enrichedSystemPrompt,
           allowWrite: effectiveWrite,
-          images,
+          images: allImages.length > 0 ? allImages : undefined,
+          attachmentManager,
           useTools: chatMode === "agent",
           onText: (text) => {
             if (!abortRef.current) appendAssistantChunk(assistantId, text);
@@ -725,9 +744,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           })(); },
           onError,
         });
+        if (pendingAttachments.length > 0) setPendingAttachments([]);
       }
     },
-    [isStreaming, messages, settings, noteContext, audioPrompt, appendAssistantChunk, recorder, effectiveWrite, effectiveSystemPrompt, runPostActions, chatMode, chatFilePath, pendingImages, attachedFiles, activeSkill, app]
+    [isStreaming, messages, settings, noteContext, audioPrompt, appendAssistantChunk, recorder, effectiveWrite, effectiveSystemPrompt, runPostActions, chatMode, chatFilePath, pendingAttachments, attachedFiles, activeSkill, app, attachmentManager]
   );
 
   const handleSend = useCallback(() => {
@@ -1076,16 +1096,15 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       />
 
       {/* Pending image previews */}
-      {pendingImages.length > 0 && (
+      {pendingAttachments.length > 0 && (
         <div className="ca-attached-files">
-          {pendingImages.map((img, i) => (
-            <span key={i} className="ca-attached-file ca-image-preview">
-              <img src={img.preview} alt="Attached" className="ca-image-thumb" />
-              <button
-                className="ca-attached-remove"
-                onClick={() => setPendingImages((prev) => prev.filter((_, j) => j !== i))}
-              >✕</button>
-            </span>
+          {pendingAttachments.map((att) => (
+            <AttachmentPreview
+              key={att.id}
+              attachment={att}
+              attachmentManager={attachmentManager}
+              onRemove={() => setPendingAttachments((prev) => prev.filter((a) => a.id !== att.id))}
+            />
           ))}
         </div>
       )}

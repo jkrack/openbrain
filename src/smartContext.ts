@@ -1,6 +1,8 @@
-import { App } from "obsidian";
+import { App, TFile } from "obsidian";
 import { startTimer } from "./perf";
 import { EmbeddingSearch } from "./embeddingSearch";
+import { AttachmentManager } from "./attachmentManager";
+import { ImageAttachment } from "./providers/types";
 
 /**
  * Smart context: automatically find vault notes relevant to the user's message.
@@ -120,8 +122,9 @@ export async function buildSmartContext(
   app: App,
   message: string,
   existingFiles: string[] = [],
-  embeddingSearch?: EmbeddingSearch | null
-): Promise<string> {
+  embeddingSearch?: EmbeddingSearch | null,
+  attachmentManager?: AttachmentManager | null
+): Promise<{ text: string; images: ImageAttachment[] }> {
   // If embeddings are available, use semantic search
   if (embeddingSearch?.isReady()) {
     const passages = await embeddingSearch.searchPassages(message, 3);
@@ -134,7 +137,7 @@ export async function buildSmartContext(
       !newPassages.some((p) => p.path === n.path)
     );
 
-    if (newPassages.length === 0 && newNotes.length === 0) return "";
+    if (newPassages.length === 0 && newNotes.length === 0) return { text: "", images: [] };
 
     let context = "\n\n--- Relevant context from your vault ---\n";
 
@@ -148,7 +151,18 @@ export async function buildSmartContext(
       context += newNotes.map((n) => `- ${n.path}`).join("\n");
     }
 
-    return context;
+    let images: ImageAttachment[] = [];
+    if (attachmentManager) {
+      for (const p of newPassages) {
+        const file = app.vault.getAbstractFileByPath(p.path);
+        if (file instanceof TFile) {
+          const content = await app.vault.cachedRead(file);
+          const noteImages = attachmentManager.extractFromNote(content);
+          images.push(...noteImages);
+        }
+      }
+    }
+    return { text: context, images };
   }
 
   // Fallback: keyword matching
@@ -156,8 +170,11 @@ export async function buildSmartContext(
 
   // Filter out files already attached via @ mentions
   const newFiles = relevant.filter((p) => !existingFiles.includes(p));
-  if (newFiles.length === 0) return "";
+  if (newFiles.length === 0) return { text: "", images: [] };
 
-  return "\n\nRelevant vault notes (read if helpful for responding):\n" +
-    newFiles.map((p) => `- ${p}`).join("\n");
+  return {
+    text: "\n\nRelevant vault notes (read if helpful for responding):\n" +
+      newFiles.map((p) => `- ${p}`).join("\n"),
+    images: [],
+  };
 }
