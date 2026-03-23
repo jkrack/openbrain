@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { transcribeAudioSegments } from "./claude";
-import { Message, ChatMessage } from "./providers/types";
+import { Message, ChatMessage, ImageAttachment } from "./providers/types";
 import { runChat, summarizeChat } from "./chatEngine";
 import { useAudioRecorder, formatDuration } from "./useAudioRecorder";
 import { OpenBrainSettings } from "./settings";
@@ -692,9 +692,14 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         }));
         apiMessages.push({ role: "user", content: fullPrompt });
 
-        // Get images if any
+        // Get images if any (full ImageAttachment wiring comes in Task 5)
         const images = pendingImages.length > 0
-          ? pendingImages.map(img => ({ base64: img.base64, mediaType: img.mediaType }))
+          ? pendingImages.map((img, i) => ({
+              id: `pending-${i}`,
+              source: "paste" as const,
+              mediaType: img.mediaType,
+              sizeBytes: 0,
+            } as ImageAttachment))
           : undefined;
         if (pendingImages.length > 0) setPendingImages([]);
 
