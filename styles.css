@@ -2053,3 +2053,21 @@
   border-radius: 2px;
   transition: width 0.3s ease;
 }
+
+/* Image thumbnails in messages */
+.ca-msg-images { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.ca-msg-image-thumb { cursor: pointer; border-radius: 6px; overflow: hidden; border: 1px solid var(--background-modifier-border); }
+.ca-msg-image-thumb img { height: 80px; width: auto; max-width: 200px; object-fit: cover; display: block; }
+.ca-msg-image-broken { display: flex; align-items: center; justify-content: center; width: 80px; height: 80px; background: var(--background-secondary); color: var(--text-muted); font-size: 24px; }
+.ca-msg-image-loading { display: block; width: 80px; height: 80px; background: var(--background-secondary); border-radius: 6px; animation: ca-pulse 1.5s infinite; }
+@keyframes ca-pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+
+/* Lightbox */
+.ca-lightbox-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.ca-lightbox-content { position: relative; max-width: 90vw; max-height: 90vh; }
+.ca-lightbox-image { max-width: 90vw; max-height: 85vh; object-fit: contain; border-radius: 4px; }
+.ca-lightbox-close { position: absolute; top: -30px; right: 0; background: none; border: none; color: white; font-size: 20px; cursor: pointer; }
+.ca-lightbox-nav { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 8px; }
+.ca-lightbox-arrow { background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 4px 8px; }
+.ca-lightbox-arrow:disabled { opacity: 0.3; cursor: default; }
+.ca-lightbox-counter { color: rgba(255,255,255,0.7); font-size: 13px; }

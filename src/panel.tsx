@@ -1078,6 +1078,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           app={app}
           component={component}
           showTooltips={settings.showTooltips}
+          attachmentManager={attachmentManager}
         />
       </div>
 

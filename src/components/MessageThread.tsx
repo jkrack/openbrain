@@ -1,5 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Message } from "../providers/types";
+import { ImageAttachment } from "../providers/types";
+import { AttachmentManager } from "../attachmentManager";
+import { ImageLightbox } from "./ImageLightbox";
 import { Skill } from "../skills";
 import { PersonProfile } from "../people";
 import { App, Component, MarkdownRenderer } from "obsidian";
@@ -62,6 +65,65 @@ function ToolPill({ name }: { name: string }) {
   );
 }
 
+function MessageImages({ images, attachmentManager }: {
+  images: ImageAttachment[];
+  attachmentManager: AttachmentManager;
+}) {
+  const [dataUrls, setDataUrls] = useState<(string | null)[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (loadedRef.current || !ref.current) return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        loadedRef.current = true;
+        observer.disconnect();
+        void (async () => {
+          const urls = await Promise.all(
+            images.map((img) => attachmentManager.readAsDataUrl(img))
+          );
+          setDataUrls(urls);
+        })();
+      }
+    });
+
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [images, attachmentManager]);
+
+  const validUrls = dataUrls.filter((u): u is string => u !== null);
+
+  return (
+    <>
+      <div className="ca-msg-images" ref={ref}>
+        {images.map((img, i) => (
+          <div key={img.id} className="ca-msg-image-thumb" onClick={() => dataUrls[i] && setLightboxIndex(i)}>
+            {dataUrls[i] ? (
+              <img src={dataUrls[i]!} alt={img.vaultPath || img.assetPath || ""} />
+            ) : dataUrls.length > 0 ? (
+              <span className="ca-msg-image-broken" title={img.assetPath || img.vaultPath}>&#x1F5BC;</span>
+            ) : (
+              <span className="ca-msg-image-loading" />
+            )}
+          </div>
+        ))}
+      </div>
+      {lightboxIndex !== null && (
+        <ImageLightbox
+          images={validUrls}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+          onPrev={() => setLightboxIndex((i) => Math.max(0, (i ?? 0) - 1))}
+          onNext={() => setLightboxIndex((i) => Math.min(validUrls.length - 1, (i ?? 0) + 1))}
+        />
+      )}
+    </>
+  );
+}
+
 export interface MessageThreadProps {
   messages: Message[];
   isStreaming: boolean;
@@ -72,6 +134,7 @@ export interface MessageThreadProps {
   app: App;
   component: Component;
   showTooltips: boolean;
+  attachmentManager?: AttachmentManager;
 }
 
 function TimingBadge() {
@@ -116,6 +179,7 @@ export function MessageThread({
   app,
   component,
   showTooltips,
+  attachmentManager,
 }: MessageThreadProps) {
   const [visibleCount, setVisibleCount] = useState(MESSAGES_PER_PAGE);
 
@@ -226,6 +290,9 @@ export function MessageThread({
             <div className="ca-msg-content">
               {msg.isAudio && <span className="ca-audio-tag">{"\uD83C\uDF99"} </span>}
               <span className="ca-msg-text">{msg.content}</span>
+              {msg.images && msg.images.length > 0 && attachmentManager && (
+                <MessageImages images={msg.images} attachmentManager={attachmentManager} />
+              )}
             </div>
           </div>
         );
