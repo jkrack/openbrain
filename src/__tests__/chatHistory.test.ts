@@ -28,6 +28,7 @@ import {
   ChatMeta,
 } from "../chatHistory";
 import type { Message } from "../providers/types";
+import type { ImageAttachment } from "../providers/types";
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -50,7 +51,6 @@ function makeMeta(overrides: Partial<ChatMeta> = {}): ChatMeta {
 function makeMsg(overrides: Partial<Message> & { id: string; role: "user" | "assistant"; content: string }): Message {
   return {
     timestamp: new Date("2026-03-15T10:00:00Z"),
-    isAudio: false,
     ...overrides,
   };
 }
@@ -156,11 +156,11 @@ describe("parseChat error handling", () => {
     }
   });
 
-  it("rejects format_version > 1", () => {
+  it("rejects format_version > 2", () => {
     const content = [
       "---",
       'type: "openbrain-chat"',
-      "format_version: 2",
+      "format_version: 3",
       'created: "2026-03-15"',
       'updated: "2026-03-15"',
       'skill: "general"',
@@ -173,7 +173,7 @@ describe("parseChat error handling", () => {
       "",
     ].join("\n");
 
-    const result = parseChat(content, "v2.md");
+    const result = parseChat(content, "v3.md");
     expect("error" in result).toBe(true);
     if ("error" in result) {
       expect(result.error).toContain("Unsupported format_version");
@@ -242,6 +242,73 @@ describe("generateChatTitle", () => {
     expect(title).not.toContain("_");
     expect(title).not.toContain("`");
     expect(title).toBe("bold and italic and code");
+  });
+});
+
+// ── v2 image serialization ───────────────────────────────────────────────
+
+describe("v2 image serialization", () => {
+  const testImage: ImageAttachment = {
+    id: "img1",
+    source: "paste",
+    assetPath: "OpenBrain/chats/assets/abc/img1.png",
+    mediaType: "image/png",
+    sizeBytes: 5000,
+  };
+
+  it("round-trips messages with images", () => {
+    const msgs: Message[] = [
+      makeMsg({ id: "m1", role: "user", content: "Look at this", images: [testImage] }),
+      makeMsg({ id: "m2", role: "assistant", content: "I see a diagram" }),
+    ];
+    const meta = makeMeta({ formatVersion: 2 });
+    const serialized = serializeChat(msgs, meta);
+    const parsed = parseChat(serialized, "test.md");
+    expect("error" in parsed).toBe(false);
+    if (!("error" in parsed)) {
+      expect(parsed.messages).toHaveLength(2);
+      expect(parsed.messages[0].images).toHaveLength(1);
+      expect(parsed.messages[0].images![0].id).toBe("img1");
+      expect(parsed.messages[0].images![0].assetPath).toBe("OpenBrain/chats/assets/abc/img1.png");
+      expect(parsed.messages[1].images).toBeUndefined();
+    }
+  });
+
+  it("serializes format_version 2 when images present", () => {
+    const msgs: Message[] = [
+      makeMsg({ id: "m1", role: "user", content: "Hello", images: [testImage] }),
+    ];
+    const meta = makeMeta({ formatVersion: 2 });
+    const serialized = serializeChat(msgs, meta);
+    expect(serialized).toContain("format_version: 2");
+  });
+
+  it("parses v1 format without images (backward compat)", () => {
+    const msgs: Message[] = [makeMsg({ id: "m1", role: "user", content: "Hello" })];
+    const meta = makeMeta({ formatVersion: 1 });
+    const serialized = serializeChat(msgs, meta);
+    const parsed = parseChat(serialized, "test.md");
+    expect("error" in parsed).toBe(false);
+    if (!("error" in parsed)) {
+      expect(parsed.messages[0].images).toBeUndefined();
+    }
+  });
+
+  it("handles non-ASCII vault paths in images", () => {
+    const unicodeImage: ImageAttachment = {
+      ...testImage,
+      vaultPath: "Notes/日本語/図.png",
+    };
+    const msgs: Message[] = [
+      makeMsg({ id: "m1", role: "user", content: "Check this", images: [unicodeImage] }),
+    ];
+    const meta = makeMeta({ formatVersion: 2 });
+    const serialized = serializeChat(msgs, meta);
+    const parsed = parseChat(serialized, "test.md");
+    expect("error" in parsed).toBe(false);
+    if (!("error" in parsed)) {
+      expect(parsed.messages[0].images![0].vaultPath).toBe("Notes/日本語/図.png");
+    }
   });
 });
 

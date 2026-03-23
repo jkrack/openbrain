@@ -5,6 +5,19 @@ export interface Message {
   content: string;
   isAudio?: boolean;
   timestamp: Date;
+  images?: ImageAttachment[];
+}
+
+/** Image attached to a chat message */
+export interface ImageAttachment {
+  id: string;
+  source: "paste" | "vault" | "drop" | "context";
+  vaultPath?: string;
+  assetPath?: string;
+  mediaType: string;
+  width?: number;
+  height?: number;
+  sizeBytes: number;
 }
 
 /** API-level message (sent to providers) */

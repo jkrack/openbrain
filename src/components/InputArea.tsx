@@ -20,6 +20,8 @@ export interface InputAreaProps {
   onMicClick: () => void;
   micState: "idle" | "recording" | "processing";
   isSendDisabled: boolean;
+  onImageDrop?: (file: File) => void;
+  onImageAttach?: (vaultPath: string) => void;
 }
 
 export function InputArea({
@@ -39,7 +41,30 @@ export function InputArea({
   onMicClick,
   micState,
   isSendDisabled,
+  onImageDrop,
+  onImageAttach,
 }: InputAreaProps) {
+  // Drop zone state
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes("Files")) setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => setIsDragging(false), []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      if (file.type.startsWith("image/") && onImageDrop) {
+        onImageDrop(file);
+      }
+    }
+  }, [onImageDrop]);
+
   // @ mention state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionResults, setMentionResults] = useState<{ path: string; basename: string }[]>([]);
@@ -99,7 +124,12 @@ export function InputArea({
   // Insert selected file as attached reference (path only)
   const insertMention = useCallback(
     (entry: { path: string; basename: string }) => {
-      onFileAttach(entry.path);
+      const isImage = /\.(png|jpe?g|gif|webp)$/i.test(entry.path);
+      if (isImage && onImageAttach) {
+        onImageAttach(entry.path);
+      } else {
+        onFileAttach(entry.path);
+      }
 
       // Replace @query with @basename in input
       const pos = inputRef.current?.selectionStart ?? input.length;
@@ -110,7 +140,7 @@ export function InputArea({
       setMentionQuery(null);
       setTimeout(() => inputRef.current?.focus(), 0);
     },
-    [input, onInputChange, onFileAttach]
+    [input, onInputChange, onFileAttach, onImageAttach]
   );
 
   // Insert slash command — activate the selected skill
@@ -214,7 +244,12 @@ export function InputArea({
       )}
 
       {/* Unified input card */}
-      <div className="ca-input-card">
+      <div
+        className={`ca-input-card${isDragging ? " ca-drop-active" : ""}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <div className="ca-input-wrapper">
           <textarea
             ref={inputRef}

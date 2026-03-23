@@ -3,16 +3,18 @@ import { OpenBrainSettings } from "./settings";
 import { AnthropicProvider } from "./providers/anthropic";
 import { OpenRouterProvider } from "./providers/openrouter";
 import { OllamaProvider } from "./providers/ollama";
-import { LLMProvider, ChatMessage, StreamEvent, ToolCall, ToolResultData, Message } from "./providers/types";
+import { LLMProvider, ChatMessage, StreamEvent, ToolCall, ToolResultData, Message, ImageAttachment } from "./providers/types";
 import { getActiveTools } from "./tools";
 import { executeTool } from "./toolEngine";
 import { startTimer } from "./perf";
+import { AttachmentManager } from "./attachmentManager";
 
 export interface ChatEngineOptions {
   messages: ChatMessage[];
   systemPrompt: string;
   allowWrite: boolean;
-  images?: { base64: string; mediaType: string }[];
+  images?: ImageAttachment[];
+  attachmentManager?: AttachmentManager;
   useTools: boolean;
   onText: (text: string) => void;
   onToolStart: (name: string) => void;
@@ -36,6 +38,16 @@ export async function runChat(
   const conversationMessages = [...opts.messages];
   let maxIterations = 10;
   let images = opts.images;
+  let resolvedImages: { base64: string; mediaType: string }[] | undefined;
+  if (images?.length && opts.attachmentManager) {
+    const resolved = await Promise.all(
+      images.map(async (img) => {
+        const base64 = await opts.attachmentManager!.readAsBase64(img);
+        return base64 ? { base64, mediaType: img.mediaType } : null;
+      })
+    );
+    resolvedImages = resolved.filter((r): r is { base64: string; mediaType: string } => r !== null);
+  }
 
   while (maxIterations > 0) {
     maxIterations--;
@@ -47,7 +59,7 @@ export async function runChat(
         messages: conversationMessages,
         systemPrompt: opts.systemPrompt,
         tools,
-        images,
+        images: resolvedImages,
         onEvent: (event: StreamEvent) => {
           switch (event.type) {
             case "text":
@@ -95,6 +107,7 @@ export async function runChat(
     conversationMessages.push(...toolMessages);
 
     images = undefined; // Don't resend images
+    resolvedImages = undefined;
   }
 
   doneTimer();

@@ -258,6 +258,13 @@ export function createEmbeddingIndexer(
     const content = await app.vault.cachedRead(file);
     let stripped = stripFrontmatter(content);
 
+    // Enrich image wiki-links with searchable text tokens
+    stripped = stripped.replace(
+      /!\[\[([^\]]+\.(png|jpe?g|gif|webp))(?:\|([^\]]*))?\]\]/gi,
+      (_match, filename, _ext, altText) =>
+        altText ? `[Image: ${altText} (${filename})]` : `[Image: ${filename}]`
+    );
+
     // Remove code blocks and XML-like content that cause ONNX errors
     stripped = stripped.replace(/```[\s\S]*?```/g, " ");
     stripped = stripped.replace(/<[^>]+>/g, " ");
