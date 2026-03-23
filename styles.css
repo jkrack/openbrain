@@ -638,11 +638,19 @@
   background: var(--background-secondary);
   margin: 8px 14px 12px;
   flex-shrink: 0;
+  position: relative;
   transition: border-color var(--ca-transition), box-shadow var(--ca-transition);
 }
 .ca-input-card:focus-within {
   border-color: var(--interactive-accent);
   box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb, 72, 120, 220), 0.15);
+}
+.ca-input-card.ca-drop-active { border: 2px dashed var(--interactive-accent); background: var(--background-secondary-alt); }
+.ca-input-card.ca-drop-active::after {
+  content: "Drop image";
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--interactive-accent); background: var(--background-secondary-alt);
+  z-index: 10; pointer-events: none; border-radius: 8px;
 }
 
 .ca-input-wrapper {

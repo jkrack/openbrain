@@ -1128,6 +1128,15 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         onMicClick={() => void handleMicClick()}
         micState={recorder.state === "processing" ? "processing" : isRecording ? "recording" : "idle"}
         isSendDisabled={isStreaming || isRecording || !input.trim()}
+        onImageDrop={async (file) => {
+          const chatId = chatFilePathRef.current?.split("/").pop()?.replace(".md", "") || generateId();
+          const att = await attachmentManager.addFromDrop(file, chatId);
+          if (att) setPendingAttachments((prev) => [...prev, att]);
+        }}
+        onImageAttach={async (vaultPath) => {
+          const att = await attachmentManager.addFromVault(vaultPath);
+          if (att) setPendingAttachments((prev) => [...prev, att]);
+        }}
       />
 
       {/* Task tray — slides from right */}
