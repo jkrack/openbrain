@@ -1,7 +1,5 @@
 import { App } from "obsidian";
 
-const PEOPLE_FOLDER = "OpenBrain/people";
-
 export interface PersonProfile {
   name: string;
   role: string;
@@ -14,9 +12,9 @@ export interface PersonProfile {
 /**
  * Initialize the people folder with an example profile.
  */
-export async function initPeopleFolder(app: App): Promise<void> {
-  if (!app.vault.getAbstractFileByPath(PEOPLE_FOLDER)) {
-    const parts = PEOPLE_FOLDER.split("/");
+export async function initPeopleFolder(app: App, peopleFolder = "OpenBrain/people"): Promise<void> {
+  if (!app.vault.getAbstractFileByPath(peopleFolder)) {
+    const parts = peopleFolder.split("/");
     let current = "";
     for (const part of parts) {
       current = current ? `${current}/${part}` : part;
@@ -27,7 +25,7 @@ export async function initPeopleFolder(app: App): Promise<void> {
   }
 
   // Seed an example profile (don't overwrite)
-  const examplePath = `${PEOPLE_FOLDER}/Example Person.md`;
+  const examplePath = `${peopleFolder}/Example Person.md`;
   if (!app.vault.getAbstractFileByPath(examplePath)) {
     await app.vault.create(examplePath, EXAMPLE_PROFILE);
   }
@@ -36,10 +34,10 @@ export async function initPeopleFolder(app: App): Promise<void> {
 /**
  * Load all person profiles from the people folder.
  */
-export async function loadPeople(app: App): Promise<PersonProfile[]> {
+export async function loadPeople(app: App, peopleFolder = "OpenBrain/people"): Promise<PersonProfile[]> {
   const people: PersonProfile[] = [];
   const files = app.vault.getMarkdownFiles().filter(
-    (f) => f.path.startsWith(PEOPLE_FOLDER + "/")
+    (f) => f.path.startsWith(peopleFolder + "/")
   );
 
   for (const file of files) {
@@ -83,8 +81,8 @@ function parseProfile(content: string, filePath: string): PersonProfile | null {
 /**
  * Get the folder path for a person's 1:1 notes.
  */
-export function getPersonMeetingFolder(name: string): string {
-  return `Meetings/1-on-1/${name}`;
+export function getPersonMeetingFolder(name: string, oneOnOneFolder = "OpenBrain/meetings/1-on-1"): string {
+  return `${oneOnOneFolder}/${name}`;
 }
 
 /**
@@ -93,9 +91,10 @@ export function getPersonMeetingFolder(name: string): string {
 export async function getRecentOneOnOnes(
   app: App,
   name: string,
-  limit = 3
+  limit = 3,
+  oneOnOneFolder = "OpenBrain/meetings/1-on-1"
 ): Promise<string[]> {
-  const folder = getPersonMeetingFolder(name);
+  const folder = getPersonMeetingFolder(name, oneOnOneFolder);
   const files = app.vault.getMarkdownFiles()
     .filter((f) => f.path.startsWith(folder + "/"))
     .sort((a, b) => b.stat.mtime - a.stat.mtime)

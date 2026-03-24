@@ -769,7 +769,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
     // If skill requires a person, show the person picker
     if (skill.requiresPerson) {
-      const loaded = await loadPeople(app);
+      const loaded = await loadPeople(app, settings.peopleFolder);
       setPeople(loaded);
       setShowPersonPicker(true);
     } else {
@@ -783,12 +783,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
     setShowPersonPicker(false);
 
     // Create the 1:1 note from template
-    const folder = getPersonMeetingFolder(person.name);
+    const folder = getPersonMeetingFolder(person.name, settings.oneOnOneFolder);
     const dateStr = new Date().toISOString().slice(0, 10);
     const notePath = `${folder}/${dateStr}.md`;
     const created = await createFromTemplate(app, "One on One.md", notePath, {
       title: person.name,
-    });
+    }, settings.templatesFolder);
     if (!mountedRef.current) return;
     if (created) {
       // Link the 1:1 note in today's daily note under Meetings
@@ -800,7 +800,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
     if (!mountedRef.current) return;
 
     // Also reference the recent 1:1 note files directly
-    const recentFolder = getPersonMeetingFolder(person.name);
+    const recentFolder = getPersonMeetingFolder(person.name, settings.oneOnOneFolder);
     const recentFiles = app.vault.getMarkdownFiles()
       .filter((f) => f.path.startsWith(recentFolder + "/"))
       .sort((a, b) => b.stat.mtime - a.stat.mtime)

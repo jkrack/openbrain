@@ -1,6 +1,6 @@
 import { App, Notice, TFile, moment } from "obsidian";
 import { OpenBrainSettings } from "./settings";
-import { loadPeople } from "./people";
+import { loadPeople, getPersonMeetingFolder } from "./people";
 
 /**
  * Run notification checks once on plugin load (after vault is ready).
@@ -25,9 +25,9 @@ export async function checkNotifications(app: App, settings: OpenBrainSettings):
 
   // 2. Check for stale 1:1s (no session in 14+ days)
   try {
-    const people = await loadPeople(app);
+    const people = await loadPeople(app, settings.peopleFolder);
     for (const person of people) {
-      const folder = `Meetings/1-on-1/${person.name}`;
+      const folder = getPersonMeetingFolder(person.name, settings.oneOnOneFolder || "OpenBrain/meetings/1-on-1");
       const files = app.vault.getMarkdownFiles()
         .filter(f => f.path.startsWith(folder + "/"))
         .sort((a, b) => b.stat.mtime - a.stat.mtime);
