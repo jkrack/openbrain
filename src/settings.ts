@@ -116,15 +116,61 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  private activeTab = "general";
+
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+    containerEl.addClass("ca-settings");
+
+    // ── Tab bar ──
+    const tabs = [
+      { id: "general", label: "General" },
+      { id: "folders", label: "Folders" },
+      { id: "voice", label: "Voice" },
+      { id: "advanced", label: "Advanced" },
+    ];
+
+    const tabBar = containerEl.createDiv({ cls: "ca-settings-tabs" });
+    const sections: Record<string, HTMLElement> = {};
+
+    for (const tab of tabs) {
+      const btn = tabBar.createEl("button", {
+        text: tab.label,
+        cls: `ca-settings-tab ${tab.id === this.activeTab ? "active" : ""}`,
+      });
+      btn.addEventListener("click", () => {
+        this.activeTab = tab.id;
+        for (const t of tabs) {
+          sections[t.id].style.display = t.id === tab.id ? "block" : "none";
+          tabBar.querySelectorAll(".ca-settings-tab").forEach((b, i) => {
+            b.classList.toggle("active", tabs[i].id === tab.id);
+          });
+        }
+      });
+    }
+
+    for (const tab of tabs) {
+      sections[tab.id] = containerEl.createDiv({
+        cls: "ca-settings-section",
+      });
+      sections[tab.id].style.display = tab.id === this.activeTab ? "block" : "none";
+    }
+
+    const general = sections["general"];
+    const folders = sections["folders"];
+    const voice = sections["voice"];
+    const advanced = sections["advanced"];
+
+    // ══════════════════════════════════════════════════════════════
+    // GENERAL TAB
+    // ══════════════════════════════════════════════════════════════
 
     // ── Setup ──
-    new Setting(containerEl).setName("Setup").setHeading();
+    new Setting(general).setName("Setup").setHeading();
 
     if (Platform.isDesktop) {
-      new Setting(containerEl)
+      new Setting(general)
         .setName("Obsidian CLI path")
         .setDesc(
           "Path to the Obsidian CLI. Enable it in Obsidian Settings → General → Command line interface. " +
@@ -141,7 +187,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         );
     }
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("Anthropic API key")
       .setDesc(
         "Required when using the Anthropic provider. " +
@@ -162,7 +208,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       }
       );
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("Voice model")
       .setDesc("Anthropic model ID for voice transcription. New models work automatically — just update the ID.")
       .addText((text) =>
@@ -176,9 +222,9 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     // ── Chat Mode Provider ──
-    new Setting(containerEl).setName("Chat mode").setHeading();
+    new Setting(general).setName("Chat mode").setHeading();
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("Provider")
       .setDesc("Which API to use for all conversations — Vault mode and Chat mode.")
       .addDropdown((drop) =>
@@ -195,7 +241,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.chatProvider === "openrouter") {
-      new Setting(containerEl)
+      new Setting(general)
         .setName("OpenRouter API key")
         .setDesc("Get one at openrouter.ai/keys")
         .addText((text) => {
@@ -211,7 +257,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           return text;
         });
 
-      new Setting(containerEl)
+      new Setting(general)
         .setName("Model")
         .setDesc(
           "OpenRouter model ID. Examples: anthropic/claude-sonnet-4.6, " +
@@ -229,7 +275,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     }
 
     if (this.plugin.settings.chatProvider === "anthropic") {
-      new Setting(containerEl)
+      new Setting(general)
         .setName("Model")
         .setDesc("Anthropic model to use. Leave empty for default (Claude Sonnet 4).")
         .addText((text) =>
@@ -244,7 +290,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     }
 
     if (this.plugin.settings.chatProvider === "ollama") {
-      new Setting(containerEl)
+      new Setting(general)
         .setName("Ollama URL")
         .setDesc("Base URL where Ollama is running. Default: http://localhost:11434")
         .addText((text) =>
@@ -257,7 +303,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             })(); })
         );
 
-      new Setting(containerEl)
+      new Setting(general)
         .setName("Model")
         .setDesc("Ollama model name. Examples: llama3, mistral, codellama, gemma2")
         .addText((text) =>
@@ -270,7 +316,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             })(); })
         );
 
-      new Setting(containerEl)
+      new Setting(general)
         .setName("Test connection")
         .setDesc("Verify that Ollama is running and the model is available.")
         .addButton((btn) =>
@@ -306,9 +352,9 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     }
 
     // ── Behavior ──
-    new Setting(containerEl).setName("Behavior").setHeading();
+    new Setting(general).setName("Behavior").setHeading();
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("Include active note as context")
       .setDesc("Automatically share the note you're viewing with Claude so it can reference your current work.")
       .addToggle((toggle) =>
@@ -320,7 +366,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("Auto-send on recording stop")
       .setDesc("Immediately send audio for transcription when you stop recording. Turn off to review before sending.")
       .addToggle((toggle) =>
@@ -332,7 +378,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("System prompt")
       .setDesc("Edit OpenBrain/system-prompt.md to customize Claude's instructions. Applied to every conversation unless a skill overrides it.")
       .addButton((btn) =>
@@ -341,7 +387,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         })
       );
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("Include recent chats as context")
       .setDesc("Inject recent chat summaries into new conversations")
       .addToggle((toggle) =>
@@ -354,13 +400,13 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     // ── Permissions ──
-    new Setting(containerEl).setName("Permissions").setHeading();
-    containerEl.createEl("p", {
+    new Setting(general).setName("Permissions").setHeading();
+    general.createEl("p", {
       text: "These control what Claude can do. Start with both off and enable as needed.",
       cls: "setting-item-description",
     });
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("Allow file editing")
       .setDesc(
         "Let Claude create and edit files in your vault. " +
@@ -377,7 +423,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     if (Platform.isDesktop) {
-      new Setting(containerEl)
+      new Setting(general)
         .setName("Allow shell commands")
         .setDesc(
           "Let Claude run terminal commands and use the Obsidian CLI. " +
@@ -394,10 +440,14 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         );
     }
 
-    // ── Folders ──
-    new Setting(containerEl).setName("Folders").setHeading();
+    // ══════════════════════════════════════════════════════════════
+    // FOLDERS TAB
+    // ══════════════════════════════════════════════════════════════
 
-    new Setting(containerEl)
+    // ── Folders ──
+    new Setting(folders).setName("Folders").setHeading();
+
+    new Setting(folders)
       .setName("Daily notes folder")
       .setDesc(
         "Where daily notes are created. Supports date variables: {{YYYY}}, {{MM}}, {{DD}}. " +
@@ -413,7 +463,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("Daily note filename format")
       .setDesc(
         "Date format for the daily note filename (without .md). Uses moment.js format tokens: " +
@@ -429,7 +479,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("Meetings")
       .setDesc("Where meeting notes are created by skills.")
       .addText((text) =>
@@ -442,7 +492,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("1:1 meetings")
       .setDesc("Where one-on-one meeting notes are created by skills.")
       .addText((text) =>
@@ -455,7 +505,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("Reviews")
       .setDesc("Where review notes are created by skills.")
       .addText((text) =>
@@ -468,7 +518,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("Projects")
       .setDesc("Where project notes are created by skills.")
       .addText((text) =>
@@ -481,7 +531,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("People")
       .setDesc("Where person profiles are stored.")
       .addText((text) =>
@@ -494,7 +544,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("Templates")
       .setDesc("Where note templates are stored.")
       .addText((text) =>
@@ -507,7 +557,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("Chat history")
       .setDesc("Vault folder where chat files are saved.")
       .addText((text) =>
@@ -520,7 +570,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("Skills")
       .setDesc("Where skill definitions live. Each .md file in this folder becomes an available skill.")
       .addText((text) =>
@@ -533,7 +583,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(folders)
       .setName("Open chat history")
       .setDesc("View all past chats in an Obsidian Base")
       .addButton((btn) =>
@@ -543,11 +593,25 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         })
       );
 
+    // ══════════════════════════════════════════════════════════════
+    // VOICE TAB
+    // ══════════════════════════════════════════════════════════════
+
+    // --- Audio Input Section ---
+    new Setting(voice).setName("Audio input").setHeading();
+
+    const micSetting = new Setting(voice)
+      .setName("Microphone")
+      .setDesc("Select which microphone to use for recording.");
+
+    // Populate mic dropdown asynchronously
+    void this.populateMicDropdown(micSetting);
+
     // --- Local Speech-to-Text Section (desktop only) ---
     if (Platform.isDesktop) {
-      new Setting(containerEl).setName("Local speech-to-text").setHeading();
+      new Setting(voice).setName("Local speech-to-text").setHeading();
 
-      new Setting(containerEl)
+      new Setting(voice)
         .setName("Use local transcription")
         .setDesc(
           "Transcribe audio locally with sherpa-onnx (free, private, offline). " +
@@ -564,7 +628,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         );
 
       if (this.plugin.settings.useLocalStt) {
-        new Setting(containerEl)
+        new Setting(voice)
           .setName("sherpa-onnx home directory")
           .setDesc(
             "Where binary and model files are stored. Leave empty for default (~/.openbrain)."
@@ -580,26 +644,16 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           );
 
         // Installation status + install button
-        const statusEl = containerEl.createDiv({ cls: "ca-stt-status" });
+        const statusEl = voice.createDiv({ cls: "ca-stt-status" });
         statusEl.setText("Checking installation...");
         void this.renderSttStatus(statusEl);
       }
     }
 
-    // --- Audio Input Section ---
-    new Setting(containerEl).setName("Audio input").setHeading();
-
-    const micSetting = new Setting(containerEl)
-      .setName("Microphone")
-      .setDesc("Select which microphone to use for recording.");
-
-    // Populate mic dropdown asynchronously
-    void this.populateMicDropdown(micSetting);
-
     // ── Interface ──
-    new Setting(containerEl).setName("Interface").setHeading();
+    new Setting(general).setName("Interface").setHeading();
 
-    new Setting(containerEl)
+    new Setting(general)
       .setName("Show tooltips")
       .setDesc("Display hover text on icons and buttons")
       .addToggle((toggle) =>
@@ -613,9 +667,9 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     // ── Floating Recorder (desktop only) ──
     if (Platform.isDesktop) {
-    new Setting(containerEl).setName("Floating recorder").setHeading();
+    new Setting(voice).setName("Floating recorder").setHeading();
 
-    new Setting(containerEl)
+    new Setting(voice)
       .setName("Enable floating recorder")
       .setDesc(
         "Show a floating recording overlay when Obsidian is not the active window. " +
@@ -639,7 +693,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.floatingRecorderEnabled) {
-    const hotkeySetting = new Setting(containerEl)
+    const hotkeySetting = new Setting(voice)
       .setName("System-wide hotkey")
       .setDesc(
         "Press a key combination to set a global hotkey that works even when Obsidian is not focused. " +
@@ -736,7 +790,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
     }
 
-    new Setting(containerEl)
+    new Setting(voice)
       .setName("Segment duration")
       .setDesc(
         "How often to save a recording segment to disk (in seconds). " +
@@ -755,7 +809,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(voice)
       .setName("Output folder")
       .setDesc("Vault folder where transcription notes are created.")
       .addText((text) =>
@@ -768,7 +822,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           })(); })
       );
 
-    new Setting(containerEl)
+    new Setting(voice)
       .setName("WAV file retention")
       .setDesc(
         "Days to keep raw WAV files after transcription. Set to 0 to delete immediately."
@@ -788,11 +842,15 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     } // end floatingRecorderEnabled
     } // end Platform.isDesktop (floating recorder)
 
+    // ══════════════════════════════════════════════════════════════
+    // ADVANCED TAB
+    // ══════════════════════════════════════════════════════════════
+
     // ── Semantic Search (desktop only) ──
     if (Platform.isDesktop) {
-    new Setting(containerEl).setName("Semantic search").setHeading();
+    new Setting(advanced).setName("Semantic search").setHeading();
 
-    new Setting(containerEl)
+    new Setting(advanced)
       .setName("Enable semantic search")
       .setDesc(
         "Use local AI embeddings to find semantically related notes and passages. " +
@@ -810,7 +868,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     if (this.plugin.settings.embeddingsEnabled) {
       // Index status display — shown FIRST so user sees current state immediately
-      const statusEl = containerEl.createDiv({ cls: "ca-embed-status" });
+      const statusEl = advanced.createDiv({ cls: "ca-embed-status" });
       const statusDot = statusEl.createDiv({ cls: "ca-embed-status-dot" });
       const statusTextContainer = statusEl.createDiv({ cls: "ca-embed-status-content" });
       const statusText = statusTextContainer.createSpan({ cls: "ca-embed-status-text" });
@@ -854,11 +912,11 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       }
 
       // Model picker
-      new Setting(containerEl)
+      new Setting(advanced)
         .setName("Embedding model")
         .setDesc("Smaller models are faster. Switching models requires re-downloading and re-indexing.");
 
-      const modelSection = containerEl.createDiv({ cls: "ca-embed-models" });
+      const modelSection = advanced.createDiv({ cls: "ca-embed-models" });
 
       const scaleLabel = modelSection.createDiv({ cls: "ca-embed-scale" });
       scaleLabel.createSpan({ text: "Fast", cls: "ca-embed-scale-fast" });
@@ -919,9 +977,9 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     } // end Platform.isDesktop (semantic search)
 
     // ── OpenClaw ──
-    new Setting(containerEl).setName("OpenClaw").setHeading();
+    new Setting(advanced).setName("OpenClaw").setHeading();
 
-    new Setting(containerEl)
+    new Setting(advanced)
       .setName("Enable OpenClaw integration")
       .setDesc(
         "Connect to an OpenClaw gateway to access your vault from any messaging channel " +
@@ -938,7 +996,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.openclawEnabled) {
-      new Setting(containerEl)
+      new Setting(advanced)
         .setName("Gateway URL")
         .setDesc("WebSocket URL of your OpenClaw gateway. Default: ws://127.0.0.1:18789")
         .addText((text) =>
