@@ -362,7 +362,7 @@ async function linkInDailyNoteVaultApi(
   let file = app.vault.getAbstractFileByPath(dailyPath);
 
   if (!(file instanceof TFile)) {
-    await createFromTemplate(app, "Daily Note.md", dailyPath);
+    await createFromTemplate(app, "Daily Note.md", dailyPath, {}, settings?.templatesFolder);
     file = app.vault.getAbstractFileByPath(dailyPath);
   }
 
@@ -408,7 +408,7 @@ export async function appendToDailySection(
   let file = app.vault.getAbstractFileByPath(dailyPath);
 
   if (!(file instanceof TFile)) {
-    await createFromTemplate(app, "Daily Note.md", dailyPath);
+    await createFromTemplate(app, "Daily Note.md", dailyPath, {}, settings?.templatesFolder);
     file = app.vault.getAbstractFileByPath(dailyPath);
   }
 

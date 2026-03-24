@@ -84,7 +84,8 @@ export function createEmbeddingIndexer(
   app: App,
   engine: EmbeddingEngine,
   index: EmbeddingIndex,
-  modelId: string
+  modelId: string,
+  excludeFolders?: { chatFolder?: string; templatesFolder?: string }
 ): EmbeddingIndexer {
   let running = false;
   let paused = false;
@@ -119,7 +120,9 @@ export function createEmbeddingIndexer(
       const toIndex: TFile[] = [];
 
       for (const file of files) {
-        if (file.path.startsWith("OpenBrain/chats/") || file.path.startsWith("OpenBrain/templates/")) continue;
+        const chatExclude = excludeFolders?.chatFolder || "OpenBrain/chats";
+        const templateExclude = excludeFolders?.templatesFolder || "OpenBrain/templates";
+        if (file.path.startsWith(chatExclude + "/") || file.path.startsWith(templateExclude + "/")) continue;
         if (!index.has(file.path, file.stat.mtime)) {
           toIndex.push(file);
         }

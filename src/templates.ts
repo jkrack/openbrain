@@ -1,7 +1,5 @@
 import { App, TFile, moment } from "obsidian";
 
-const TEMPLATES_FOLDER = "OpenBrain/templates";
-
 // ── Built-in templates ─────────────────────────────────────────────────
 
 const DAILY_NOTE_TEMPLATE = `# {{date}} ({{day}})
@@ -291,10 +289,10 @@ export async function createGettingStartedNote(app: App): Promise<void> {
  * Create the templates folder and seed built-in templates.
  * Never overwrites existing templates — user customizations are preserved.
  */
-export async function initTemplates(app: App): Promise<void> {
+export async function initTemplates(app: App, templatesFolder = "OpenBrain/templates"): Promise<void> {
   // Create folder if missing
-  if (!app.vault.getAbstractFileByPath(TEMPLATES_FOLDER)) {
-    const parts = TEMPLATES_FOLDER.split("/");
+  if (!app.vault.getAbstractFileByPath(templatesFolder)) {
+    const parts = templatesFolder.split("/");
     let current = "";
     for (const part of parts) {
       current = current ? `${current}/${part}` : part;
@@ -306,7 +304,7 @@ export async function initTemplates(app: App): Promise<void> {
 
   // Seed built-in templates (don't overwrite existing)
   for (const tpl of BUILT_IN_TEMPLATES) {
-    const path = `${TEMPLATES_FOLDER}/${tpl.filename}`;
+    const path = `${templatesFolder}/${tpl.filename}`;
     if (!app.vault.getAbstractFileByPath(path)) {
       await app.vault.create(path, tpl.content);
     }
@@ -320,9 +318,10 @@ export async function initTemplates(app: App): Promise<void> {
 export async function renderTemplate(
   app: App,
   templateName: string,
-  vars: Record<string, string> = {}
+  vars: Record<string, string> = {},
+  templatesFolder = "OpenBrain/templates"
 ): Promise<string | null> {
-  const path = `${TEMPLATES_FOLDER}/${templateName}`;
+  const path = `${templatesFolder}/${templateName}`;
   const file = app.vault.getAbstractFileByPath(path);
   if (!(file instanceof TFile)) return null;
 
@@ -353,9 +352,10 @@ export async function createFromTemplate(
   app: App,
   templateName: string,
   outputPath: string,
-  vars: Record<string, string> = {}
+  vars: Record<string, string> = {},
+  templatesFolder = "OpenBrain/templates"
 ): Promise<string | null> {
-  const content = await renderTemplate(app, templateName, vars);
+  const content = await renderTemplate(app, templateName, vars, templatesFolder);
   if (!content) return null;
 
   // Create parent folders if needed

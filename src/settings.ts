@@ -51,6 +51,13 @@ export interface OpenBrainSettings {
   embeddingsEnabled: boolean;
   embeddingsModel: string;
   embeddingsDownloadedModels: string[];
+  // Folder structure
+  meetingsFolder: string;
+  oneOnOneFolder: string;
+  reviewsFolder: string;
+  projectsFolder: string;
+  peopleFolder: string;
+  templatesFolder: string;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -71,7 +78,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   lastChatPath: "",
   includeRecentChats: false,
   showTooltips: true, // Default ON for new users
-  dailyNoteFolder: "Daily/{{YYYY}}/{{MM}}",
+  dailyNoteFolder: "OpenBrain/daily/{{YYYY}}/{{MM}}",
   dailyNoteFormat: "YYYY-MM-DD",
   obsidianCliPath: "obsidian",
   onboardingComplete: false,
@@ -93,6 +100,12 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   embeddingsEnabled: false,
   embeddingsModel: "Xenova/all-MiniLM-L6-v2",
   embeddingsDownloadedModels: [],
+  meetingsFolder: "OpenBrain/meetings",
+  oneOnOneFolder: "OpenBrain/meetings/1-on-1",
+  reviewsFolder: "OpenBrain/reviews",
+  projectsFolder: "OpenBrain/projects",
+  peopleFolder: "OpenBrain/people",
+  templatesFolder: "OpenBrain/templates",
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -328,6 +341,18 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         })
       );
 
+    new Setting(containerEl)
+      .setName("Include recent chats as context")
+      .setDesc("Inject recent chat summaries into new conversations")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.includeRecentChats)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.includeRecentChats = value;
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
     // ── Permissions ──
     new Setting(containerEl).setName("Permissions").setHeading();
     containerEl.createEl("p", {
@@ -373,27 +398,14 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName("Folders").setHeading();
 
     new Setting(containerEl)
-      .setName("Skills folder")
-      .setDesc("Where skill definitions live. Each .md file in this folder becomes an available skill.")
-      .addText((text) =>
-        text
-          .setPlaceholder("OpenBrain/skills")
-          .setValue(this.plugin.settings.skillsFolder)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.skillsFolder = value;
-            await this.plugin.saveSettings();
-          })(); })
-      );
-
-    new Setting(containerEl)
-      .setName("Daily note folder")
+      .setName("Daily notes folder")
       .setDesc(
         "Where daily notes are created. Supports date variables: {{YYYY}}, {{MM}}, {{DD}}. " +
-        "Example: Daily/{{YYYY}}/{{MM}} creates notes like 0. Daily/2026/03/2026-03-15.md"
+        "Example: OpenBrain/daily/{{YYYY}}/{{MM}} creates notes like OpenBrain/daily/2026/03/2026-03-15.md"
       )
       .addText((text) =>
         text
-          .setPlaceholder("Daily/{{YYYY}}/{{MM}}")
+          .setPlaceholder("OpenBrain/daily/{{YYYY}}/{{MM}}")
           .setValue(this.plugin.settings.dailyNoteFolder)
           .onChange((value) => { void (async () => {
             this.plugin.settings.dailyNoteFolder = value;
@@ -415,6 +427,120 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             this.plugin.settings.dailyNoteFormat = value;
             await this.plugin.saveSettings();
           })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Meetings")
+      .setDesc("Where meeting notes are created by skills.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/meetings")
+          .setValue(this.plugin.settings.meetingsFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.meetingsFolder = value;
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("1:1 meetings")
+      .setDesc("Where one-on-one meeting notes are created by skills.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/meetings/1-on-1")
+          .setValue(this.plugin.settings.oneOnOneFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.oneOnOneFolder = value;
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Reviews")
+      .setDesc("Where review notes are created by skills.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/reviews")
+          .setValue(this.plugin.settings.reviewsFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.reviewsFolder = value;
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Projects")
+      .setDesc("Where project notes are created by skills.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/projects")
+          .setValue(this.plugin.settings.projectsFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.projectsFolder = value;
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("People")
+      .setDesc("Where person profiles are stored.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/people")
+          .setValue(this.plugin.settings.peopleFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.peopleFolder = value;
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Templates")
+      .setDesc("Where note templates are stored.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/templates")
+          .setValue(this.plugin.settings.templatesFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.templatesFolder = value;
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Chat history")
+      .setDesc("Vault folder where chat files are saved.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/chats")
+          .setValue(this.plugin.settings.chatFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.chatFolder = value || "OpenBrain/chats";
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Skills")
+      .setDesc("Where skill definitions live. Each .md file in this folder becomes an available skill.")
+      .addText((text) =>
+        text
+          .setPlaceholder("OpenBrain/skills")
+          .setValue(this.plugin.settings.skillsFolder)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.skillsFolder = value;
+            await this.plugin.saveSettings();
+          })(); })
+      );
+
+    new Setting(containerEl)
+      .setName("Open chat history")
+      .setDesc("View all past chats in an Obsidian Base")
+      .addButton((btn) =>
+        btn.setButtonText("Open").onClick(() => {
+          const basePath = `${this.plugin.settings.chatFolder}/Chat History.base`;
+          void this.app.workspace.openLinkText(basePath, "");
+        })
       );
 
     // --- Local Speech-to-Text Section (desktop only) ---
@@ -483,44 +609,6 @@ export class OpenBrainSettingTab extends PluginSettingTab {
             this.plugin.settings.showTooltips = value;
             await this.plugin.saveSettings();
           })(); })
-      );
-
-    // ── Chat History ──
-    new Setting(containerEl).setName("Chat history").setHeading();
-
-    new Setting(containerEl)
-      .setName("Chat folder")
-      .setDesc("Vault folder where chat files are saved")
-      .addText((text) =>
-        text
-          .setPlaceholder("OpenBrain/chats")
-          .setValue(this.plugin.settings.chatFolder)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.chatFolder = value || "OpenBrain/chats";
-            await this.plugin.saveSettings();
-          })(); })
-      );
-
-    new Setting(containerEl)
-      .setName("Include recent chats as context")
-      .setDesc("Inject recent chat summaries into new conversations")
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.includeRecentChats)
-          .onChange((value) => { void (async () => {
-            this.plugin.settings.includeRecentChats = value;
-            await this.plugin.saveSettings();
-          })(); })
-      );
-
-    new Setting(containerEl)
-      .setName("Open chat history")
-      .setDesc("View all past chats in an Obsidian Base")
-      .addButton((btn) =>
-        btn.setButtonText("Open").onClick(() => {
-          const basePath = `${this.plugin.settings.chatFolder}/Chat History.base`;
-          void this.app.workspace.openLinkText(basePath, "");
-        })
       );
 
     // ── Floating Recorder (desktop only) ──

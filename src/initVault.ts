@@ -32,15 +32,17 @@ export async function ensureFolder(app: App, folderPath: string): Promise<void> 
  * Safe to call multiple times — idempotent.
  */
 export async function initVault(app: App, settings: OpenBrainSettings): Promise<void> {
-  // Create the top-level OpenBrain folder first
-  await ensureFolder(app, "OpenBrain");
-
-  // Create all subfolders in parallel (they share the same parent)
+  // Create all folders (ensureFolder handles parents automatically)
   const folders = [
     settings.chatFolder || "OpenBrain/chats",
     settings.skillsFolder || "OpenBrain/skills",
-    "OpenBrain/templates",
-    "OpenBrain/people",
+    settings.templatesFolder || "OpenBrain/templates",
+    settings.peopleFolder || "OpenBrain/people",
+    settings.meetingsFolder || "OpenBrain/meetings",
+    settings.oneOnOneFolder || "OpenBrain/meetings/1-on-1",
+    settings.reviewsFolder || "OpenBrain/reviews",
+    settings.projectsFolder || "OpenBrain/projects",
+    settings.floatingRecorderOutputFolder || "OpenBrain/recordings",
   ];
 
   for (const folder of folders) {
@@ -50,8 +52,8 @@ export async function initVault(app: App, settings: OpenBrainSettings): Promise<
   // Now seed files (folders are guaranteed to exist)
   const results = await Promise.allSettled([
     initChatFolder(app, settings.chatFolder || "OpenBrain/chats"),
-    initTemplates(app),
-    initPeopleFolder(app),
+    initTemplates(app, settings.templatesFolder || "OpenBrain/templates"),
+    initPeopleFolder(app, settings.peopleFolder || "OpenBrain/people"),
     createGettingStartedNote(app),
   ]);
 

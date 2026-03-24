@@ -150,9 +150,17 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
   const effectiveWrite = activeSkill?.tools.write ?? allowWrite;
   const effectiveCli = activeSkill?.tools.cli ?? allowCli;
   const baseSystemPrompt = activeSkill?.systemPrompt || settings.systemPrompt;
+  const folderContext = [
+    `\nConfigured vault folders:`,
+    `- Meetings: ${settings.meetingsFolder}`,
+    `- 1:1s: ${settings.oneOnOneFolder}`,
+    `- Reviews: ${settings.reviewsFolder}`,
+    `- Projects: ${settings.projectsFolder}`,
+    `- People: ${settings.peopleFolder}`,
+  ].join("\n");
   const effectiveSystemPrompt = selectedPerson
-    ? `${baseSystemPrompt}\n\n--- Person Context ---\n${selectedPerson.fullContent}`
-    : baseSystemPrompt;
+    ? `${baseSystemPrompt}\n\n--- Person Context ---\n${selectedPerson.fullContent}${folderContext}`
+    : `${baseSystemPrompt}${folderContext}`;
 
   // Check setup status on mount
   const [setupDismissed, setSetupDismissed] = useState(false);
@@ -704,7 +712,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           recentContext = await getRecentChatContext();
         }
 
-        const smartCtx = await buildSmartContext(app, userText, attachedFiles, getEmbeddingSearch(), attachmentManager);
+        const smartCtx = await buildSmartContext(app, userText, attachedFiles, getEmbeddingSearch(), attachmentManager, settings);
         const contextImages = smartCtx.images;
         const allContext = [noteContext, recentContext, smartCtx.text].filter(Boolean).join("");
         const allImages = [...pendingAttachments, ...contextImages];
@@ -769,7 +777,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
     // If skill requires a person, show the person picker
     if (skill.requiresPerson) {
-      const loaded = await loadPeople(app);
+      const loaded = await loadPeople(app, settings.peopleFolder);
       setPeople(loaded);
       setShowPersonPicker(true);
     } else {
@@ -783,12 +791,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
     setShowPersonPicker(false);
 
     // Create the 1:1 note from template
-    const folder = getPersonMeetingFolder(person.name);
+    const folder = getPersonMeetingFolder(person.name, settings.oneOnOneFolder);
     const dateStr = new Date().toISOString().slice(0, 10);
     const notePath = `${folder}/${dateStr}.md`;
     const created = await createFromTemplate(app, "One on One.md", notePath, {
       title: person.name,
-    });
+    }, settings.templatesFolder);
     if (!mountedRef.current) return;
     if (created) {
       // Link the 1:1 note in today's daily note under Meetings
@@ -800,7 +808,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
     if (!mountedRef.current) return;
 
     // Also reference the recent 1:1 note files directly
-    const recentFolder = getPersonMeetingFolder(person.name);
+    const recentFolder = getPersonMeetingFolder(person.name, settings.oneOnOneFolder);
     const recentFiles = app.vault.getMarkdownFiles()
       .filter((f) => f.path.startsWith(recentFolder + "/"))
       .sort((a, b) => b.stat.mtime - a.stat.mtime)

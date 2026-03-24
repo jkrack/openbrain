@@ -258,7 +258,7 @@ export class OpenClawNode {
       }
 
       case "vault.people.list": {
-        const people = await loadPeople(this.app);
+        const people = await loadPeople(this.app, this.settings.peopleFolder);
         return {
           people: people.map((p) => ({
             name: p.name,
