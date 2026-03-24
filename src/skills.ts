@@ -113,11 +113,26 @@ function substituteVars(template: string, vars: Record<string, string>): string 
  * Looks for first markdown heading, falls back to first non-empty line.
  */
 function extractTitle(response: string): string {
-  const headingMatch = response.match(/^#{1,6}\s+(.+)/m);
-  if (headingMatch) return headingMatch[1].replace(/[/:*?"<>|]/g, "").trim();
+  // Prefer a markdown heading (skip tool-use chatter and preamble)
+  const headings = response.match(/^#{1,3}\s+(.+)/gm);
+  if (headings) {
+    // Pick the first heading that looks like a real title (not "Using vault_read...")
+    for (const h of headings) {
+      const text = h.replace(/^#+\s+/, "").replace(/[/:*?"<>|]/g, "").trim();
+      if (text.length > 2 && !text.startsWith("Using ")) {
+        return text.slice(0, 80);
+      }
+    }
+  }
 
-  const firstLine = response.split("\n").find((l) => l.trim());
-  if (firstLine) return firstLine.slice(0, 60).replace(/[/:*?"<>|]/g, "").trim();
+  // Fallback: first non-empty line that isn't tool chatter
+  const lines = response.split("\n").filter((l) => {
+    const t = l.trim();
+    return t && !t.startsWith("*Using ") && !t.startsWith("Let me ");
+  });
+  if (lines.length > 0) {
+    return lines[0].slice(0, 60).replace(/[/:*?"<>|]/g, "").trim();
+  }
 
   return "Untitled";
 }

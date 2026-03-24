@@ -189,10 +189,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
     }
   }, [activeSkillId]);
 
-  // Pre-fill auto_prompt when skill changes
+  // Auto-send auto_prompt when skill changes
   useEffect(() => {
     if (activeSkill?.autoPrompt) {
-      setInput(activeSkill.autoPrompt);
+      void sendMessage(activeSkill.autoPrompt);
     }
   }, [activeSkillId]);
 
@@ -443,12 +443,21 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
     );
   }, []);
 
+  const postActionsRanRef = useRef(false);
+
+  // Reset post_actions flag when skill or conversation changes
+  useEffect(() => {
+    postActionsRanRef.current = false;
+  }, [activeSkillId, chatFilePath]);
+
   const runPostActions = useCallback(async () => {
     if (!activeSkill || activeSkill.postActions.length === 0) return;
+    if (postActionsRanRef.current) return; // Only fire once per skill session
 
     const response = responseRef.current;
     if (!response.trim()) return;
 
+    postActionsRanRef.current = true;
     const results = await executePostActions(app, activeSkill.postActions, response, settings);
 
     const feedback = results
