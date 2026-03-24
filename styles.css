@@ -2079,3 +2079,34 @@
 .ca-lightbox-arrow { background: none; border: none; color: white; font-size: 20px; cursor: pointer; padding: 4px 8px; }
 .ca-lightbox-arrow:disabled { opacity: 0.3; cursor: default; }
 .ca-lightbox-counter { color: rgba(255,255,255,0.7); font-size: 13px; }
+
+/* ============================================================
+   SETTINGS TABS
+   ============================================================ */
+.ca-settings-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 16px;
+  position: sticky;
+  top: 0;
+  background: var(--background-primary);
+  z-index: 5;
+  padding-top: 4px;
+}
+.ca-settings-tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ca-settings-tab:hover { color: var(--text-normal); }
+.ca-settings-tab.active {
+  color: var(--interactive-accent);
+  border-bottom-color: var(--interactive-accent);
+}
