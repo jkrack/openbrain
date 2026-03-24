@@ -218,6 +218,10 @@ export async function executePostActions(
     title,
     response,
     note_path: "",
+    meetings_folder: settings?.meetingsFolder || "OpenBrain/meetings",
+    reviews_folder: settings?.reviewsFolder || "OpenBrain/reviews",
+    projects_folder: settings?.projectsFolder || "OpenBrain/projects",
+    people_folder: settings?.peopleFolder || "OpenBrain/people",
   };
 
   for (const action of actions) {
@@ -310,7 +314,15 @@ export async function runSkillInBackground(
   }
 
   const fullContext = (contextNote || "") + recentContext;
-  const systemPrompt = skill.systemPrompt + (fullContext ? `\n\n---\nContext:\n${fullContext}` : "");
+  const folderContext = [
+    `\nConfigured vault folders:`,
+    `- Meetings: ${settings.meetingsFolder || "OpenBrain/meetings"}`,
+    `- 1:1s: ${settings.oneOnOneFolder || "OpenBrain/meetings/1-on-1"}`,
+    `- Reviews: ${settings.reviewsFolder || "OpenBrain/reviews"}`,
+    `- Projects: ${settings.projectsFolder || "OpenBrain/projects"}`,
+    `- People: ${settings.peopleFolder || "OpenBrain/people"}`,
+  ].join("\n");
+  const systemPrompt = skill.systemPrompt + (fullContext ? `\n\n---\nContext:\n${fullContext}` : "") + folderContext;
 
   new Notice(`OpenBrain: Running ${skill.name}...`);
 

@@ -3,6 +3,7 @@ import { startTimer } from "./perf";
 import { EmbeddingSearch } from "./embeddingSearch";
 import { AttachmentManager } from "./attachmentManager";
 import { ImageAttachment } from "./providers/types";
+import { OpenBrainSettings } from "./settings";
 
 /**
  * Smart context: automatically find vault notes relevant to the user's message.
@@ -54,7 +55,8 @@ function extractKeywords(text: string): string[] {
 export function findRelevantFiles(
   app: App,
   message: string,
-  limit = 3
+  limit = 3,
+  settings?: OpenBrainSettings | null
 ): string[] {
   const done = startTimer("smart-context", { messageLength: message.length });
   const keywords = extractKeywords(message);
@@ -70,7 +72,9 @@ export function findRelevantFiles(
   {
     const allFiles = app.vault.getMarkdownFiles();
     for (const file of allFiles) {
-      if (file.path.includes("OpenBrain/chats/") || file.path.includes("OpenBrain/templates/")) continue;
+      const chatExclude = settings?.chatFolder || "OpenBrain/chats";
+      const templateExclude = settings?.templatesFolder || "OpenBrain/templates";
+      if (file.path.includes(chatExclude + "/") || file.path.includes(templateExclude + "/")) continue;
 
       const cache = app.metadataCache.getFileCache(file);
       const fm = cache?.frontmatter;
@@ -123,7 +127,8 @@ export async function buildSmartContext(
   message: string,
   existingFiles: string[] = [],
   embeddingSearch?: EmbeddingSearch | null,
-  attachmentManager?: AttachmentManager | null
+  attachmentManager?: AttachmentManager | null,
+  settings?: OpenBrainSettings | null
 ): Promise<{ text: string; images: ImageAttachment[] }> {
   // If embeddings are available, use semantic search
   if (embeddingSearch?.isReady()) {
@@ -166,7 +171,7 @@ export async function buildSmartContext(
   }
 
   // Fallback: keyword matching
-  const relevant = findRelevantFiles(app, message);
+  const relevant = findRelevantFiles(app, message, 3, settings);
 
   // Filter out files already attached via @ mentions
   const newFiles = relevant.filter((p) => !existingFiles.includes(p));

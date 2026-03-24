@@ -444,7 +444,8 @@ export default class OpenBrainPlugin extends Plugin {
 
       const index = createEmbeddingIndex(this.embeddingEngine.getDimensions());
       const indexer = createEmbeddingIndexer(
-        this.app, this.embeddingEngine, index, this.settings.embeddingsModel
+        this.app, this.embeddingEngine, index, this.settings.embeddingsModel,
+        { chatFolder: this.settings.chatFolder, templatesFolder: this.settings.templatesFolder }
       );
 
       // Pause indexing during recording

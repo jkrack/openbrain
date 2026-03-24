@@ -150,9 +150,17 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
   const effectiveWrite = activeSkill?.tools.write ?? allowWrite;
   const effectiveCli = activeSkill?.tools.cli ?? allowCli;
   const baseSystemPrompt = activeSkill?.systemPrompt || settings.systemPrompt;
+  const folderContext = [
+    `\nConfigured vault folders:`,
+    `- Meetings: ${settings.meetingsFolder}`,
+    `- 1:1s: ${settings.oneOnOneFolder}`,
+    `- Reviews: ${settings.reviewsFolder}`,
+    `- Projects: ${settings.projectsFolder}`,
+    `- People: ${settings.peopleFolder}`,
+  ].join("\n");
   const effectiveSystemPrompt = selectedPerson
-    ? `${baseSystemPrompt}\n\n--- Person Context ---\n${selectedPerson.fullContent}`
-    : baseSystemPrompt;
+    ? `${baseSystemPrompt}\n\n--- Person Context ---\n${selectedPerson.fullContent}${folderContext}`
+    : `${baseSystemPrompt}${folderContext}`;
 
   // Check setup status on mount
   const [setupDismissed, setSetupDismissed] = useState(false);
@@ -704,7 +712,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           recentContext = await getRecentChatContext();
         }
 
-        const smartCtx = await buildSmartContext(app, userText, attachedFiles, getEmbeddingSearch(), attachmentManager);
+        const smartCtx = await buildSmartContext(app, userText, attachedFiles, getEmbeddingSearch(), attachmentManager, settings);
         const contextImages = smartCtx.images;
         const allContext = [noteContext, recentContext, smartCtx.text].filter(Boolean).join("");
         const allImages = [...pendingAttachments, ...contextImages];
