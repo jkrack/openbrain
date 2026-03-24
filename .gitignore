@@ -24,3 +24,6 @@ Thumbs.db
 CLAUDE.md
 .superpowers/
 embeddingWorker.js
+
+# Worktrees
+.worktrees/
