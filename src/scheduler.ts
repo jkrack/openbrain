@@ -1,6 +1,7 @@
 import { App, Notice, moment } from "obsidian";
 import { OpenBrainSettings } from "./settings";
 import { Skill, loadSkills, runSkillInBackground } from "./skills";
+import { getDayMode } from "./dayMode";
 
 interface ScheduleConfig {
   skillName: string;
@@ -10,11 +11,13 @@ interface ScheduleConfig {
   action: "notify" | "run";
   // Optional: only run when this settings flag is true
   requiresSetting?: keyof OpenBrainSettings;
+  // Optional: only run on work days or weekends
+  dayMode?: "work" | "weekend";
 }
 
 const DEFAULT_SCHEDULES: ScheduleConfig[] = [
   { skillName: "Weekly Review", schedule: "weekly:5", action: "notify" },
-  { skillName: "End of Day", schedule: "daily:17", action: "notify" },
+  { skillName: "End of Day", schedule: "daily:17", action: "notify", dayMode: "work" },
   { skillName: "Graph Enrichment", schedule: "hourly", action: "run", requiresSetting: "knowledgeGraphEnabled" },
   { skillName: "Graph Health", schedule: "weekly:0", action: "run", requiresSetting: "knowledgeGraphEnabled" },
 ];
@@ -61,6 +64,11 @@ export class SkillScheduler {
 
       // Check required setting gate
       if (config.requiresSetting && !this.settings[config.requiresSetting]) continue;
+
+      // Check day mode gate
+      const currentMode = getDayMode(this.settings.workDays);
+      if (config.dayMode && config.dayMode !== currentMode) continue;
+      if (skill.dayMode && skill.dayMode !== currentMode) continue;
 
       // Don't re-trigger if already running
       if (this.running.has(config.skillName)) continue;
