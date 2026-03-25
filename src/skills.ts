@@ -23,6 +23,7 @@ export interface Skill {
   requiresPerson?: boolean;
   systemPrompt: string;
   filePath: string;
+  dayMode?: "work" | "weekend";
 }
 
 /**
@@ -79,6 +80,7 @@ export function parseSkillFile(content: string, filePath: string): Skill | null 
     requiresPerson: frontmatter.requires_person === true,
     systemPrompt: body,
     filePath,
+    dayMode: frontmatter.day_mode || undefined,
   };
 }
 
