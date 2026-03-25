@@ -13,6 +13,7 @@ import { SkillScheduler } from "./scheduler";
 import { checkNotifications } from "./notifications";
 import { setEmbeddingSearch, setVaultIndex } from "./toolEngine";
 import { loadWelcomeCache, refreshWelcomeIfStale } from "./welcomeMessages";
+import { inferRelationships, applyRelationships } from "./knowledgeGraph";
 
 // Desktop-only modules — imported dynamically to avoid crashing on mobile
 // import { configure as configureObsidianCli } from "./obsidianCli";
@@ -34,6 +35,7 @@ export default class OpenBrainPlugin extends Plugin {
   private embeddingIndexer: any | null = null;
   private embeddingStatusBarEl: HTMLElement | null = null;
   private lastEmbeddingProgress: { indexed: number; total: number; status: string } | null = null;
+  private graphInferTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   async onload() {
     // OpenBrain icon — actual Lucide brain outline, scaled for 100x100 canvas
@@ -165,6 +167,7 @@ export default class OpenBrainPlugin extends Plugin {
       this.app.vault.on("modify", (file) => {
         if (file instanceof TFile) this.vaultIndex?.update(file.path);
         if (file instanceof TFile) this.embeddingIndexer?.queueFile(file.path);
+        if (file instanceof TFile) this.scheduleGraphInference(file.path);
       })
     );
     this.registerEvent(
@@ -317,6 +320,35 @@ export default class OpenBrainPlugin extends Plugin {
       name: "Search chat history",
       callback: () => {
         new ChatSearchModal(this.app, this.settings).open();
+      },
+    });
+
+    this.addCommand({
+      id: "run-graph-enrichment",
+      name: "Run knowledge graph enrichment",
+      callback: () => {
+        if (!this.vaultIndex) {
+          new Notice("Vault index not ready");
+          return;
+        }
+        void (async () => {
+          new Notice("Running graph enrichment...");
+          const chatFolder = this.settings.chatFolder || "OpenBrain/chats";
+          const templateFolder = this.settings.templatesFolder || "OpenBrain/templates";
+          let count = 0;
+          for (const file of this.app.vault.getMarkdownFiles()) {
+            if (file.path.startsWith(chatFolder + "/") || file.path.startsWith(templateFolder + "/")) continue;
+            const relationships = inferRelationships(this.app, file.path, this.vaultIndex!);
+            if (relationships.length > 0) {
+              const modified = await applyRelationships(this.app, file.path, relationships);
+              if (modified) {
+                this.vaultIndex!.update(file.path);
+                count++;
+              }
+            }
+          }
+          new Notice(`Graph enrichment complete: ${count} notes updated`);
+        })();
       },
     });
 
@@ -515,6 +547,34 @@ export default class OpenBrainPlugin extends Plugin {
     }
   }
 
+  private scheduleGraphInference(path: string): void {
+    if (!this.settings.knowledgeGraphEnabled || !this.settings.knowledgeGraphAutoInfer) return;
+    if (!this.vaultIndex) return;
+
+    // Skip chat and template files
+    const chatFolder = this.settings.chatFolder || "OpenBrain/chats";
+    const templateFolder = this.settings.templatesFolder || "OpenBrain/templates";
+    if (path.startsWith(chatFolder + "/") || path.startsWith(templateFolder + "/")) return;
+
+    // Debounce: 5 seconds per file
+    const existing = this.graphInferTimers.get(path);
+    if (existing) clearTimeout(existing);
+
+    this.graphInferTimers.set(path, setTimeout(() => {
+      this.graphInferTimers.delete(path);
+      void (async () => {
+        if (!this.vaultIndex) return;
+        const relationships = inferRelationships(this.app, path, this.vaultIndex);
+        if (relationships.length > 0) {
+          const modified = await applyRelationships(this.app, path, relationships);
+          if (modified) {
+            this.vaultIndex.update(path);
+          }
+        }
+      })();
+    }, 5000));
+  }
+
   private refreshViews() {
     const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
     for (const leaf of leaves) {
@@ -635,6 +695,8 @@ export default class OpenBrainPlugin extends Plugin {
   onunload() {
     this.scheduler?.stop();
     this.openclawNode?.disconnect();
+    for (const timer of this.graphInferTimers.values()) clearTimeout(timer);
+    this.graphInferTimers.clear();
     if (Platform.isDesktop) {
       this.floatingRecorder?.destroy();
       this.embeddingIndexer?.stop();

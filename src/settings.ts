@@ -1,5 +1,6 @@
-import { App, Platform, PluginSettingTab, Setting, Notice, requestUrl } from "obsidian";
+import { App, Platform, PluginSettingTab, Setting, Notice, requestUrl, TFile } from "obsidian";
 import OpenBrainPlugin from "./main";
+import { inferRelationships, applyRelationships } from "./knowledgeGraph";
 
 const EMBEDDING_MODELS = [
   { id: "TaylorAI/bge-micro-v2", name: "BGE-micro-v2", size: "~20MB", dims: 384, tokens: 512, quality: 1 },
@@ -58,6 +59,9 @@ export interface OpenBrainSettings {
   projectsFolder: string;
   peopleFolder: string;
   templatesFolder: string;
+  // Knowledge graph
+  knowledgeGraphEnabled: boolean;
+  knowledgeGraphAutoInfer: boolean;
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -106,6 +110,8 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   projectsFolder: "OpenBrain/projects",
   peopleFolder: "OpenBrain/people",
   templatesFolder: "OpenBrain/templates",
+  knowledgeGraphEnabled: false,
+  knowledgeGraphAutoInfer: true,
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -976,6 +982,65 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     }
     } // end Platform.isDesktop (semantic search)
 
+    // ── Knowledge Graph ──
+    new Setting(advanced).setName("Knowledge graph").setHeading();
+
+    new Setting(advanced)
+      .setName("Enable knowledge graph")
+      .setDesc(
+        "Build typed relationships between notes using mentions_people, mentions_projects, " +
+        "and mentions_topics frontmatter. Powers graph-aware context injection and graph tools."
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.knowledgeGraphEnabled)
+          .onChange((value) => { void (async () => {
+            this.plugin.settings.knowledgeGraphEnabled = value;
+            await this.plugin.saveSettings();
+            this.display();
+          })(); })
+      );
+
+    if (this.plugin.settings.knowledgeGraphEnabled) {
+      new Setting(advanced)
+        .setName("Auto-infer relationships")
+        .setDesc(
+          "Automatically detect and write relationship frontmatter when files are saved. " +
+          "Only writes relationships for explicit wikilinks to typed entities (people, projects)."
+        )
+        .addToggle((toggle) =>
+          toggle
+            .setValue(this.plugin.settings.knowledgeGraphAutoInfer)
+            .onChange((value) => { void (async () => {
+              this.plugin.settings.knowledgeGraphAutoInfer = value;
+              await this.plugin.saveSettings();
+            })(); })
+        );
+
+      new Setting(advanced)
+        .setName("Retroactive enrichment")
+        .setDesc(
+          "Process all existing vault notes to infer relationships from wikilinks. " +
+          "Ambiguous cases are queued for the Graph Enrichment skill."
+        )
+        .addButton((btn) =>
+          btn.setButtonText("Run now").onClick(() => { void (async () => {
+            btn.setButtonText("Processing...");
+            btn.setDisabled(true);
+            try {
+              const count = await this.runRetroactiveEnrichment();
+              new Notice(`Graph enrichment complete: ${count} notes updated`);
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : String(err);
+              new Notice(`Enrichment failed: ${message}`);
+            } finally {
+              btn.setButtonText("Run now");
+              btn.setDisabled(false);
+            }
+          })(); })
+        );
+    }
+
     // ── OpenClaw ──
     new Setting(advanced).setName("OpenClaw").setHeading();
 
@@ -1065,6 +1130,33 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         cls: "ca-stt-missing",
       });
     }
+  }
+
+  private async runRetroactiveEnrichment(): Promise<number> {
+    const vaultIndex = this.plugin.vaultIndex;
+    if (!vaultIndex) throw new Error("Vault index not available");
+
+    const chatFolder = this.plugin.settings.chatFolder || "OpenBrain/chats";
+    const templateFolder = this.plugin.settings.templatesFolder || "OpenBrain/templates";
+
+    let updatedCount = 0;
+    const files = this.app.vault.getMarkdownFiles();
+
+    for (const file of files) {
+      // Skip chat and template files
+      if (file.path.startsWith(chatFolder + "/") || file.path.startsWith(templateFolder + "/")) continue;
+
+      const relationships = inferRelationships(this.app, file.path, vaultIndex);
+      if (relationships.length > 0) {
+        const modified = await applyRelationships(this.app, file.path, relationships);
+        if (modified) {
+          vaultIndex.update(file.path);
+          updatedCount++;
+        }
+      }
+    }
+
+    return updatedCount;
   }
 
   private async populateMicDropdown(setting: Setting) {

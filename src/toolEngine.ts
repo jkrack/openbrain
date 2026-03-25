@@ -23,6 +23,10 @@ export function setVaultIndex(index: VaultIndex | null): void {
   vaultIndexInstance = index;
 }
 
+export function getVaultIndex(): VaultIndex | null {
+  return vaultIndexInstance;
+}
+
 /**
  * Execute a tool call and return the result.
  */
@@ -313,6 +317,117 @@ async function executeToolInner(
       }
       if (!result) result = "No semantically similar content found.";
       return result;
+    }
+
+    // --- Graph tools ---
+    case "vault_graph_walk": {
+      if (!input.path) throw new Error("path required");
+      if (!vaultIndexInstance) throw new Error("Vault index not available");
+      const hops = Math.min(((input.hops as unknown) as number) || 2, 3);
+      const limit = ((input.limit as unknown) as number) || 10;
+      const excludeFolders = [
+        settings.chatFolder || "OpenBrain/chats",
+        settings.templatesFolder || "OpenBrain/templates",
+      ];
+      const results = vaultIndexInstance.getGraphContext([input.path], hops, limit, excludeFolders);
+      if (results.length === 0) return "No related notes found in graph";
+      return results
+        .map((r) => {
+          const basename = r.path.split("/").pop()?.replace(/\.md$/, "") || r.path;
+          return `${basename} (${r.path}) — score: ${r.score.toFixed(1)}, hop: ${r.hop}, via: ${r.relationship}`;
+        })
+        .join("\n");
+    }
+    case "vault_graph_stats": {
+      if (!vaultIndexInstance) throw new Error("Vault index not available");
+      const allEntries = vaultIndexInstance.getAllEntries();
+      const typeCounts = new Map<string, number>();
+      let totalMentions = 0;
+      let orphanCount = 0;
+
+      for (const entry of allEntries) {
+        if (entry.frontmatterType) {
+          typeCounts.set(entry.frontmatterType, (typeCounts.get(entry.frontmatterType) || 0) + 1);
+        }
+        totalMentions += entry.mentionsPeople.length + entry.mentionsProjects.length + entry.mentionsTopics.length;
+      }
+
+      // Find orphans: notes with no backlinks, no mentions, and no outgoing links
+      for (const entry of allEntries) {
+        const backlinks = vaultIndexInstance.getBacklinks(entry.path);
+        const mentioners = vaultIndexInstance.getMentionedBy(entry.path);
+        if (backlinks.length === 0 && mentioners.length === 0 && entry.links.length === 0) {
+          orphanCount++;
+        }
+      }
+
+      // Most connected nodes
+      const connectionScores = allEntries
+        .map((e) => ({
+          path: e.path,
+          connections: vaultIndexInstance!.getBacklinks(e.path).length +
+            e.links.length +
+            e.mentionsPeople.length + e.mentionsProjects.length + e.mentionsTopics.length +
+            vaultIndexInstance!.getMentionedBy(e.path).length,
+        }))
+        .sort((a, b) => b.connections - a.connections)
+        .slice(0, 5);
+
+      let result = `Knowledge Graph Stats\n`;
+      result += `Total notes: ${allEntries.length}\n`;
+      result += `Total typed relationships: ${totalMentions}\n`;
+      result += `Orphan notes: ${orphanCount}\n\n`;
+      result += `Entity counts by type:\n`;
+      for (const [type, count] of Array.from(typeCounts.entries()).sort((a, b) => b[1] - a[1])) {
+        result += `  ${type}: ${count}\n`;
+      }
+      result += `\nMost connected nodes:\n`;
+      for (const node of connectionScores) {
+        const basename = node.path.split("/").pop()?.replace(/\.md$/, "") || node.path;
+        result += `  ${basename} (${node.path}): ${node.connections} connections\n`;
+      }
+      return result;
+    }
+    case "vault_entity_search": {
+      if (!input.entity) throw new Error("entity required");
+      if (!vaultIndexInstance) throw new Error("Vault index not available");
+      const entity = input.entity;
+      const results: string[] = [];
+
+      // Search by exact path match in mentions_* fields
+      const entityPath = entity.endsWith(".md") ? entity : entity + ".md";
+      const mentioners = vaultIndexInstance.getMentionedBy(entityPath);
+      for (const p of mentioners) {
+        if (!results.includes(p)) results.push(p);
+      }
+
+      // Also search by basename in mentions fields
+      const entityBasename = entity.replace(/\.md$/, "").split("/").pop()?.toLowerCase() || "";
+      for (const entry of vaultIndexInstance.getAllEntries()) {
+        const allMentions = [
+          ...entry.mentionsPeople,
+          ...entry.mentionsProjects,
+          ...entry.mentionsTopics,
+        ];
+        for (const m of allMentions) {
+          const mBasename = m.replace(/\.md$/, "").split("/").pop()?.toLowerCase() || "";
+          if (mBasename === entityBasename && !results.includes(entry.path)) {
+            results.push(entry.path);
+          }
+        }
+
+        // Also check direct links
+        for (const link of entry.links) {
+          const linkBasename = link.split("/").pop()?.toLowerCase() || "";
+          if ((linkBasename === entityBasename || link.toLowerCase() === entity.toLowerCase()) &&
+              !results.includes(entry.path)) {
+            results.push(entry.path);
+          }
+        }
+      }
+
+      if (results.length === 0) return `No notes found mentioning "${entity}"`;
+      return `Notes mentioning "${entity}":\n${results.map((p) => `- ${p}`).join("\n")}`;
     }
 
     // --- Write tools ---

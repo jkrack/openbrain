@@ -4,7 +4,7 @@ import { Skill, loadSkills } from "./skills";
 
 interface ScheduleConfig {
   skillName: string;
-  // "daily" = run once per day, "weekly:5" = run on Friday (day 5)
+  // "daily" = run once per day, "weekly:5" = run on Friday (day 5), "hourly" = run every hour
   schedule: string;
   lastRun?: string; // ISO date string
 }
@@ -12,6 +12,8 @@ interface ScheduleConfig {
 const DEFAULT_SCHEDULES: ScheduleConfig[] = [
   { skillName: "Weekly Review", schedule: "weekly:5" }, // Friday
   { skillName: "End of Day", schedule: "daily:17" },    // 5pm reminder
+  { skillName: "Graph Enrichment", schedule: "hourly" },
+  { skillName: "Graph Health", schedule: "weekly:0" },   // Sunday
 ];
 
 export class SkillScheduler {
@@ -53,16 +55,22 @@ export class SkillScheduler {
       const skill: Skill | undefined = skills.find(s => s.name === config.skillName);
       if (!skill) continue;
 
-      const lastRun = this.lastChecked[config.skillName];
-      if (lastRun === today) continue; // Already ran today
-
       const [type, param] = config.schedule.split(":");
+      const lastRun = this.lastChecked[config.skillName];
 
-      if (type === "weekly" && dayOfWeek === parseInt(param) && hour >= 14) {
+      if (type === "hourly") {
+        // Hourly: check if last run was in a different hour
+        const currentHourKey = now.format("YYYY-MM-DD-HH");
+        if (lastRun === currentHourKey) continue;
+        new Notice(`OpenBrain: Running ${skill.name}`);
+        this.lastChecked[config.skillName] = currentHourKey;
+      } else if (type === "weekly" && dayOfWeek === parseInt(param) && hour >= 14) {
+        if (lastRun === today) continue;
         // Weekly skill — run on the specified day after 2pm
         new Notice(`OpenBrain: Time for your ${skill.name}`);
         this.lastChecked[config.skillName] = today;
       } else if (type === "daily" && hour >= parseInt(param)) {
+        if (lastRun === today) continue;
         // Daily reminder at specified hour
         new Notice(`OpenBrain: ${skill.name} reminder — wrap up your day`);
         this.lastChecked[config.skillName] = today;

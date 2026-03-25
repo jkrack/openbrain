@@ -121,6 +121,35 @@ export const READ_TOOLS: ToolDefinition[] = [
       required: ["query"]
     }
   },
+  {
+    name: "vault_graph_walk",
+    description: "Walk the knowledge graph from a note, returning scored related notes up to N hops away via typed relationships (mentions_people, mentions_projects, mentions_topics), backlinks, and shared tags.",
+    input_schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Starting note path" },
+        hops: { type: "number", description: "Max hops to traverse (default 2, max 3)" },
+        limit: { type: "number", description: "Max results to return (default 10)" }
+      },
+      required: ["path"]
+    }
+  },
+  {
+    name: "vault_graph_stats",
+    description: "Get knowledge graph statistics: entity counts by type, relationship density, most-connected nodes, and orphan count.",
+    input_schema: { type: "object", properties: {} }
+  },
+  {
+    name: "vault_entity_search",
+    description: "Find all notes that mention a specific entity (person, project, or topic) via mentions_* frontmatter fields and direct links.",
+    input_schema: {
+      type: "object",
+      properties: {
+        entity: { type: "string", description: "Entity name or path to search for" }
+      },
+      required: ["entity"]
+    }
+  },
 ];
 
 // Write tools — only included when write permission is enabled

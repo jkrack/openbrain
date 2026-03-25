@@ -4,6 +4,7 @@ import { EmbeddingSearch } from "./embeddingSearch";
 import { AttachmentManager } from "./attachmentManager";
 import { ImageAttachment } from "./providers/types";
 import { OpenBrainSettings } from "./settings";
+import { getVaultIndex } from "./toolEngine";
 
 /**
  * Smart context: automatically find vault notes relevant to the user's message.
@@ -142,19 +143,31 @@ export async function buildSmartContext(
       !newPassages.some((p) => p.path === n.path)
     );
 
-    if (newPassages.length === 0 && newNotes.length === 0) return { text: "", images: [] };
+    let context = "";
 
-    let context = "\n\n--- Relevant context from your vault ---\n";
+    if (newPassages.length > 0 || newNotes.length > 0) {
+      context = "\n\n--- Relevant context from your vault ---\n";
 
-    for (const p of newPassages) {
-      const basename = p.path.split("/").pop()?.replace(/\.md$/, "") || p.path;
-      context += `\nFrom "${basename}" > ${p.heading}:\n${p.text}\n`;
+      for (const p of newPassages) {
+        const basename = p.path.split("/").pop()?.replace(/\.md$/, "") || p.path;
+        context += `\nFrom "${basename}" > ${p.heading}:\n${p.text}\n`;
+      }
+
+      if (newNotes.length > 0) {
+        context += "\nRelated notes (read if helpful):\n";
+        context += newNotes.map((n) => `- ${n.path}`).join("\n");
+      }
     }
 
-    if (newNotes.length > 0) {
-      context += "\nRelated notes (read if helpful):\n";
-      context += newNotes.map((n) => `- ${n.path}`).join("\n");
-    }
+    // Graph context: use initial results as seeds for relationship traversal
+    const initialPaths = [
+      ...newPassages.map((p) => p.path),
+      ...newNotes.map((n) => n.path),
+    ];
+    const graphContext = buildGraphContextSection(initialPaths, existingFiles, settings);
+    if (graphContext) context += graphContext;
+
+    if (!context) return { text: "", images: [] };
 
     let images: ImageAttachment[] = [];
     if (attachmentManager) {
@@ -175,11 +188,53 @@ export async function buildSmartContext(
 
   // Filter out files already attached via @ mentions
   const newFiles = relevant.filter((p) => !existingFiles.includes(p));
-  if (newFiles.length === 0) return { text: "", images: [] };
 
-  return {
-    text: "\n\nRelevant vault notes (read if helpful for responding):\n" +
-      newFiles.map((p) => `- ${p}`).join("\n"),
-    images: [],
-  };
+  let context = "";
+  if (newFiles.length > 0) {
+    context = "\n\nRelevant vault notes (read if helpful for responding):\n" +
+      newFiles.map((p) => `- ${p}`).join("\n");
+  }
+
+  // Graph context: use keyword results as seeds
+  const graphContext = buildGraphContextSection(newFiles, existingFiles, settings);
+  if (graphContext) context += graphContext;
+
+  if (!context) return { text: "", images: [] };
+
+  return { text: context, images: [] };
+}
+
+/**
+ * Build a graph context section from seed paths using BFS traversal.
+ * Returns formatted text or empty string if no graph results.
+ */
+function buildGraphContextSection(
+  seedPaths: string[],
+  existingFiles: string[],
+  settings?: OpenBrainSettings | null
+): string {
+  if (seedPaths.length === 0) return "";
+
+  const vaultIndex = getVaultIndex();
+  if (!vaultIndex) return "";
+
+  const excludeFolders = [
+    settings?.chatFolder || "OpenBrain/chats",
+    settings?.templatesFolder || "OpenBrain/templates",
+  ];
+
+  const graphResults = vaultIndex.getGraphContext(seedPaths, 2, 5, excludeFolders);
+
+  // Filter out already-known files
+  const allKnown = new Set([...seedPaths, ...existingFiles]);
+  const newResults = graphResults.filter((r) => !allKnown.has(r.path));
+
+  if (newResults.length === 0) return "";
+
+  let section = "\n\n--- Related context (via graph) ---\n";
+  for (const r of newResults) {
+    const basename = r.path.split("/").pop()?.replace(/\.md$/, "") || r.path;
+    section += `- [[${basename}]] (${r.relationship}, hop ${r.hop})\n`;
+  }
+  return section;
 }
