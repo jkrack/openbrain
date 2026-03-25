@@ -87,8 +87,12 @@ Valid values: `"work"`, `"weekend"`, or omitted (no restriction).
 
 **Effect of `day_mode`:**
 - Skills with a `day_mode` that doesn't match the current day still appear in the skill list and can be manually activated
-- They will NOT auto-trigger (if they have a `trigger` field) or auto-schedule on non-matching days
-- The scheduler checks `skill.dayMode` in addition to `ScheduleConfig.dayMode`
+- They will NOT auto-trigger (if they have a `trigger` field) on non-matching days
+- They will NOT auto-schedule on non-matching days
+
+**Gating in the `daily-note-created` trigger hook:** The existing trigger handler in `main.ts` (lines 462-475) fires skills with `trigger: "daily-note-created"` when a daily note is created. This runs outside the scheduler — it must also check `skill.dayMode` against `getDayMode()` and skip skills that don't match. Without this, `morning-briefing.md` (which fires via this trigger, not the scheduler) would still run on weekends.
+
+**Dual-gate combination rule:** When both `ScheduleConfig.dayMode` and `skill.dayMode` exist, either gate can block firing. If `ScheduleConfig.dayMode` is set and doesn't match → skip. If the matched skill's `dayMode` is set and doesn't match → skip. If neither is set → always fire. In other words: both must pass (or be absent) for the skill to fire.
 
 **Parsing:** `parseSkillFile()` in `skills.ts` reads `frontmatter.day_mode` and stores it as `skill.dayMode: "work" | "weekend" | undefined`.
 
@@ -118,7 +122,7 @@ The existing onboarding flow in `panel.tsx` has 3 steps. Add a 4th step:
 
 Seven day-of-week checkboxes (Mon-Fri pre-checked). Single tap to toggle. Written to `settings.workDays` immediately. Brief explanation: "OpenBrain will adjust its tone and suggestions based on your schedule."
 
-This step appears after the existing onboarding steps (API key, permissions, etc.).
+This step appears after the existing onboarding steps (API key, permissions, etc.). Note: the `onboardingStep` type in `panel.tsx` must be widened from `1 | 2 | 3` to `1 | 2 | 3 | 4`.
 
 ## Existing Skill Updates
 
@@ -153,7 +157,7 @@ Leave these without a day_mode (run any day):
 | File | Change |
 |------|--------|
 | `src/settings.ts` | Add `workDays: number[]` to interface + defaults. Add "Schedule" section in Advanced tab with day toggle buttons. |
-| `src/main.ts` | Update `loadSystemPrompt()` to pick work/weekend file. Migrate existing `system-prompt.md` to `system-prompt-work.md` on first run. |
+| `src/main.ts` | Update `loadSystemPrompt()` to pick work/weekend file. Migrate existing `system-prompt.md` to `system-prompt-work.md` on first run. Gate `daily-note-created` trigger handler by `skill.dayMode`. Update "Open system prompt" settings button to open the day-appropriate file. |
 | `src/scheduler.ts` | Add `dayMode` to `ScheduleConfig`. Check day mode in `checkSchedules()`. Gate work skills. |
 | `src/skills.ts` | Parse `day_mode` from frontmatter. Add `dayMode` to `Skill` interface. |
 | `src/panel.tsx` | Add onboarding step 4: work days picker. |
