@@ -70,6 +70,10 @@ export function DetachedPanel({
         settings={settings}
         chatState={chatState}
         vaultIndex={vaultIndex}
+        onCollapseChange={(collapsed) => {
+          settings.contextPanelCollapsed = collapsed;
+          // Settings will be saved by the plugin's periodic save
+        }}
       />
     </div>
   );

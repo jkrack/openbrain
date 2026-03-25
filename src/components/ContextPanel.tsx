@@ -7,9 +7,10 @@ interface ContextPanelProps {
   settings: OpenBrainSettings;
   chatState: ChatStateManager;
   vaultIndex: VaultIndex | null;
+  onCollapseChange?: (collapsed: { context: boolean; graph: boolean; tools: boolean }) => void;
 }
 
-export function ContextPanel({ settings, chatState, vaultIndex: _vaultIndex }: ContextPanelProps) {
+export function ContextPanel({ settings, chatState, vaultIndex: _vaultIndex, onCollapseChange }: ContextPanelProps) {
   const [collapsed, setCollapsed] = useState(settings.contextPanelCollapsed);
   const [, forceUpdate] = useState(0);
 
@@ -20,7 +21,11 @@ export function ContextPanel({ settings, chatState, vaultIndex: _vaultIndex }: C
   }, [chatState]);
 
   const toggle = (section: "context" | "graph" | "tools") => {
-    setCollapsed((prev) => ({ ...prev, [section]: !prev[section] }));
+    setCollapsed((prev) => {
+      const next = { ...prev, [section]: !prev[section] };
+      onCollapseChange?.(next);
+      return next;
+    });
   };
 
   const state = chatState.getState();
