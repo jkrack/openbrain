@@ -7,9 +7,8 @@ export interface ToolActivity {
   /** Unique ID for this specific tool invocation (not just the tool name). */
   id: string;
   name: string;
-  status: "running" | "done" | "error";
-  input: Record<string, unknown>;
-  result?: string;
+  status: "running" | "complete" | "error";
+  durationMs?: number;
 }
 
 // ── ChatState ──────────────────────────────────────────────────────────────
@@ -23,9 +22,9 @@ export interface ChatState {
   allowWrite: boolean;
   allowCli: boolean;
   toolActivity: ToolActivity[];
-  activeContext: string | null;
-  graphContext: string | null;
-  meta: Record<string, unknown> | null;
+  activeContext: string[];
+  graphContext: { path: string; hop: number; relationship: string }[];
+  meta: { title: string; sessionId: string; hasAudio: boolean; tags: string[] } | null;
 }
 
 function defaultState(): ChatState {
@@ -38,8 +37,8 @@ function defaultState(): ChatState {
     allowWrite: false,
     allowCli: false,
     toolActivity: [],
-    activeContext: null,
-    graphContext: null,
+    activeContext: [],
+    graphContext: [],
     meta: null,
   };
 }
@@ -154,17 +153,17 @@ export class ChatStateManager extends Events {
     this.trigger("change");
   }
 
-  setActiveContext(context: string | null): void {
+  setActiveContext(context: string[]): void {
     this.state = { ...this.state, activeContext: context };
     this.trigger("change");
   }
 
-  setGraphContext(context: string | null): void {
+  setGraphContext(context: { path: string; hop: number; relationship: string }[]): void {
     this.state = { ...this.state, graphContext: context };
     this.trigger("change");
   }
 
-  setMeta(meta: Record<string, unknown> | null): void {
+  setMeta(meta: { title: string; sessionId: string; hasAudio: boolean; tags: string[] } | null): void {
     this.state = { ...this.state, meta };
     this.trigger("change");
   }

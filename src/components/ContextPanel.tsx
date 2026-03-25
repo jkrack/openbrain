@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { OpenBrainSettings } from "../settings";
 import { ChatStateManager } from "../chatStateManager";
 import { VaultIndex } from "../vaultIndex";
@@ -11,6 +11,13 @@ interface ContextPanelProps {
 
 export function ContextPanel({ settings, chatState, vaultIndex: _vaultIndex }: ContextPanelProps) {
   const [collapsed, setCollapsed] = useState(settings.contextPanelCollapsed);
+  const [, forceUpdate] = useState(0);
+
+  useEffect(() => {
+    const handler = () => forceUpdate((n) => n + 1);
+    chatState.on("change", handler);
+    return () => { chatState.off("change", handler); };
+  }, [chatState]);
 
   const toggle = (section: "context" | "graph" | "tools") => {
     setCollapsed((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -26,12 +33,14 @@ export function ContextPanel({ settings, chatState, vaultIndex: _vaultIndex }: C
         </div>
         {!collapsed.context && (
           <div className="ob-detached-context-body">
-            {!state.activeContext ? (
+            {state.activeContext.length === 0 ? (
               <div className="ob-detached-context-empty">No active context</div>
             ) : (
-              <div className="ob-detached-context-item">
-                {state.activeContext.split("/").pop()?.replace(/\.md$/, "") ?? state.activeContext}
-              </div>
+              state.activeContext.map((path) => (
+                <div key={path} className="ob-detached-context-item">
+                  {path.split("/").pop()?.replace(/\.md$/, "") ?? path}
+                </div>
+              ))
             )}
           </div>
         )}
@@ -43,12 +52,15 @@ export function ContextPanel({ settings, chatState, vaultIndex: _vaultIndex }: C
         </div>
         {!collapsed.graph && (
           <div className="ob-detached-context-body">
-            {!state.graphContext ? (
+            {state.graphContext.length === 0 ? (
               <div className="ob-detached-context-empty">No graph context</div>
             ) : (
-              <div className="ob-detached-context-item">
-                {state.graphContext}
-              </div>
+              state.graphContext.map((g) => (
+                <div key={g.path} className="ob-detached-context-item">
+                  {g.path.split("/").pop()?.replace(/\.md$/, "") ?? g.path}
+                  <span className="ob-detached-context-meta"> hop {g.hop} · {g.relationship}</span>
+                </div>
+              ))
             )}
           </div>
         )}
@@ -65,7 +77,8 @@ export function ContextPanel({ settings, chatState, vaultIndex: _vaultIndex }: C
             ) : (
               state.toolActivity.map((t) => (
                 <div key={t.id} className={`ob-detached-tool-item ${t.status}`}>
-                  {t.status === "done" ? "✓" : t.status === "error" ? "✗" : "⏳"} {t.name}
+                  {t.status === "complete" ? "✓" : t.status === "error" ? "✗" : "⏳"} {t.name}
+                  {t.durationMs != null && <span className="ob-detached-context-meta">{t.durationMs}ms</span>}
                 </div>
               ))
             )}

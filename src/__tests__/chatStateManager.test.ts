@@ -78,12 +78,12 @@ describe("ChatStateManager — initial state", () => {
     expect(mgr.getState().toolActivity).toEqual([]);
   });
 
-  it("starts with null activeContext", () => {
-    expect(mgr.getState().activeContext).toBeNull();
+  it("starts with empty activeContext array", () => {
+    expect(mgr.getState().activeContext).toEqual([]);
   });
 
-  it("starts with null graphContext", () => {
-    expect(mgr.getState().graphContext).toBeNull();
+  it("starts with empty graphContext array", () => {
+    expect(mgr.getState().graphContext).toEqual([]);
   });
 
   it("starts with null meta", () => {
@@ -149,7 +149,7 @@ describe("ChatStateManager — setStreaming", () => {
   });
 
   it("does NOT clear toolActivity when streaming ends", () => {
-    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running", input: {} });
+    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running" });
     mgr.setStreaming(false);
     expect(mgr.getState().toolActivity).toHaveLength(1);
   });
@@ -217,7 +217,7 @@ describe("ChatStateManager — toolActivity", () => {
   });
 
   it("adds a tool activity entry", () => {
-    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running", input: { query: "foo" } });
+    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running" });
     expect(mgr.getState().toolActivity).toHaveLength(1);
     expect(mgr.getState().toolActivity[0]).toMatchObject({ id: "t1", name: "vault_search", status: "running" });
   });
@@ -225,39 +225,39 @@ describe("ChatStateManager — toolActivity", () => {
   it("emits change on addToolActivity", () => {
     const listener = vi.fn();
     mgr.on("change", listener);
-    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running", input: {} });
+    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running" });
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("allows multiple entries for the same tool name with different IDs", () => {
-    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running", input: {} });
-    mgr.addToolActivity({ id: "t2", name: "vault_search", status: "running", input: {} });
+    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running" });
+    mgr.addToolActivity({ id: "t2", name: "vault_search", status: "running" });
     expect(mgr.getState().toolActivity).toHaveLength(2);
   });
 
   it("updates a tool activity by unique ID", () => {
-    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running", input: {} });
-    mgr.addToolActivity({ id: "t2", name: "vault_search", status: "running", input: {} });
-    mgr.updateToolActivity("t1", { status: "done", result: "found 3 results" });
+    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running" });
+    mgr.addToolActivity({ id: "t2", name: "vault_search", status: "running" });
+    mgr.updateToolActivity("t1", { status: "complete", durationMs: 123 });
     const activities = mgr.getState().toolActivity;
-    expect(activities.find((a) => a.id === "t1")?.status).toBe("done");
-    expect(activities.find((a) => a.id === "t1")?.result).toBe("found 3 results");
+    expect(activities.find((a) => a.id === "t1")?.status).toBe("complete");
+    expect(activities.find((a) => a.id === "t1")?.durationMs).toBe(123);
     expect(activities.find((a) => a.id === "t2")?.status).toBe("running");
   });
 
   it("emits change on updateToolActivity", () => {
-    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running", input: {} });
+    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running" });
     const listener = vi.fn();
     mgr.on("change", listener);
-    mgr.updateToolActivity("t1", { status: "done" });
+    mgr.updateToolActivity("t1", { status: "complete" });
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("is a no-op update when ID not found", () => {
-    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running", input: {} });
+    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running" });
     const listener = vi.fn();
     mgr.on("change", listener);
-    mgr.updateToolActivity("nonexistent", { status: "done" });
+    mgr.updateToolActivity("nonexistent", { status: "complete" });
     expect(mgr.getState().toolActivity[0].status).toBe("running");
     expect(listener).not.toHaveBeenCalled();
   });
@@ -315,23 +315,24 @@ describe("ChatStateManager — simple field setters", () => {
   it("setActiveContext updates activeContext and emits change", () => {
     const listener = vi.fn();
     mgr.on("change", listener);
-    mgr.setActiveContext("some context text");
-    expect(mgr.getState().activeContext).toBe("some context text");
+    mgr.setActiveContext(["path/to/note.md", "another/note.md"]);
+    expect(mgr.getState().activeContext).toEqual(["path/to/note.md", "another/note.md"]);
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("setGraphContext updates graphContext and emits change", () => {
     const listener = vi.fn();
     mgr.on("change", listener);
-    mgr.setGraphContext("graph data");
-    expect(mgr.getState().graphContext).toBe("graph data");
+    const graphData = [{ path: "note.md", hop: 1, relationship: "links-to" }];
+    mgr.setGraphContext(graphData);
+    expect(mgr.getState().graphContext).toEqual(graphData);
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
   it("setMeta updates meta and emits change", () => {
     const listener = vi.fn();
     mgr.on("change", listener);
-    const meta = { title: "My Chat", sessionId: "abc", created: "2026-01-01" };
+    const meta = { title: "My Chat", sessionId: "abc", hasAudio: false, tags: ["work"] };
     mgr.setMeta(meta);
     expect(mgr.getState().meta).toEqual(meta);
     expect(listener).toHaveBeenCalledTimes(1);
@@ -355,10 +356,10 @@ describe("ChatStateManager — reset", () => {
     mgr.setChatMode("chat");
     mgr.setAllowWrite(true);
     mgr.setAllowCli(true);
-    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running", input: {} });
-    mgr.setActiveContext("context");
-    mgr.setGraphContext("graph");
-    mgr.setMeta({ title: "Test" });
+    mgr.addToolActivity({ id: "t1", name: "vault_search", status: "running" });
+    mgr.setActiveContext(["some/path.md"]);
+    mgr.setGraphContext([{ path: "note.md", hop: 1, relationship: "links-to" }]);
+    mgr.setMeta({ title: "Test", sessionId: "s1", hasAudio: false, tags: [] });
 
     mgr.reset();
 
@@ -371,8 +372,8 @@ describe("ChatStateManager — reset", () => {
     expect(state.allowWrite).toBe(false);
     expect(state.allowCli).toBe(false);
     expect(state.toolActivity).toEqual([]);
-    expect(state.activeContext).toBeNull();
-    expect(state.graphContext).toBeNull();
+    expect(state.activeContext).toEqual([]);
+    expect(state.graphContext).toEqual([]);
     expect(state.meta).toBeNull();
   });
 

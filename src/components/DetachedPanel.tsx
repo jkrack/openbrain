@@ -41,10 +41,10 @@ export function DetachedPanel({
     setCenterView(view);
   }, [app]);
 
-  const handleChatSelect = useCallback((_path: string) => {
+  const handleChatSelect = useCallback((path: string) => {
     setCenterView("chat");
-    // Chat loading will be wired in a later task
-  }, []);
+    chatState.setChatFilePath(path);
+  }, [chatState]);
 
   return (
     <div className="ob-detached-layout">
