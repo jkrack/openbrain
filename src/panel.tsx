@@ -29,10 +29,12 @@ import { MessageThread } from "./components/MessageThread";
 import { AudioControls } from "./components/AudioControls";
 import { TaskTray } from "./components/TaskTray";
 import { AttachmentManager } from "./attachmentManager";
+import { ChatStateManager } from "./chatStateManager";
 
 interface PanelProps {
   settings: OpenBrainSettings;
   app: App;
+  chatState: ChatStateManager;
   initialPrompt?: string;
   initialAttachedFile?: string;
   floatingRecorderStatus?: string | null;
@@ -90,30 +92,36 @@ function AttachmentPreview({ attachment, attachmentManager, onRemove }: {
   );
 }
 
-export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFile, floatingRecorderStatus, pendingSkillSend, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initialAttachedFile, floatingRecorderStatus, pendingSkillSend, component, skills, registerToggleRecording, onStatusChange, loadChatRequest, onChatPathChange, vaultIndex }: PanelProps) {
+  // ── Subscribe to ChatStateManager for shared state ─────────────────────
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const handler = () => forceUpdate((n) => n + 1);
+    chatState.on("change", handler);
+    return () => { chatState.off("change", handler); };
+  }, [chatState]);
+
+  // Read shared state from ChatStateManager
+  const state = chatState.getState();
+  const messages = state.messages;
+  const isStreaming = state.isStreaming;
+  const chatFilePath = state.chatFilePath;
+  const activeSkillId = state.activeSkillId;
+  const allowWrite = state.allowWrite;
+  const allowCli = state.allowCli;
+  const chatMode = state.chatMode;
+
+  // ── Local UI-only state (not shared) ───────────────────────────────────
   const [input, setInput] = useState(initialPrompt || "");
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
   const [noteContext, setNoteContext] = useState<string | undefined>();
   const [noteFilePath, setNoteFilePath] = useState<string | undefined>();
-  const [allowWrite, setAllowWrite] = useState(settings.allowVaultWrite);
-  const [allowCli, setAllowCli] = useState(settings.allowCliExec);
   const [audioPrompt, setAudioPrompt] = useState("");
   const [showAudioPrompt, setShowAudioPrompt] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
-  const [activeSkillId, setActiveSkillId] = useState<string | null>(null);
   const [showSkillMenu, setShowSkillMenu] = useState(false);
-  const [chatFilePath, setChatFilePathState] = useState<string | null>(null);
-  const chatFilePathRef = useRef<string | null>(null);
-  const setChatFilePath = (p: string | null) => {
-    chatFilePathRef.current = p;
-    setChatFilePathState(p);
-  };
-  // showSaveConfirm removed — chats auto-save
 
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
-  const [chatMode, setChatMode] = useState<"agent" | "chat">("agent");
   const [pendingAttachments, setPendingAttachments] = useState<ImageAttachment[]>([]);
   const attachmentManager = useRef(new AttachmentManager(app)).current;
   const [showTaskTray, setShowTaskTray] = useState(false);
@@ -129,12 +137,20 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
+  // Initialize shared state from settings on first mount
+  const initializedRef = useRef(false);
+  useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      chatState.setAllowWrite(settings.allowVaultWrite);
+      chatState.setAllowCli(settings.allowCliExec);
+    }
+  }, [chatState, settings.allowVaultWrite, settings.allowCliExec]);
+
   const debouncedSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const justLoadedRef = useRef(false);
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
-  const activeSkillIdRef = useRef(activeSkillId);
-  activeSkillIdRef.current = activeSkillId;
 
   const vaultPath = (app.vault.adapter as unknown as { basePath?: string }).basePath;
 
@@ -192,10 +208,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
   // Apply tool overrides when skill changes
   useEffect(() => {
     if (activeSkill) {
-      if (activeSkill.tools.write !== undefined) setAllowWrite(activeSkill.tools.write);
-      if (activeSkill.tools.cli !== undefined) setAllowCli(activeSkill.tools.cli);
+      if (activeSkill.tools.write !== undefined) chatState.setAllowWrite(activeSkill.tools.write);
+      if (activeSkill.tools.cli !== undefined) chatState.setAllowCli(activeSkill.tools.cli);
     }
-  }, [activeSkillId]);
+  }, [activeSkillId, chatState]);
 
   // Auto-send auto_prompt when skill changes
   useEffect(() => {
@@ -241,7 +257,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       pendingSkillSendRef.current = pendingSkillSend;
 
       // Activate the skill
-      setActiveSkillId(pendingSkillSend);
+      chatState.setActiveSkillId(pendingSkillSend);
 
       // Wait a tick for the skill to set the auto_prompt, then send
       setTimeout(() => {
@@ -250,7 +266,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         void sendMessage(prompt);
       }, 200);
     }
-  }, [pendingSkillSend, skills]);
+  }, [pendingSkillSend, skills, chatState]);
 
   // Handle image paste (Cmd+V)
   useEffect(() => {
@@ -264,7 +280,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           const blob = item.getAsFile();
           if (!blob) continue;
 
-          const chatId = chatFilePathRef.current
+          const chatId = chatState.getState().chatFilePath
             ?.split("/").pop()?.replace(".md", "") || generateId();
 
           void (async () => {
@@ -277,9 +293,10 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       }
     };
 
-    document.addEventListener("paste", handlePaste);
-    return () => document.removeEventListener("paste", handlePaste);
-  }, [attachmentManager]);
+    const doc = (component as any)?.containerEl?.ownerDocument ?? document;
+    doc.addEventListener("paste", handlePaste);
+    return () => doc.removeEventListener("paste", handlePaste);
+  }, [attachmentManager, chatState, component]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -310,8 +327,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
   function buildMeta(): ChatMeta {
     const now = new Date().toISOString();
-    const firstMsg = messages[0];
-    const currentSkillId = activeSkillIdRef.current;
+    const currentMessages = chatState.getState().messages;
+    const firstMsg = currentMessages[0];
+    const currentSkillId = chatState.getState().activeSkillId;
     return {
       type: "openbrain-chat",
       formatVersion: 1,
@@ -321,14 +339,33 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         ? skills.find((s) => s.id === currentSkillId)?.name ?? "General"
         : "General",
       sessionId: sessionIdRef.current ?? "",
-      messageCount: messages.length,
-      hasAudio: messages.some((m) => m.isAudio),
-      title: generateChatTitle(messages),
+      messageCount: currentMessages.length,
+      hasAudio: currentMessages.some((m) => m.isAudio),
+      title: generateChatTitle(currentMessages),
       tags: ["openbrain/chat"],
     };
   }
 
   // Debounced auto-save
+  const doSave = useCallback(async () => {
+    const { messages: currentMessages, chatFilePath: currentPath, activeSkillId: currentSkillId } = chatState.getState();
+    if (currentMessages.length === 0) return;
+    const meta = buildMeta();
+    const folder = settings.chatFolder || "OpenBrain/chats";
+    const path = currentPath ?? `${folder}/${generateChatFilename()}`;
+    await saveChat(app, path, currentMessages, meta);
+    if (!mountedRef.current) return;
+    if (!currentPath) {
+      chatState.setChatFilePath(path);
+      onChatPathChange?.(path);
+
+      // Link new chat in today's daily note
+      const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
+      const section = skill?.dailyNoteSection || "Capture";
+      void linkInDailyNote(app, path, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
+    }
+  }, [chatState, app, settings, skills, onChatPathChange]);
+
   useEffect(() => {
     if (messages.length === 0 || isStreaming) return;
     if (justLoadedRef.current) {
@@ -338,29 +375,25 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
     if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
 
-    debouncedSaveRef.current = setTimeout(() => { void (async () => {
-      const meta = buildMeta();
-      const folder = settings.chatFolder || "OpenBrain/chats";
-      const currentPath = chatFilePathRef.current;
-      const path = currentPath ?? `${folder}/${generateChatFilename()}`;
-      await saveChat(app, path, messages, meta);
-      if (!mountedRef.current) return;
-      if (!currentPath) {
-        setChatFilePath(path);
-        onChatPathChange?.(path);
-
-        // Link new chat in today's daily note
-        const currentSkillId = activeSkillIdRef.current;
-        const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
-        const section = skill?.dailyNoteSection || "Capture";
-        void linkInDailyNote(app, path, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
-      }
-    })(); }, 500);
+    debouncedSaveRef.current = setTimeout(() => { void doSave(); }, 500);
 
     return () => {
       if (debouncedSaveRef.current) clearTimeout(debouncedSaveRef.current);
     };
-  }, [messages, isStreaming]);
+  }, [messages, isStreaming, doSave]);
+
+  // Force-save listener — used by detach command to immediately flush pending saves
+  useEffect(() => {
+    const handler = () => {
+      if (debouncedSaveRef.current) {
+        clearTimeout(debouncedSaveRef.current);
+        debouncedSaveRef.current = null;
+      }
+      void doSave();
+    };
+    chatState.on("force-save", handler);
+    return () => { chatState.off("force-save", handler); };
+  }, [chatState, doSave]);
 
   // Load chat on mount from loadChatRequest
   useEffect(() => {
@@ -370,13 +403,13 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       const chatFile = await loadChat(app, loadChatRequest.path);
       if (chatFile) {
         justLoadedRef.current = true;
-        setMessages(chatFile.messages);
-        setChatFilePath(chatFile.path);
+        chatState.setMessages(chatFile.messages);
+        chatState.setChatFilePath(chatFile.path);
         setSessionId(chatFile.frontmatter.sessionId || undefined);
         const matchSkill = skills.find(
           (s) => s.name === chatFile.frontmatter.skill
         );
-        setActiveSkillId(matchSkill?.id ?? null);
+        chatState.setActiveSkillId(matchSkill?.id ?? null);
         onChatPathChange?.(chatFile.path);
       } else {
         new Notice("Could not load chat file.");
@@ -444,12 +477,12 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
   const appendAssistantChunk = useCallback((id: string, chunk: string) => {
     responseRef.current += chunk;
-    setMessages((prev) =>
+    chatState.updateMessages((prev) =>
       prev.map((m) =>
         m.id === id ? { ...m, content: m.content + chunk } : m
       )
     );
-  }, []);
+  }, [chatState]);
 
   const postActionsRanRef = useRef(false);
 
@@ -479,13 +512,13 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         content: `---\n${feedback}`,
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, feedbackMsg]);
+      chatState.addMessage(feedbackMsg);
     }
-  }, [activeSkill, app]);
+  }, [activeSkill, app, chatState]);
 
   const sendMessage = useCallback(
     async (userText: string, audioSegments?: Blob[]) => {
-      if (isStreaming) return;
+      if (chatState.getState().isStreaming) return;
       if (!userText.trim() && !audioSegments?.length) return;
 
       const hasAudioInput = audioSegments && audioSegments.length > 0;
@@ -507,15 +540,15 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
+      chatState.updateMessages((prev) => [...prev, userMsg, assistantMsg]);
       setInput("");
-      setIsStreaming(true);
+      chatState.setStreaming(true);
       abortRef.current = false;
       responseRef.current = "";
 
       const onError = (err: string) => {
-        setIsStreaming(false);
-        setMessages((prev) =>
+        chatState.setStreaming(false);
+        chatState.updateMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
               ? { ...m, content: `Error: ${err}` }
@@ -525,7 +558,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       };
 
       const audioDone = async () => {
-        setIsStreaming(false);
+        chatState.setStreaming(false);
         recorder.clearAudio();
         setAudioPrompt("");
         setShowAudioPrompt(false);
@@ -535,7 +568,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       if (hasAudioInput && settings.useLocalStt && Platform.isDesktop) {
         // --- Audio path: local STT (desktop only) ---
         try {
-          setMessages((prev) =>
+          chatState.updateMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? { ...m, content: "Transcribing locally..." }
@@ -547,7 +580,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           const result = audioSegments.length > 1
             ? await transcribeSegments(audioSegments, settings, (current, total) => {
                 if (!abortRef.current) {
-                  setMessages((prev) =>
+                  chatState.updateMessages((prev) =>
                     prev.map((m) =>
                       m.id === assistantId
                         ? { ...m, content: `Transcribing segment ${current}/${total}...` }
@@ -564,7 +597,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           const durationSec = (result.durationMs / 1000).toFixed(1);
 
           if (!transcription.trim()) {
-            setMessages((prev) =>
+            chatState.updateMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
                   ? {
@@ -577,7 +610,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
                   : m
               )
             );
-            setIsStreaming(false);
+            chatState.setStreaming(false);
             recorder.clearAudio();
             setAudioPrompt("");
             setShowAudioPrompt(false);
@@ -586,7 +619,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
           // Show transcription
           responseRef.current = "";
-          setMessages((prev) =>
+          chatState.updateMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? { ...m, content: `**Transcription** (${durationSec}s):\n\n${transcription}` }
@@ -609,13 +642,14 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
               content: "",
               timestamp: new Date(),
             };
-            setMessages((prev) => [...prev, analysisMsg]);
+            chatState.addMessage(analysisMsg);
             responseRef.current = "";
 
             const prompt = activeSkill?.autoPrompt || audioPrompt || "Process this transcription";
             const analysisPrompt = `${prompt}\n\nTranscription:\n${transcription}`;
 
-            const apiMessages: ChatMessage[] = messages.map(m => ({
+            const currentMessages = chatState.getState().messages;
+            const apiMessages: ChatMessage[] = currentMessages.map(m => ({
               role: m.role,
               content: m.content
             }));
@@ -626,7 +660,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
               systemPrompt: effectiveSystemPrompt,
               allowWrite: effectiveWrite,
               attachmentManager,
-              useTools: chatMode === "agent",
+              useTools: chatState.getState().chatMode === "agent",
               onText: (text) => {
                 if (!abortRef.current) appendAssistantChunk(analysisId, text);
               },
@@ -635,7 +669,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
               },
               onToolEnd: () => { /* Tool completed */ },
               onDone: () => { void (async () => {
-                setIsStreaming(false);
+                chatState.setStreaming(false);
                 recorder.clearAudio();
                 setAudioPrompt("");
                 setShowAudioPrompt(false);
@@ -646,7 +680,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           } else {
             // Transcription only — run postActions with raw transcription
             await runPostActions();
-            setIsStreaming(false);
+            chatState.setStreaming(false);
             recorder.clearAudio();
             setAudioPrompt("");
             setShowAudioPrompt(false);
@@ -675,7 +709,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           onProgress: (current, total) => {
             if (!abortRef.current) {
               appendAssistantChunk(assistantId, current === 1 ? `Transcribing segment ${current}/${total}...\n` : "");
-              setMessages((prev) =>
+              chatState.updateMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
                     ? { ...m, content: `Transcribing segment ${current}/${total}...` }
@@ -703,12 +737,14 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       } else if (hasAudioInput) {
         // --- Audio with no transcription available ---
         onError("Voice transcription requires either local STT (Settings → Local speech-to-text) or an API key from your configured provider.");
-        setIsStreaming(false);
+        chatState.setStreaming(false);
         return;
       } else {
         // --- Text message path (both Chat and Vault modes) ---
+        const currentState = chatState.getState();
         let recentContext = "";
-        if (chatMode === "agent" && !chatFilePath && messages.length === 0) {
+        if (currentState.chatMode === "agent" && !currentState.chatFilePath && currentState.messages.length === 2) {
+          // messages.length === 2 because we just added user+assistant msgs above
           recentContext = await getRecentChatContext();
         }
 
@@ -731,8 +767,9 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           ? `${effectiveSystemPrompt}\n\n---\nActive note content:\n${allContext}`
           : effectiveSystemPrompt;
 
-        // Build messages for the API
-        const apiMessages: ChatMessage[] = messages.map(m => ({
+        // Build messages for the API — read fresh from chatState
+        const currentMessages = chatState.getState().messages;
+        const apiMessages: ChatMessage[] = currentMessages.map(m => ({
           role: m.role,
           content: m.content
         }));
@@ -744,7 +781,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           allowWrite: effectiveWrite,
           images: allImages.length > 0 ? allImages : undefined,
           attachmentManager,
-          useTools: chatMode === "agent",
+          useTools: chatState.getState().chatMode === "agent",
           onText: (text) => {
             if (!abortRef.current) appendAssistantChunk(assistantId, text);
           },
@@ -753,7 +790,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
           },
           onToolEnd: () => { /* Tool completed — model will continue with the result */ },
           onDone: () => { void (async () => {
-            setIsStreaming(false);
+            chatState.setStreaming(false);
             recorder.clearAudio();
             setAudioPrompt("");
             setShowAudioPrompt(false);
@@ -764,7 +801,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         if (pendingAttachments.length > 0) setPendingAttachments([]);
       }
     },
-    [isStreaming, messages, settings, noteContext, audioPrompt, appendAssistantChunk, recorder, effectiveWrite, effectiveSystemPrompt, runPostActions, chatMode, chatFilePath, pendingAttachments, attachedFiles, activeSkill, app, attachmentManager]
+    [chatState, settings, noteContext, audioPrompt, appendAssistantChunk, recorder, effectiveWrite, effectiveSystemPrompt, runPostActions, pendingAttachments, attachedFiles, activeSkill, app, attachmentManager]
   );
 
   const handleSend = useCallback(() => {
@@ -773,7 +810,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
   // Handle skill activation from InputArea slash command
   const handleSkillActivate = async (skill: Skill) => {
-    setActiveSkillId(skill.id);
+    chatState.setActiveSkillId(skill.id);
 
     // If skill requires a person, show the person picker
     if (skill.requiresPerson) {
@@ -857,32 +894,33 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
       clearTimeout(debouncedSaveRef.current);
       debouncedSaveRef.current = null;
     }
+    const currentState = chatState.getState();
     // Generate TLDR and save before clearing
-    if (messages.length > 0 && chatFilePath) {
+    if (currentState.messages.length > 0 && currentState.chatFilePath) {
       const meta = buildMeta();
 
       // Try to generate a summary for better title
-      if (messages.length >= 2) {
-        const tldr = await summarizeChat(settings, messages);
+      if (currentState.messages.length >= 2) {
+        const tldr = await summarizeChat(settings, currentState.messages);
         if (tldr) meta.title = tldr;
       }
 
-      await saveChat(app, chatFilePath, messages, meta);
+      await saveChat(app, currentState.chatFilePath, currentState.messages, meta);
 
       // Update daily note link with the better title
-      const currentSkillId = activeSkillIdRef.current;
+      const currentSkillId = currentState.activeSkillId;
       const skill = currentSkillId ? skills.find((s) => s.id === currentSkillId) : null;
       const section = skill?.dailyNoteSection || "Capture";
-      void linkInDailyNote(app, chatFilePath, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
+      void linkInDailyNote(app, currentState.chatFilePath, section, meta.title, settings).catch(() => { /* expected — best-effort daily note update */ });
 
       // Extract action items and add to daily note
-      extractActionItems(messages, settings);
+      extractActionItems(currentState.messages, settings);
     }
-    setMessages([]);
-    setChatFilePath(null);
+    chatState.setMessages([]);
+    chatState.setChatFilePath(null);
     setSessionId(undefined);
     abortRef.current = true;
-    setIsStreaming(false);
+    chatState.setStreaming(false);
     setSelectedPerson(null);
     setShowPersonPicker(false);
     onChatPathChange?.(null);
@@ -890,18 +928,19 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
 
   const selectSkill = async (skillId: string | null) => {
     // Save current chat before switching skills
-    if (messages.length > 0 && chatFilePath) {
+    const currentState = chatState.getState();
+    if (currentState.messages.length > 0 && currentState.chatFilePath) {
       if (debouncedSaveRef.current) {
         clearTimeout(debouncedSaveRef.current);
         debouncedSaveRef.current = null;
       }
-      await saveChat(app, chatFilePath, messages, buildMeta());
+      await saveChat(app, currentState.chatFilePath, currentState.messages, buildMeta());
     }
-    setActiveSkillId(skillId);
+    chatState.setActiveSkillId(skillId);
     setShowSkillMenu(false);
     setSessionId(undefined);
-    setMessages([]);
-    setChatFilePath(null);
+    chatState.setMessages([]);
+    chatState.setChatFilePath(null);
     onChatPathChange?.(null);
   };
 
@@ -926,11 +965,11 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         chatMode={chatMode}
         onboardingComplete={onboardingDone}
         taskTrayOpen={showTaskTray}
-        onChatModeToggle={() => setChatMode((m) => m === "agent" ? "chat" : "agent")}
+        onChatModeToggle={() => chatState.setChatMode(chatState.getState().chatMode === "agent" ? "chat" : "agent")}
         onSkillMenuToggle={() => setShowSkillMenu((v) => !v)}
         onSkillSelect={(id) => void selectSkill(id)}
-        onToggleWrite={() => setAllowWrite((v) => !v)}
-        onToggleCli={() => setAllowCli((v) => !v)}
+        onToggleWrite={() => chatState.setAllowWrite(!chatState.getState().allowWrite)}
+        onToggleCli={() => chatState.setAllowCli(!chatState.getState().allowCli)}
         onNewChat={() => void clearConversation()}
         onOpenSettings={() => {
           const setting = (app as unknown as { setting?: ObsidianSettingsApi }).setting;
@@ -960,7 +999,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         <PersonPicker
           people={people}
           onSelect={(person) => void selectPerson(person)}
-          onCancel={() => { setShowPersonPicker(false); setActiveSkillId(null); }}
+          onCancel={() => { setShowPersonPicker(false); chatState.setActiveSkillId(null); }}
         />
       )}
 
@@ -1146,7 +1185,7 @@ export function OpenBrainPanel({ settings, app, initialPrompt, initialAttachedFi
         micState={recorder.state === "processing" ? "processing" : isRecording ? "recording" : "idle"}
         isSendDisabled={isStreaming || isRecording || !input.trim()}
         onImageDrop={async (file) => {
-          const chatId = chatFilePathRef.current?.split("/").pop()?.replace(".md", "") || generateId();
+          const chatId = chatState.getState().chatFilePath?.split("/").pop()?.replace(".md", "") || generateId();
           const att = await attachmentManager.addFromDrop(file, chatId);
           if (att) setPendingAttachments((prev) => [...prev, att]);
         }}

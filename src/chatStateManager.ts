@@ -63,6 +63,20 @@ export class ChatStateManager extends Events {
 
   // ── Messages ─────────────────────────────────────────────────────────────
 
+  setMessages(messages: Message[]): void {
+    this.state = { ...this.state, messages };
+    this.trigger("change");
+  }
+
+  /**
+   * Functional update: apply a transform to the current messages array.
+   * Mirrors the React `setState(prev => ...)` pattern.
+   */
+  updateMessages(fn: (prev: Message[]) => Message[]): void {
+    this.state = { ...this.state, messages: fn(this.state.messages) };
+    this.trigger("change");
+  }
+
   addMessage(msg: Message): void {
     this.state = { ...this.state, messages: [...this.state.messages, msg] };
     this.trigger("change");

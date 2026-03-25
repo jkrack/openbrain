@@ -5,6 +5,7 @@ import { OpenBrainPanel } from "./panel";
 import { OpenBrainSettings } from "./settings";
 import { Skill } from "./skills";
 import { VaultIndex } from "./vaultIndex";
+import { ChatStateManager } from "./chatStateManager";
 
 export const OPEN_BRAIN_VIEW_TYPE = "open-brain-view";
 
@@ -32,7 +33,7 @@ export class OpenBrainView extends ItemView {
   currentChatPath: string | null = null;
   private loadNonce = 0;
   private loadChatRequest: LoadChatRequest | undefined;
-  plugin: { settings: { lastChatPath: string }; saveSettings: () => Promise<void> } | null = null;
+  plugin: { settings: { lastChatPath: string }; saveSettings: () => Promise<void>; chatState: ChatStateManager } | null = null;
   vaultIndex: VaultIndex | null = null;
 
   constructor(leaf: WorkspaceLeaf, settings: OpenBrainSettings, skills: Skill[]) {
@@ -136,6 +137,7 @@ export class OpenBrainView extends ItemView {
       React.createElement(OpenBrainPanel, {
         settings: this.settings,
         app: this.app,
+        chatState: this.plugin?.chatState ?? new ChatStateManager(),
         initialPrompt: this.initialPrompt,
         initialAttachedFile: this.initialAttachedFile,
         floatingRecorderStatus: this.floatingRecorderStatus,
