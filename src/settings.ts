@@ -988,8 +988,9 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     new Setting(advanced)
       .setName("Enable knowledge graph")
       .setDesc(
-        "Build typed relationships between notes using mentions_people, mentions_projects, " +
-        "and mentions_topics frontmatter. Powers graph-aware context injection and graph tools."
+        "Turns your vault into a personal knowledge graph. OpenBrain builds typed relationships " +
+        "between notes (people, projects, topics) and uses them for smarter context injection. " +
+        "When enabled, a background worker runs automatically — see details below."
       )
       .addToggle((toggle) =>
         toggle
@@ -1002,11 +1003,20 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.knowledgeGraphEnabled) {
+      // Background worker explanation
+      const workerInfo = advanced.createDiv({ cls: "setting-item-description", attr: { style: "margin: -4px 0 12px 0; padding: 8px 12px; border-radius: 6px; background: var(--background-secondary);" } });
+      workerInfo.innerHTML =
+        "<strong>Background worker</strong> — three layers run automatically:<br>" +
+        "<strong>On save</strong> — detects wikilinks to typed entities and writes relationship frontmatter (instant, heuristic)<br>" +
+        "<strong>Hourly</strong> — Graph Enrichment skill runs the LLM to find relationships the heuristic missed<br>" +
+        "<strong>Weekly</strong> — Graph Health skill audits for orphan profiles, gaps, and disconnected clusters";
+
       new Setting(advanced)
-        .setName("Auto-infer relationships")
+        .setName("Auto-infer on save")
         .setDesc(
-          "Automatically detect and write relationship frontmatter when files are saved. " +
-          "Only writes relationships for explicit wikilinks to typed entities (people, projects)."
+          "When you save a note, detect wikilinks to people and projects and write " +
+          "mentions_people / mentions_projects frontmatter automatically. " +
+          "This is the fast, heuristic layer — no LLM cost."
         )
         .addToggle((toggle) =>
           toggle
@@ -1020,8 +1030,8 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       new Setting(advanced)
         .setName("Retroactive enrichment")
         .setDesc(
-          "Process all existing vault notes to infer relationships from wikilinks. " +
-          "Ambiguous cases are queued for the Graph Enrichment skill."
+          "Scan all existing vault notes now and infer relationships from wikilinks. " +
+          "Good to run once when you first enable the knowledge graph."
         )
         .addButton((btn) =>
           btn.setButtonText("Run now").onClick(() => { void (async () => {
