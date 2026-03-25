@@ -127,7 +127,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
   const [showTaskTray, setShowTaskTray] = useState(false);
 
   // Onboarding state
-  const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3>(1);
+  const [onboardingStep, setOnboardingStep] = useState<1 | 2 | 3 | 4>(1);
   const [onboardingDone, setOnboardingDone] = useState(settings.onboardingComplete);
 
   // Person picker state (for skills with requiresPerson)
@@ -1105,15 +1105,52 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
                 </div>
                 <button
                   className="ca-welcome-btn"
+                  onClick={() => setOnboardingStep(4)}
+                >
+                  Next →
+                </button>
+              </>
+            )}
+            {onboardingStep === 4 && (
+              <>
+                <div className="ca-welcome-title">Your Work Schedule</div>
+                <div className="ca-welcome-tips">
+                  <div className="ca-welcome-tip">
+                    OpenBrain adjusts its tone and suggestions based on your schedule.
+                    Select your work days below.
+                  </div>
+                </div>
+                <div className="ca-day-toggles" style={{ justifyContent: "center", margin: "16px 0" }}>
+                  {["S", "M", "T", "W", "T", "F", "S"].map((label, i) => (
+                    <button
+                      key={i}
+                      className={`ca-day-toggle ${settings.workDays.includes(i) ? "active" : ""}`}
+                      onClick={() => {
+                        const days = [...settings.workDays];
+                        const idx = days.indexOf(i);
+                        if (idx >= 0) days.splice(idx, 1);
+                        else { days.push(i); days.sort(); }
+                        settings.workDays = days;
+                        const pluginRef = (app as any).plugins?.plugins?.["open-brain"];
+                        if (pluginRef) {
+                          pluginRef.settings.workDays = days;
+                          void pluginRef.saveSettings();
+                        }
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="ca-welcome-btn"
                   onClick={() => {
                     setOnboardingDone(true);
                     settings.onboardingComplete = true;
-                    // Persist via plugin settings
-                    const setting = (app as unknown as { setting?: ObsidianSettingsApi }).setting;
-                    const plugin = setting?.pluginTabs?.find((t) => t.id === "open-brain")?.plugin;
-                    if (plugin) {
-                      plugin.settings.onboardingComplete = true;
-                      void plugin.saveSettings();
+                    const pluginRef = (app as any).plugins?.plugins?.["open-brain"];
+                    if (pluginRef) {
+                      pluginRef.settings.onboardingComplete = true;
+                      void pluginRef.saveSettings();
                     }
                   }}
                 >
