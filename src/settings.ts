@@ -62,6 +62,10 @@ export interface OpenBrainSettings {
   // Knowledge graph
   knowledgeGraphEnabled: boolean;
   knowledgeGraphAutoInfer: boolean;
+  // Detached window
+  detachedWindowSize: { width: number; height: number };
+  detachedWindowPosition: { x: number; y: number } | null;
+  contextPanelCollapsed: { context: boolean; graph: boolean; tools: boolean };
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -112,6 +116,9 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   templatesFolder: "OpenBrain/templates",
   knowledgeGraphEnabled: false,
   knowledgeGraphAutoInfer: true,
+  detachedWindowSize: { width: 1200, height: 800 },
+  detachedWindowPosition: null,
+  contextPanelCollapsed: { context: false, graph: false, tools: true },
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {

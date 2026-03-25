@@ -14,6 +14,7 @@ import { checkNotifications } from "./notifications";
 import { setEmbeddingSearch, setVaultIndex } from "./toolEngine";
 import { loadWelcomeCache, refreshWelcomeIfStale } from "./welcomeMessages";
 import { inferRelationships, applyRelationships } from "./knowledgeGraph";
+import { ChatStateManager } from "./chatStateManager";
 
 // Desktop-only modules — imported dynamically to avoid crashing on mobile
 // import { configure as configureObsidianCli } from "./obsidianCli";
@@ -36,6 +37,7 @@ export default class OpenBrainPlugin extends Plugin {
   private embeddingStatusBarEl: HTMLElement | null = null;
   private lastEmbeddingProgress: { indexed: number; total: number; status: string } | null = null;
   private graphInferTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  chatState: ChatStateManager = new ChatStateManager();
 
   async onload() {
     // OpenBrain icon — actual Lucide brain outline, scaled for 100x100 canvas
