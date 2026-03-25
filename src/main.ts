@@ -1,5 +1,6 @@
 import { addIcon, App, Platform, Plugin, TFile, WorkspaceLeaf, Modal, Notice, Setting } from "obsidian";
 import { OpenBrainView, OPEN_BRAIN_VIEW_TYPE, RecordingStatus } from "./view";
+import { DetachedOpenBrainView, DETACHED_OPEN_BRAIN_VIEW_TYPE } from "./detachedView";
 import { OpenBrainSettings, DEFAULT_SETTINGS, OpenBrainSettingTab } from "./settings";
 import { Skill, loadSkills, getDailyNotePath, runSkillInBackground } from "./skills";
 import { appendToDailySection } from "./chatHistory";
@@ -78,6 +79,16 @@ export default class OpenBrainPlugin extends Plugin {
         view.plugin = this;
         view.vaultIndex = this.vaultIndex;
         view.onStatusChange = (status) => this.updateStatusBar(status);
+        return view;
+      }
+    );
+
+    this.registerView(
+      DETACHED_OPEN_BRAIN_VIEW_TYPE,
+      (leaf) => {
+        const view = new DetachedOpenBrainView(leaf, this.settings, this.skills, this.chatState);
+        view.vaultIndex = this.vaultIndex;
+        view.plugin = this;
         return view;
       }
     );
@@ -356,6 +367,20 @@ export default class OpenBrainPlugin extends Plugin {
 
     if (Platform.isDesktopApp) {
       this.addCommand({
+        id: "detach-to-window",
+        name: "Detach to window",
+        callback: () => void this.detachToWindow(),
+      });
+
+      this.addCommand({
+        id: "attach-to-sidebar",
+        name: "Attach to sidebar",
+        callback: () => void this.attachToSidebar(true),
+      });
+    }
+
+    if (Platform.isDesktopApp) {
+      this.addCommand({
         id: "toggle-floating-recorder",
         name: "Toggle floating recorder",
         icon: "mic",
@@ -587,6 +612,16 @@ export default class OpenBrainPlugin extends Plugin {
         view.rerender();
       }
     }
+
+    // Also refresh detached views
+    const detachedLeaves = this.app.workspace.getLeavesOfType(DETACHED_OPEN_BRAIN_VIEW_TYPE);
+    for (const leaf of detachedLeaves) {
+      if (leaf.view instanceof DetachedOpenBrainView) {
+        leaf.view.updateSkills(this.skills);
+        leaf.view.vaultIndex = this.vaultIndex;
+        leaf.view.rerender();
+      }
+    }
   }
 
   private getActiveOpenBrainView(): OpenBrainView | null {
@@ -691,6 +726,53 @@ export default class OpenBrainPlugin extends Plugin {
       try {
         await this.app.vault.create(path, this.settings.systemPrompt);
       } catch { /* folder may not exist yet — initVault handles it */ }
+    }
+  }
+
+  async detachToWindow(): Promise<void> {
+    if (this.chatState.getState().isStreaming) {
+      new Notice("Wait for the response to complete before detaching.");
+      return;
+    }
+
+    // Force-save any pending chat
+    this.chatState.trigger("force-save");
+
+    const initData: any = {
+      size: this.settings.detachedWindowSize,
+    };
+    if (this.settings.detachedWindowPosition) {
+      initData.x = this.settings.detachedWindowPosition.x;
+      initData.y = this.settings.detachedWindowPosition.y;
+    }
+    const leaf = this.app.workspace.openPopoutLeaf(initData);
+    await leaf.setViewState({
+      type: DETACHED_OPEN_BRAIN_VIEW_TYPE,
+      active: true,
+    });
+
+    // Close sidebar
+    const sidebarLeaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
+    for (const l of sidebarLeaves) {
+      l.detach();
+    }
+  }
+
+  async attachToSidebar(closePopout = false): Promise<void> {
+    if (this.chatState.getState().isStreaming) {
+      new Notice("Wait for the response to complete before attaching.");
+      return;
+    }
+
+    this.chatState.trigger("force-save");
+
+    await this.activateView();
+
+    if (closePopout) {
+      const detachedLeaves = this.app.workspace.getLeavesOfType(DETACHED_OPEN_BRAIN_VIEW_TYPE);
+      for (const l of detachedLeaves) {
+        l.detach();
+      }
     }
   }
 

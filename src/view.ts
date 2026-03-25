@@ -110,6 +110,22 @@ export class OpenBrainView extends ItemView {
     // Start fresh on open — conversations are saved in chat history
     // and can be resumed via "Resume chat in OpenBrain" command
 
+    // Add detach button to view header actions
+    const headerActions = this.containerEl.querySelector(".view-actions");
+    if (headerActions) {
+      const detachBtn = headerActions.createEl("a", {
+        cls: "view-action ob-detach-btn",
+        attr: { "aria-label": "Detach to window" },
+      });
+      detachBtn.setText("↗");
+      detachBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (this.plugin) {
+          void (this.plugin as any).detachToWindow();
+        }
+      });
+    }
+
     this.rerender();
   }
 
