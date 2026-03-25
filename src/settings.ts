@@ -1,5 +1,6 @@
 import { App, Platform, PluginSettingTab, Setting, Notice, requestUrl, TFile } from "obsidian";
 import OpenBrainPlugin from "./main";
+import { getDayMode } from "./dayMode";
 import { inferRelationships, applyRelationships } from "./knowledgeGraph";
 
 const EMBEDDING_MODELS = [
@@ -66,6 +67,7 @@ export interface OpenBrainSettings {
   detachedWindowSize: { width: number; height: number };
   detachedWindowPosition: { x: number; y: number } | null;
   contextPanelCollapsed: { context: boolean; graph: boolean; tools: boolean };
+  workDays: number[];
 }
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
@@ -119,6 +121,7 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   detachedWindowSize: { width: 1200, height: 800 },
   detachedWindowPosition: null,
   contextPanelCollapsed: { context: false, graph: false, tools: true },
+  workDays: [1, 2, 3, 4, 5],
 };
 
 export class OpenBrainSettingTab extends PluginSettingTab {
@@ -393,10 +396,18 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     new Setting(general)
       .setName("System prompt")
-      .setDesc("Edit OpenBrain/system-prompt.md to customize Claude's instructions. Applied to every conversation unless a skill overrides it.")
+      .setDesc(
+        "Edit the day-appropriate system prompt to customize Claude's instructions. " +
+        "Work days use system-prompt-work.md, weekends use system-prompt-weekend.md. " +
+        "Applied to every conversation unless a skill overrides it."
+      )
       .addButton((btn) =>
         btn.setButtonText("Open").onClick(() => {
-          void this.app.workspace.openLinkText("OpenBrain/system-prompt.md", "");
+          const mode = getDayMode(this.plugin.settings.workDays);
+          const path = mode === "work"
+            ? "OpenBrain/system-prompt-work.md"
+            : "OpenBrain/system-prompt-weekend.md";
+          void this.app.workspace.openLinkText(path, "");
         })
       );
 
@@ -988,6 +999,43 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       }
     }
     } // end Platform.isDesktop (semantic search)
+
+    // ── Schedule ──
+    new Setting(advanced).setName("Schedule").setHeading();
+
+    {
+      const scheduleSetting = new Setting(advanced)
+        .setName("Work days")
+        .setDesc("Select the days of the week you work. OpenBrain adjusts its tone and suggestions based on your schedule.");
+
+      const togglesWrapper = scheduleSetting.controlEl.createDiv({ cls: "ca-day-toggles" });
+      const dayLabels = ["S", "M", "T", "W", "T", "F", "S"];
+
+      const renderToggles = () => {
+        togglesWrapper.empty();
+        dayLabels.forEach((label, i) => {
+          const btn = togglesWrapper.createEl("button", {
+            text: label,
+            cls: `ca-day-toggle${this.plugin.settings.workDays.includes(i) ? " active" : ""}`,
+          });
+          btn.addEventListener("click", () => { void (async () => {
+            const days = [...this.plugin.settings.workDays];
+            const idx = days.indexOf(i);
+            if (idx >= 0) {
+              days.splice(idx, 1);
+            } else {
+              days.push(i);
+              days.sort((a, b) => a - b);
+            }
+            this.plugin.settings.workDays = days;
+            await this.plugin.saveSettings();
+            renderToggles();
+          })(); });
+        });
+      };
+
+      renderToggles();
+    }
 
     // ── Knowledge Graph ──
     new Setting(advanced).setName("Knowledge graph").setHeading();
