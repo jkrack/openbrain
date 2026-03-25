@@ -24,6 +24,7 @@ interface TaskTrayProps {
   isOpen: boolean;
   onClose: () => void;
   onFocusTask?: (task: { text: string; file: string }) => void;
+  fullPane?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -69,7 +70,7 @@ function computeLevel(count: number, max: number): 0 | 1 | 2 | 3 | 4 {
 
 // ── Component ────────────────────────────────────────────────
 
-export function TaskTray({ app, settings, isOpen, onClose, onFocusTask }: TaskTrayProps) {
+export function TaskTray({ app, settings, isOpen, onClose, onFocusTask, fullPane }: TaskTrayProps) {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [contributions, setContributions] = useState<ContributionDay[]>([]);
   const [quickAddText, setQuickAddText] = useState("");
@@ -367,12 +368,8 @@ export function TaskTray({ app, settings, isOpen, onClose, onFocusTask }: TaskTr
     );
   };
 
-  return (
+  const trayContent = (
     <>
-      {/* Overlay to close tray when clicking outside */}
-      {isOpen && <div className="ca-tray-overlay" onClick={onClose} />}
-
-      <div className={`ca-task-tray ${isOpen ? "open" : ""}`}>
         {/* Tray header with score */}
         <div className="ca-tray-header">
           <div>
@@ -453,6 +450,24 @@ export function TaskTray({ app, settings, isOpen, onClose, onFocusTask }: TaskTr
             </>
           )}
         </div>
+    </>
+  );
+
+  if (fullPane) {
+    return (
+      <div className="ca-task-tray ca-task-tray--full-pane">
+        {trayContent}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Overlay to close tray when clicking outside */}
+      {isOpen && <div className="ca-tray-overlay" onClick={onClose} />}
+
+      <div className={`ca-task-tray ${isOpen ? "open" : ""}`}>
+        {trayContent}
       </div>
     </>
   );
