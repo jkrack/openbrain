@@ -4,6 +4,9 @@ import { Skill } from "../skills";
 import { ChatStateManager } from "../chatStateManager";
 import { VaultIndex } from "../vaultIndex";
 import { CenterView } from "./DetachedPanel";
+import { SkillsBrowser } from "./SkillsBrowser";
+import { GraphDashboard } from "./GraphDashboard";
+import { TaskTray } from "./TaskTray";
 
 interface CenterPaneProps {
   app: App;
@@ -17,11 +20,11 @@ interface CenterPaneProps {
 }
 
 export function CenterPane({
-  app: _app,
-  settings: _settings,
-  skills: _skills,
+  app,
+  settings,
+  skills,
   chatState,
-  vaultIndex: _vaultIndex,
+  vaultIndex,
   component: _component,
   centerView,
   onAttach,
@@ -48,13 +51,24 @@ export function CenterPane({
           </div>
         )}
         {centerView === "skills" && (
-          <div className="ob-detached-placeholder">Skills browser — Phase 3</div>
+          <SkillsBrowser
+            skills={skills}
+            chatState={chatState}
+            onSkillRun={(id) => { chatState.setActiveSkillId(id); }}
+          />
         )}
         {centerView === "graph" && (
-          <div className="ob-detached-placeholder">Graph dashboard — Phase 3</div>
+          <GraphDashboard vaultIndex={vaultIndex} />
         )}
         {centerView === "tasks" && (
-          <div className="ob-detached-placeholder">Task dashboard — Phase 3</div>
+          <TaskTray
+            app={app}
+            settings={settings}
+            isOpen={true}
+            fullPane={true}
+            onClose={() => {}}
+            onFocusTask={() => {}}
+          />
         )}
       </div>
     </div>
