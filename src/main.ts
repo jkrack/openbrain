@@ -135,10 +135,30 @@ export default class OpenBrainPlugin extends Plugin {
             leaves[0].view.setFloatingRecorderStatus(status);
           }
           if (status) {
-            void this.activateView();
+            // If detached window is open, focus it instead of the sidebar
+            const detachedLeaves = this.app.workspace.getLeavesOfType(DETACHED_OPEN_BRAIN_VIEW_TYPE);
+            if (detachedLeaves.length > 0) {
+              void this.app.workspace.revealLeaf(detachedLeaves[0]);
+            } else {
+              void this.activateView();
+            }
           }
         };
         this.floatingRecorder.onRecordingComplete = (notePath: string, skillId: string) => {
+          // If detached window is open, route recording there
+          const detachedLeaves = this.app.workspace.getLeavesOfType(DETACHED_OPEN_BRAIN_VIEW_TYPE);
+          if (detachedLeaves.length > 0) {
+            void this.app.workspace.revealLeaf(detachedLeaves[0]);
+            if (notePath) {
+              this.chatState.setActiveContext([notePath]);
+            }
+            if (skillId && skillId !== "clipboard") {
+              this.chatState.setActiveSkillId(skillId);
+            }
+            return;
+          }
+
+          // Otherwise use the sidebar
           void this.activateView().then(() => {
             const leaves = this.app.workspace.getLeavesOfType(OPEN_BRAIN_VIEW_TYPE);
             if (leaves.length > 0 && leaves[0].view instanceof OpenBrainView) {
