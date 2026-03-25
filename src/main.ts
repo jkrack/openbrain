@@ -16,6 +16,7 @@ import { setEmbeddingSearch, setVaultIndex } from "./toolEngine";
 import { loadWelcomeCache, refreshWelcomeIfStale } from "./welcomeMessages";
 import { inferRelationships, applyRelationships } from "./knowledgeGraph";
 import { ChatStateManager } from "./chatStateManager";
+import { getDayMode } from "./dayMode";
 
 // Desktop-only modules — imported dynamically to avoid crashing on mobile
 // import { configure as configureObsidianCli } from "./obsidianCli";
@@ -438,8 +439,13 @@ export default class OpenBrainPlugin extends Plugin {
         const expectedPath = getDailyNotePath(this.app, this.settings);
         if (file.path !== expectedPath) return;
 
-        // Find skills with this trigger
-        const triggered = this.skills.filter((s) => s.trigger === "daily-note-created");
+        // Find skills with this trigger, gated by dayMode
+        const currentMode = getDayMode(this.settings.workDays);
+        const triggered = this.skills.filter((s) => {
+          if (s.trigger !== "daily-note-created") return false;
+          if (s.dayMode && s.dayMode !== currentMode) return false;
+          return true;
+        });
         if (triggered.length === 0) return;
 
         // Wait for Templater to process the template
@@ -714,19 +720,36 @@ export default class OpenBrainPlugin extends Plugin {
   }
 
   private async loadSystemPrompt(): Promise<void> {
-    const path = "OpenBrain/system-prompt.md";
-    const file = this.app.vault.getAbstractFileByPath(path);
-    if (file instanceof TFile) {
-      const content = await this.app.vault.read(file);
+    const mode = getDayMode(this.settings.workDays);
+    const dayPath = mode === "work"
+      ? "OpenBrain/system-prompt-work.md"
+      : "OpenBrain/system-prompt-weekend.md";
+    const fallbackPath = "OpenBrain/system-prompt.md";
+
+    // Try day-specific file first
+    const dayFile = this.app.vault.getAbstractFileByPath(dayPath);
+    if (dayFile instanceof TFile) {
+      const content = await this.app.vault.read(dayFile);
       if (content.trim()) {
         this.settings.systemPrompt = content.trim();
+        return;
       }
-    } else {
-      // Seed the file from the current default
-      try {
-        await this.app.vault.create(path, this.settings.systemPrompt);
-      } catch { /* folder may not exist yet — initVault handles it */ }
     }
+
+    // Fall back to generic system-prompt.md
+    const fallbackFile = this.app.vault.getAbstractFileByPath(fallbackPath);
+    if (fallbackFile instanceof TFile) {
+      const content = await this.app.vault.read(fallbackFile);
+      if (content.trim()) {
+        this.settings.systemPrompt = content.trim();
+        return;
+      }
+    }
+
+    // Seed the generic file from the current default
+    try {
+      await this.app.vault.create(fallbackPath, this.settings.systemPrompt);
+    } catch { /* folder may not exist yet — initVault handles it */ }
   }
 
   async detachToWindow(): Promise<void> {

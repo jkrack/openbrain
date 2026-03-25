@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, TFile } from "obsidian";
 import { OpenBrainSettings } from "./settings";
 import { initChatFolder } from "./chatHistory";
 import { initTemplates, createGettingStartedNote } from "./templates";
@@ -61,6 +61,40 @@ export async function initVault(app: App, settings: OpenBrainSettings): Promise<
   for (const result of results) {
     if (result.status === "rejected") {
       console.error("OpenBrain: vault init error:", result.reason);
+    }
+  }
+
+  // Migrate / seed day-aware system prompt files
+  const workPath = "OpenBrain/system-prompt-work.md";
+  const weekendPath = "OpenBrain/system-prompt-weekend.md";
+  const genericPath = "OpenBrain/system-prompt.md";
+
+  // If work prompt doesn't exist but generic does, copy generic → work
+  if (!app.vault.getAbstractFileByPath(workPath)) {
+    const genericFile = app.vault.getAbstractFileByPath(genericPath);
+    if (genericFile instanceof TFile) {
+      try {
+        const genericContent = await app.vault.read(genericFile);
+        await app.vault.create(workPath, genericContent);
+      } catch {
+        // ignore — folder may not be ready yet
+      }
+    }
+  }
+
+  // Seed weekend prompt if it doesn't exist
+  if (!app.vault.getAbstractFileByPath(weekendPath)) {
+    try {
+      await app.vault.create(
+        weekendPath,
+        `You are OpenBrain, an AI assistant embedded in Obsidian. It's your user's day off.
+Be warm, casual, and exploratory. Don't push tasks, meetings, or deadlines unless
+asked. Suggest creative ideas, help with personal projects, or just have a
+conversation. Use [[wikilinks]] when referencing notes. Use vault-relative paths only.
+Search the vault before answering questions about it. Read files before editing them.`
+      );
+    } catch {
+      // ignore
     }
   }
 }

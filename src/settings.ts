@@ -1,5 +1,6 @@
 import { App, Platform, PluginSettingTab, Setting, Notice, requestUrl, TFile } from "obsidian";
 import OpenBrainPlugin from "./main";
+import { getDayMode } from "./dayMode";
 import { inferRelationships, applyRelationships } from "./knowledgeGraph";
 
 const EMBEDDING_MODELS = [
@@ -395,10 +396,18 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     new Setting(general)
       .setName("System prompt")
-      .setDesc("Edit OpenBrain/system-prompt.md to customize Claude's instructions. Applied to every conversation unless a skill overrides it.")
+      .setDesc(
+        "Edit the day-appropriate system prompt to customize Claude's instructions. " +
+        "Work days use system-prompt-work.md, weekends use system-prompt-weekend.md. " +
+        "Applied to every conversation unless a skill overrides it."
+      )
       .addButton((btn) =>
         btn.setButtonText("Open").onClick(() => {
-          void this.app.workspace.openLinkText("OpenBrain/system-prompt.md", "");
+          const mode = getDayMode(this.plugin.settings.workDays);
+          const path = mode === "work"
+            ? "OpenBrain/system-prompt-work.md"
+            : "OpenBrain/system-prompt-weekend.md";
+          void this.app.workspace.openLinkText(path, "");
         })
       );
 
