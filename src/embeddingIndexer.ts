@@ -211,6 +211,17 @@ export function createEmbeddingIndexer(
     });
   }
 
+  /** Wait for the browser to be idle before continuing. */
+  function waitForIdle(): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof requestIdleCallback === "function") {
+        requestIdleCallback(() => resolve(), { timeout: 2000 });
+      } else {
+        setTimeout(resolve, 200);
+      }
+    });
+  }
+
   async function processBatch(files: TFile[], startIdx: number) {
     if (!running) return;
 
@@ -227,7 +238,8 @@ export function createEmbeddingIndexer(
       return;
     }
 
-    const batchEnd = Math.min(startIdx + 10, files.length);
+    // Process 3 files per batch (not 10) — each file makes multiple embed calls
+    const batchEnd = Math.min(startIdx + 3, files.length);
 
     for (let i = startIdx; i < batchEnd; i++) {
       const file = files[i];
@@ -245,8 +257,10 @@ export function createEmbeddingIndexer(
     await saveIndex();
 
     if (batchEnd < files.length) {
-      // Yield to UI, then continue
-      batchTimeout = setTimeout(() => void processBatch(files, batchEnd), 50);
+      // Wait for the browser to be idle before processing the next batch.
+      // This prevents the indexer from starving the UI thread.
+      await waitForIdle();
+      batchTimeout = setTimeout(() => void processBatch(files, batchEnd), 100);
     } else {
       status = "ready";
       reportProgress();
@@ -326,6 +340,9 @@ export function createEmbeddingIndexer(
         }
         indexed++;
         reportProgress();
+
+        // Yield between files to keep UI responsive
+        await waitForIdle();
       }
     }
 
