@@ -3,8 +3,7 @@ import { access, mkdir, chmod, copyFile as fsCopyFile } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 import { createWriteStream } from "fs";
-import { get as httpsGet, Agent as HttpsAgent } from "https";
-import { readFileSync } from "fs";
+import { get as httpsGet } from "https";
 import { blobToWav, writeTempWav, cleanupTempWav } from "./audioConverter";
 import { OpenBrainSettings } from "./settings";
 
@@ -369,48 +368,32 @@ export async function installStt(
 // --- Download / file helpers ---
 
 /**
- * Build an HTTPS agent that trusts system CA certificates.
- * Fixes "unable to get local issuer certificate" on corporate networks
- * where a proxy/firewall intercepts HTTPS with a custom root CA.
- */
-function getHttpsAgent(): HttpsAgent | undefined {
-  // Check NODE_EXTRA_CA_CERTS env var first
-  const extraCerts = process.env.NODE_EXTRA_CA_CERTS;
-  if (extraCerts) {
-    try {
-      const ca = readFileSync(extraCerts);
-      return new HttpsAgent({ ca });
-    } catch { /* fall through */ }
-  }
-
-  // macOS system cert bundle
-  const systemCertPaths = [
-    "/etc/ssl/cert.pem",
-    "/etc/ssl/certs/ca-certificates.crt",
-  ];
-  for (const certPath of systemCertPaths) {
-    try {
-      const ca = readFileSync(certPath);
-      return new HttpsAgent({ ca });
-    } catch { /* try next */ }
-  }
-
-  return undefined; // use Node's default
-}
-
-/**
- * Download a file from a URL, following redirects (GitHub releases redirect).
- * Uses system CA certificates to work on corporate networks.
+ * Download a file from a URL using curl.
+ * curl on macOS uses SecureTransport which trusts the system Keychain,
+ * so it works on corporate networks with custom CA certificates.
+ * Falls back to Node.js https.get if curl is not available.
  */
 function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Use curl — it trusts macOS Keychain certs (fixes corporate proxy SSL errors)
+    execFile("curl", ["-fSL", "-o", destPath, url], { timeout: 600000 }, (err) => {
+      if (err) {
+        // Fall back to Node.js https if curl fails or is missing
+        downloadFileNode(url, destPath).then(resolve, reject);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+/** Fallback: Node.js https download with redirect following. */
+function downloadFileNode(url: string, destPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
     const file = createWriteStream(destPath);
-    const agent = getHttpsAgent();
 
     const request = (currentUrl: string) => {
-      const opts = agent ? { agent } : {};
-      httpsGet(currentUrl, opts, (response) => {
-        // Follow redirects (GitHub releases use 302)
+      httpsGet(currentUrl, (response) => {
         if (
           response.statusCode &&
           response.statusCode >= 300 &&
@@ -423,9 +406,7 @@ function downloadFile(url: string, destPath: string): Promise<void> {
 
         if (response.statusCode !== 200) {
           file.close();
-          reject(
-            new Error(`Download failed with status ${response.statusCode}`)
-          );
+          reject(new Error(`Download failed with status ${response.statusCode}`));
           return;
         }
 
