@@ -3,7 +3,8 @@ import { access, mkdir, chmod, copyFile as fsCopyFile } from "fs/promises";
 import { join } from "path";
 import { homedir } from "os";
 import { createWriteStream } from "fs";
-import { get as httpsGet } from "https";
+import { get as httpsGet, Agent as HttpsAgent } from "https";
+import { readFileSync } from "fs";
 import { blobToWav, writeTempWav, cleanupTempWav } from "./audioConverter";
 import { OpenBrainSettings } from "./settings";
 
@@ -368,14 +369,47 @@ export async function installStt(
 // --- Download / file helpers ---
 
 /**
+ * Build an HTTPS agent that trusts system CA certificates.
+ * Fixes "unable to get local issuer certificate" on corporate networks
+ * where a proxy/firewall intercepts HTTPS with a custom root CA.
+ */
+function getHttpsAgent(): HttpsAgent | undefined {
+  // Check NODE_EXTRA_CA_CERTS env var first
+  const extraCerts = process.env.NODE_EXTRA_CA_CERTS;
+  if (extraCerts) {
+    try {
+      const ca = readFileSync(extraCerts);
+      return new HttpsAgent({ ca });
+    } catch { /* fall through */ }
+  }
+
+  // macOS system cert bundle
+  const systemCertPaths = [
+    "/etc/ssl/cert.pem",
+    "/etc/ssl/certs/ca-certificates.crt",
+  ];
+  for (const certPath of systemCertPaths) {
+    try {
+      const ca = readFileSync(certPath);
+      return new HttpsAgent({ ca });
+    } catch { /* try next */ }
+  }
+
+  return undefined; // use Node's default
+}
+
+/**
  * Download a file from a URL, following redirects (GitHub releases redirect).
+ * Uses system CA certificates to work on corporate networks.
  */
 function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const file = createWriteStream(destPath);
+    const agent = getHttpsAgent();
 
     const request = (currentUrl: string) => {
-      httpsGet(currentUrl, (response) => {
+      const opts = agent ? { agent } : {};
+      httpsGet(currentUrl, opts, (response) => {
         // Follow redirects (GitHub releases use 302)
         if (
           response.statusCode &&
