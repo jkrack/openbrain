@@ -1,23 +1,32 @@
-import { writeFile, unlink, rmdir, mkdtemp } from "fs/promises";
+import { writeFile, unlink, rmdir, mkdtemp, readFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import { execFile } from "child_process";
 
 const TARGET_SAMPLE_RATE = 16000;
 
 /**
  * Convert a WebM/Opus audio Blob to a 16-bit PCM, mono, 16kHz WAV buffer.
- * Uses the browser's OfflineAudioContext (available in Electron) to decode
- * and resample — no external dependencies needed.
+ * Tries browser's OfflineAudioContext first (fast, no deps).
+ * Falls back to ffmpeg if decoding fails (handles all codecs).
  */
 export async function blobToWav(blob: Blob): Promise<Buffer> {
   const arrayBuffer = await blob.arrayBuffer();
 
-  // Decode the WebM/Opus blob using the browser's built-in decoder.
-  // OfflineAudioContext needs at least 1 sample; we'll resample properly below.
+  try {
+    return await blobToWavBrowser(arrayBuffer);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[OpenBrain] Browser audio decode failed (${msg}), trying ffmpeg...`);
+    return await blobToWavFfmpeg(arrayBuffer);
+  }
+}
+
+/** Browser-based conversion using OfflineAudioContext. */
+async function blobToWavBrowser(arrayBuffer: ArrayBuffer): Promise<Buffer> {
   const tempCtx = new OfflineAudioContext(1, 1, TARGET_SAMPLE_RATE);
   const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
 
-  // Check if decoded audio has actual content
   const rawSamples = audioBuffer.getChannelData(0);
   let maxAmp = 0;
   for (let i = 0; i < rawSamples.length; i++) {
@@ -25,18 +34,48 @@ export async function blobToWav(blob: Blob): Promise<Buffer> {
     if (a > maxAmp) maxAmp = a;
   }
 
-  // Resample to 16kHz mono
   const samples = await resampleAudio(audioBuffer, TARGET_SAMPLE_RATE);
 
-  // Check resampled audio
   let resampledMax = 0;
   for (let i = 0; i < samples.length; i++) {
     const a = Math.abs(samples[i]);
     if (a > resampledMax) resampledMax = a;
   }
 
-  // Encode as WAV
-  const wavBuffer = encodeWav(samples, TARGET_SAMPLE_RATE);
+  return encodeWav(samples, TARGET_SAMPLE_RATE);
+}
+
+/** ffmpeg-based conversion — handles any codec. */
+async function blobToWavFfmpeg(arrayBuffer: ArrayBuffer): Promise<Buffer> {
+  const dir = await mkdtemp(join(tmpdir(), "openbrain-ffmpeg-"));
+  const inputPath = join(dir, "input.webm");
+  const outputPath = join(dir, "output.wav");
+
+  await writeFile(inputPath, Buffer.from(arrayBuffer));
+
+  await new Promise<void>((resolve, reject) => {
+    execFile("ffmpeg", [
+      "-i", inputPath,
+      "-ar", String(TARGET_SAMPLE_RATE),
+      "-ac", "1",
+      "-sample_fmt", "s16",
+      "-y",
+      outputPath,
+    ], { timeout: 30000 }, (err) => {
+      if (err) reject(new Error(`ffmpeg conversion failed: ${err.message}`));
+      else resolve();
+    });
+  });
+
+  const wavBuffer = await readFile(outputPath);
+
+  // Cleanup
+  try {
+    await unlink(inputPath);
+    await unlink(outputPath);
+    await rmdir(dir);
+  } catch { /* best-effort */ }
+
   return wavBuffer;
 }
 

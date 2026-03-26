@@ -258,7 +258,7 @@ export function InputArea({
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            disabled={isRecording || isStreaming}
+            disabled={isRecording}
             rows={1}
           />
           {/* @ mention dropdown */}
