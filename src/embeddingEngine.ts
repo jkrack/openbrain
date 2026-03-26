@@ -1,5 +1,8 @@
 import { join } from "path";
 import { homedir } from "os";
+import { execFile } from "child_process";
+import { readFileSync, existsSync, mkdirSync } from "fs";
+import { dirname } from "path";
 
 export interface DownloadProgress {
   status: string;
@@ -23,10 +26,104 @@ export function getModelCacheDir(): string {
 }
 
 /**
+ * Pre-download model files from HuggingFace using curl.
+ * curl on macOS uses SecureTransport which trusts the system Keychain,
+ * so it works on corporate networks with custom CA certificates.
+ */
+async function predownloadModelFiles(
+  modelId: string,
+  onProgress: (p: DownloadProgress) => void
+): Promise<Map<string, ArrayBuffer>> {
+  const cacheDir = getModelCacheDir();
+  const modelDir = join(cacheDir, modelId.replace("/", "__"));
+  const baseUrl = `https://huggingface.co/${modelId}/resolve/main`;
+
+  // Files needed by Transformers.js for feature-extraction pipeline
+  const requiredFiles = [
+    "config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+  ];
+  const optionalFiles = [
+    "special_tokens_map.json",
+    "preprocessor_config.json",
+  ];
+  // Try multiple ONNX filename patterns — models vary
+  const onnxCandidates = [
+    "onnx/model.onnx",
+    "onnx/model_fp32.onnx",
+    "onnx/model_quantized.onnx",
+  ];
+
+  const downloadFile = (file: string, required: boolean): Promise<boolean> => {
+    const localPath = join(modelDir, file);
+    if (existsSync(localPath)) return Promise.resolve(true);
+
+    const dir = dirname(localPath);
+    mkdirSync(dir, { recursive: true });
+
+    return new Promise((resolve) => {
+      onProgress({ status: "download", file: file.split("/").pop() });
+      execFile("curl", ["-fSL", "-o", localPath, `${baseUrl}/${file}`],
+        { timeout: 300000 }, (err) => {
+          if (err) {
+            if (required) {
+              console.error(`[OpenBrain] Failed to download ${file}: ${err.message}`);
+            }
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        });
+    });
+  };
+
+  // Download required files
+  for (const file of requiredFiles) {
+    const ok = await downloadFile(file, true);
+    if (!ok) throw new Error(`Failed to download required model file: ${file}`);
+  }
+
+  // Download optional files (ignore failures)
+  for (const file of optionalFiles) {
+    await downloadFile(file, false);
+  }
+
+  // Download ONNX model — try each candidate until one works
+  let onnxFound = false;
+  for (const candidate of onnxCandidates) {
+    if (await downloadFile(candidate, false)) {
+      onnxFound = true;
+      break;
+    }
+  }
+  if (!onnxFound) {
+    throw new Error("Failed to download ONNX model file — tried: " + onnxCandidates.join(", "));
+  }
+
+  // Read all downloaded files into memory
+  const files = new Map<string, ArrayBuffer>();
+  const allCandidates = [...requiredFiles, ...optionalFiles, ...onnxCandidates];
+  for (const file of allCandidates) {
+    const localPath = join(modelDir, file);
+    if (existsSync(localPath)) {
+      const buf = readFileSync(localPath);
+      files.set(file, buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+    }
+  }
+
+  return files;
+}
+
+/**
  * Embedding engine using an iframe to run Transformers.js.
  * Same approach as Smart Connections — loads Transformers.js from CDN
  * inside an isolated iframe, avoiding all WASM/module resolution issues
  * in Obsidian's plugin protocol.
+ *
+ * Model files are pre-downloaded via curl (trusts macOS Keychain for
+ * corporate networks) and injected into the iframe via postMessage,
+ * so the iframe never needs to fetch from HuggingFace directly.
  */
 export function createEmbeddingEngine(): EmbeddingEngine {
   let iframe: HTMLIFrameElement | null = null;
@@ -46,6 +143,20 @@ export function createEmbeddingEngine(): EmbeddingEngine {
     async init(modelId: string): Promise<void> {
       console.log("[OpenBrain] Embedding init starting (iframe), model:", modelId);
 
+      // Pre-download model files using curl (works on corporate networks)
+      engine.onDownloadProgress?.({ status: "download", file: "model files" });
+      let preloadedFiles: Map<string, ArrayBuffer>;
+      try {
+        preloadedFiles = await predownloadModelFiles(modelId, (p) => {
+          engine.onDownloadProgress?.(p);
+        });
+        console.log(`[OpenBrain] Pre-downloaded ${preloadedFiles.size} model files`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[OpenBrain] Pre-download failed (${msg}), will try remote fetch`);
+        preloadedFiles = new Map();
+      }
+
       // Create hidden iframe
       iframe = document.createElement("iframe");
       iframe.style.display = "none";
@@ -54,13 +165,53 @@ export function createEmbeddingEngine(): EmbeddingEngine {
 
       const iframeDoc = iframe.contentDocument!;
 
-      // Write the connector script into the iframe
-      // Error handling modeled after Smart Connections:
-      // - Retry individually on batch failure
-      // - Reset pipeline after ONNX errors to clear WASM memory corruption
+      // Build the iframe script.
+      // If we have pre-loaded files, inject a fetch interceptor that serves
+      // them locally so Transformers.js never hits the network for model data.
       const script = `
         <script type="module">
           import { pipeline, env } from "${TRANSFORMERS_CDN}";
+
+          // Pre-loaded model file cache (populated via postMessage from parent)
+          const fileCache = new Map();
+          let modelBaseUrl = "";
+
+          // Override fetch to serve cached model files
+          const _originalFetch = globalThis.fetch;
+          globalThis.fetch = async function(url, opts) {
+            const urlStr = typeof url === "string" ? url : url?.url || "";
+            // Match HuggingFace model file URLs
+            if (modelBaseUrl && urlStr.startsWith(modelBaseUrl)) {
+              const relPath = urlStr.slice(modelBaseUrl.length);
+              if (fileCache.has(relPath)) {
+                const data = fileCache.get(relPath);
+                return new Response(data, {
+                  status: 200,
+                  headers: {
+                    "content-type": relPath.endsWith(".json")
+                      ? "application/json"
+                      : "application/octet-stream",
+                    "content-length": String(data.byteLength),
+                  },
+                });
+              }
+            }
+            // Also try matching by filename only (some Transformers.js versions use different URL patterns)
+            for (const [name, data] of fileCache) {
+              if (urlStr.endsWith("/" + name) || urlStr.endsWith("/" + encodeURIComponent(name))) {
+                return new Response(data, {
+                  status: 200,
+                  headers: {
+                    "content-type": name.endsWith(".json")
+                      ? "application/json"
+                      : "application/octet-stream",
+                    "content-length": String(data.byteLength),
+                  },
+                });
+              }
+            }
+            return _originalFetch.call(this, url, opts);
+          };
 
           env.allowLocalModels = false;
           env.allowRemoteModels = true;
@@ -87,7 +238,6 @@ export function createEmbeddingEngine(): EmbeddingEngine {
               consecutiveErrors++;
               console.warn("[OpenBrain iframe] Embed failed, attempt to recover:", err.message?.slice(0, 60));
 
-              // After 3 consecutive errors, reset the pipeline (clears WASM memory)
               if (consecutiveErrors >= 3 && currentModelId) {
                 console.warn("[OpenBrain iframe] Resetting pipeline after consecutive errors");
                 try {
@@ -96,16 +246,25 @@ export function createEmbeddingEngine(): EmbeddingEngine {
                 await initPipeline(currentModelId, () => {});
               }
 
-              return null; // Return null for failed embeds
+              return null;
             }
           }
 
           async function handleMessage(e) {
-            const { type, id, modelId, text, texts } = e.data;
+            const { type, id, modelId, text, texts, files, baseUrl } = e.data;
             if (e.source !== window.parent) return;
 
             try {
-              if (type === "init") {
+              if (type === "preload") {
+                // Receive pre-downloaded model files
+                if (files) {
+                  for (const [name, buffer] of Object.entries(files)) {
+                    fileCache.set(name, buffer);
+                  }
+                }
+                if (baseUrl) modelBaseUrl = baseUrl;
+                window.parent.postMessage({ type: "preload-done", id }, "*");
+              } else if (type === "init") {
                 await initPipeline(modelId, (p) => {
                   window.parent.postMessage({
                     type: "progress", id,
@@ -153,7 +312,6 @@ export function createEmbeddingEngine(): EmbeddingEngine {
         }
 
         if (type === "iframe-ready") {
-          // Iframe is loaded, send init
           return;
         }
 
@@ -165,6 +323,8 @@ export function createEmbeddingEngine(): EmbeddingEngine {
           handler.reject(new Error(error));
         } else if (type === "ready") {
           handler.resolve(undefined);
+        } else if (type === "preload-done") {
+          handler.resolve(undefined);
         } else if (type === "result") {
           if (vector) {
             handler.resolve(new Float32Array(vector));
@@ -175,7 +335,7 @@ export function createEmbeddingEngine(): EmbeddingEngine {
       };
       window.addEventListener("message", messageHandler);
 
-      // Wait for iframe to be ready, then init
+      // Wait for iframe to be ready
       await new Promise<void>((resolve) => {
         const checkReady = (e: MessageEvent) => {
           if (e.data?.type === "iframe-ready" && e.source === iframe?.contentWindow) {
@@ -185,6 +345,23 @@ export function createEmbeddingEngine(): EmbeddingEngine {
         };
         window.addEventListener("message", checkReady);
       });
+
+      // If we have pre-loaded files, send them to the iframe
+      if (preloadedFiles.size > 0) {
+        console.log("[OpenBrain] Sending pre-loaded model files to iframe...");
+        const filesObj: Record<string, ArrayBuffer> = {};
+        const transferables: ArrayBuffer[] = [];
+        for (const [name, buf] of preloadedFiles) {
+          filesObj[name] = buf;
+          transferables.push(buf);
+        }
+        const baseUrl = `https://huggingface.co/${modelId}/resolve/main/`;
+        await sendMessage(
+          { type: "preload", files: filesObj, baseUrl },
+          transferables
+        );
+        console.log("[OpenBrain] Pre-loaded files sent to iframe");
+      }
 
       // Send init command
       console.log("[OpenBrain] Iframe ready, loading model...");
@@ -227,7 +404,7 @@ export function createEmbeddingEngine(): EmbeddingEngine {
     },
   };
 
-  function sendMessage(msg: any): Promise<any> {
+  function sendMessage(msg: any, transferables?: ArrayBuffer[]): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!iframe?.contentWindow) {
         reject(new Error("Iframe not initialized"));
@@ -235,7 +412,11 @@ export function createEmbeddingEngine(): EmbeddingEngine {
       }
       const id = nextId++;
       pending.set(id, { resolve, reject });
-      iframe.contentWindow.postMessage({ ...msg, id }, "*");
+      if (transferables && transferables.length > 0) {
+        iframe.contentWindow.postMessage({ ...msg, id }, "*", transferables);
+      } else {
+        iframe.contentWindow.postMessage({ ...msg, id }, "*");
+      }
     });
   }
 
