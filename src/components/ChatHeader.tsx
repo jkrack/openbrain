@@ -11,7 +11,6 @@ export interface ChatHeaderProps {
   effectiveCli: boolean;
   noteContext: string | undefined;
   sessionId: string | undefined;
-  useLocalStt: boolean;
   showTooltips: boolean;
   chatMode: "agent" | "chat";
   onboardingComplete: boolean;
@@ -36,7 +35,6 @@ export function ChatHeader({
   effectiveCli,
   noteContext,
   sessionId,
-  useLocalStt,
   showTooltips,
   chatMode,
   onboardingComplete,
@@ -66,11 +64,6 @@ export function ChatHeader({
         {sessionId && (
           <span className="ca-note-badge" aria-label={tip("Multi-turn session — Claude remembers this conversation")}>
             session
-          </span>
-        )}
-        {useLocalStt && (
-          <span className="ca-note-badge" aria-label={tip("Voice transcription runs locally on your device")}>
-            local
           </span>
         )}
         {onboardingComplete && (
