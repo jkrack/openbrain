@@ -187,6 +187,19 @@ export default class OpenBrainPlugin extends Plugin {
         }
       }
 
+      // Auto-start STT daemon (desktop only, Apple Silicon)
+      if (Platform.isDesktop && this.settings.sttDaemonAutoStart) {
+        void (async () => {
+          try {
+            const { ensureDaemon } = await import("./stt");
+            await ensureDaemon(this.settings);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[OpenBrain] STT daemon auto-start failed: ${msg}`);
+          }
+        })();
+      }
+
       // Initialize embedding system (desktop only — requires Node.js)
       if (Platform.isDesktop && this.settings.embeddingsEnabled) {
         void this.initEmbeddings();
@@ -681,7 +694,7 @@ export default class OpenBrainPlugin extends Plugin {
       this.statusBarEl.setText("🧠 Transcribing...");
       this.statusBarEl.removeClass("openbrain-recording");
       this.statusBarEl.addClass("openbrain-transcribing");
-    } else if (this.settings.useLocalStt) {
+    } else if (this.settings.sttDaemonAutoStart) {
       this.statusBarEl.setText("🧠 STT");
       this.statusBarEl.removeClass("openbrain-recording");
       this.statusBarEl.removeClass("openbrain-transcribing");
@@ -839,6 +852,12 @@ export default class OpenBrainPlugin extends Plugin {
       this.embeddingEngine?.destroy();
       setEmbeddingSearch(null);
     }
+    void (async () => {
+      try {
+        const { shutdownDaemon } = await import("./sttClient");
+        await shutdownDaemon();
+      } catch { /* best-effort */ }
+    })();
   }
 }
 
