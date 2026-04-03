@@ -67,6 +67,15 @@ export default class OpenBrainPlugin extends Plugin {
     ].join(""));
 
     await this.loadSettings();
+    // Migrate old STT settings to daemon-based settings
+    if ("useLocalStt" in (this.settings as any)) {
+      if ((this.settings as any).useLocalStt) {
+        this.settings.sttDaemonAutoStart = true;
+      }
+      delete (this.settings as any).useLocalStt;
+      delete (this.settings as any).sttHomePath;
+      await this.saveSettings();
+    }
     if (Platform.isDesktop) {
       const { configure } = await import("./obsidianCli");
       configure(this.settings.obsidianCliPath);

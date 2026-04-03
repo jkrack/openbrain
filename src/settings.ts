@@ -22,8 +22,8 @@ export interface OpenBrainSettings {
   allowCliExec: boolean;
   transcribeOnStop: boolean;
   skillsFolder: string;
-  useLocalStt: boolean;
-  sttHomePath: string;
+  sttDaemonAutoStart: boolean;
+  sttModelId: string;
   audioDeviceId: string;
   chatFolder: string;
   lastChatPath: string;
@@ -81,8 +81,8 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   allowCliExec: false,
   transcribeOnStop: true,
   skillsFolder: "OpenBrain/skills",
-  useLocalStt: false,
-  sttHomePath: "",
+  sttDaemonAutoStart: true,
+  sttModelId: "parakeet-tdt-0.6b-v3",
   audioDeviceId: "",
   chatFolder: "OpenBrain/chats",
   lastChatPath: "",
@@ -145,6 +145,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       { id: "folders", label: "Folders" },
       { id: "voice", label: "Voice" },
       { id: "advanced", label: "Advanced" },
+      { id: "openclaw", label: "OpenClaw" },
     ];
 
     const tabBar = containerEl.createDiv({ cls: "ca-settings-tabs" });
@@ -177,6 +178,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     const folders = sections["folders"];
     const voice = sections["voice"];
     const advanced = sections["advanced"];
+    const openclaw = sections["openclaw"];
 
     // ══════════════════════════════════════════════════════════════
     // GENERAL TAB
@@ -631,47 +633,28 @@ export class OpenBrainSettingTab extends PluginSettingTab {
     // Populate mic dropdown asynchronously
     void this.populateMicDropdown(micSetting);
 
-    // --- Local Speech-to-Text Section (desktop only) ---
+    // --- Neural Engine STT (desktop only, Apple Silicon) ---
     if (Platform.isDesktop) {
-      new Setting(voice).setName("Local speech-to-text").setHeading();
+      new Setting(voice).setName("Neural Engine speech-to-text").setHeading();
+
+      const statusEl = voice.createDiv({ cls: "ca-stt-status" });
+      statusEl.setText("Checking daemon...");
+      void this.renderSttStatus(statusEl);
 
       new Setting(voice)
-        .setName("Use local transcription")
+        .setName("Auto-start STT daemon")
         .setDesc(
-          "Transcribe audio locally with sherpa-onnx (free, private, offline). " +
-            "Falls back to Anthropic API if not installed."
+          "Start the transcription daemon when the plugin loads. " +
+          "The daemon stays resident for fast transcription and auto-exits after 30 minutes idle."
         )
         .addToggle((toggle) =>
           toggle
-            .setValue(this.plugin.settings.useLocalStt)
+            .setValue(this.plugin.settings.sttDaemonAutoStart)
             .onChange((value) => { void (async () => {
-              this.plugin.settings.useLocalStt = value;
+              this.plugin.settings.sttDaemonAutoStart = value;
               await this.plugin.saveSettings();
-              this.display(); // Re-render to show/hide STT options
             })(); })
         );
-
-      if (this.plugin.settings.useLocalStt) {
-        new Setting(voice)
-          .setName("sherpa-onnx home directory")
-          .setDesc(
-            "Where binary and model files are stored. Leave empty for default (~/.openbrain)."
-          )
-          .addText((text) =>
-            text
-              .setPlaceholder("~/.openbrain")
-              .setValue(this.plugin.settings.sttHomePath)
-              .onChange((value) => { void (async () => {
-                this.plugin.settings.sttHomePath = value;
-                await this.plugin.saveSettings();
-              })(); })
-          );
-
-        // Installation status + install button
-        const statusEl = voice.createDiv({ cls: "ca-stt-status" });
-        statusEl.setText("Checking installation...");
-        void this.renderSttStatus(statusEl);
-      }
     }
 
     // ── Interface ──
@@ -1106,10 +1089,13 @@ export class OpenBrainSettingTab extends PluginSettingTab {
         );
     }
 
-    // ── OpenClaw ──
-    new Setting(advanced).setName("OpenClaw").setHeading();
+    // ══════════════════════════════════════════════════════════════
+    // OPENCLAW TAB
+    // ══════════════════════════════════════════════════════════════
 
-    new Setting(advanced)
+    new Setting(openclaw).setName("OpenClaw").setHeading();
+
+    new Setting(openclaw)
       .setName("Enable OpenClaw integration")
       .setDesc(
         "Connect to an OpenClaw gateway to access your vault from any messaging channel " +
@@ -1126,7 +1112,7 @@ export class OpenBrainSettingTab extends PluginSettingTab {
       );
 
     if (this.plugin.settings.openclawEnabled) {
-      new Setting(advanced)
+      new Setting(openclaw)
         .setName("Gateway URL")
         .setDesc("WebSocket URL of your OpenClaw gateway. Default: ws://127.0.0.1:18789")
         .addText((text) =>
@@ -1143,55 +1129,57 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
   private async renderSttStatus(el: HTMLElement) {
     try {
-      const { checkSttInstallation, installStt } = await import("./stt");
+      const { checkSttInstallation, ensureDaemon } = await import("./stt");
       const status = await checkSttInstallation(this.plugin.settings);
 
       el.empty();
 
       if (status.ready) {
         el.createSpan({
-          text: `Ready — ${status.modelName}`,
+          text: "Ready — Parakeet TDT 0.6B v3 · Neural Engine",
           cls: "ca-stt-ready",
         });
-      } else {
-        const parts: string[] = [];
-        if (!status.binaryInstalled) parts.push("Binary not found");
-        if (!status.modelInstalled) parts.push("Model not found");
-        el.createSpan({ text: parts.join(", "), cls: "ca-stt-missing" });
+      } else if (status.binaryInstalled) {
+        el.createSpan({
+          text: `Daemon ${status.daemonState || "stopped"}`,
+          cls: "ca-stt-missing",
+        });
         el.createEl("br");
 
-        const installBtn = el.createEl("button", {
-          text: "Install sherpa-onnx + Parakeet model",
+        const startBtn = el.createEl("button", {
+          text: "Start daemon",
           cls: "mod-cta",
         });
 
-        installBtn.addEventListener("click", () => { void (async () => {
-          installBtn.disabled = true;
-          installBtn.setText("Installing...");
-
-          const progressEl = el.createDiv({ cls: "ca-stt-progress" });
-
+        startBtn.addEventListener("click", () => { void (async () => {
+          startBtn.disabled = true;
+          startBtn.setText("Starting...");
           try {
-            await installStt(this.plugin.settings, (message) => {
-              progressEl.setText(message);
-            });
-
-            // Re-render to show updated status
+            await ensureDaemon(this.plugin.settings);
             this.display();
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            progressEl.setText(`Installation failed: ${message}`);
-            progressEl.addClass("ca-stt-missing");
-            installBtn.disabled = false;
-            installBtn.setText("Retry installation");
+            el.createDiv({ text: `Failed: ${message}`, cls: "ca-stt-missing" });
+            startBtn.disabled = false;
+            startBtn.setText("Retry");
           }
         })(); });
+      } else {
+        el.createSpan({
+          text: "Not installed — requires Apple Silicon Mac",
+          cls: "ca-stt-missing",
+        });
+        el.createEl("br");
+        el.createSpan({
+          text: "Voice transcription will use the Anthropic API as fallback.",
+          cls: "setting-item-description",
+        });
       }
     } catch (err: unknown) {
       el.empty();
       const message = err instanceof Error ? err.message : String(err);
       el.createSpan({
-        text: `Error checking installation: ${message}`,
+        text: `Error checking daemon: ${message}`,
         cls: "ca-stt-missing",
       });
     }
