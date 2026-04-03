@@ -565,13 +565,13 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         await runPostActions();
       };
 
-      if (hasAudioInput && settings.useLocalStt && Platform.isDesktop) {
-        // --- Audio path: local STT (desktop only) ---
+      if (hasAudioInput && Platform.isDesktop) {
+        // --- Audio path: daemon STT (desktop, auto-detected) ---
         try {
           chatState.updateMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
-                ? { ...m, content: "Transcribing locally..." }
+                ? { ...m, content: "Transcribing..." }
                 : m
             )
           );
@@ -600,13 +600,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
             chatState.updateMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantId
-                  ? {
-                      ...m,
-                      content:
-                        "No speech detected in the recording.\n\n" +
-                        `*Debug: processed in ${durationSec}s. Check Obsidian console (Cmd+Opt+I) for diagnostics. ` +
-                        `WAV saved to ~/.openbrain/debug/last_recording.wav — try playing it with* \`afplay ~/.openbrain/debug/last_recording.wav\``,
-                    }
+                  ? { ...m, content: "No speech detected in the recording." }
                   : m
               )
             );
@@ -628,7 +622,6 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
           );
           responseRef.current = transcription;
 
-          // Determine audio mode: active skill overrides audioPrompt string check
           const shouldAnalyze = activeSkill
             ? activeSkill.audioMode === "transcribe_and_analyze"
             : audioPrompt && !audioPrompt.toLowerCase().includes("transcribe only");
@@ -685,17 +678,15 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
             setAudioPrompt("");
             setShowAudioPrompt(false);
           }
+          return; // Daemon handled it — skip API fallback
         } catch (err: unknown) {
+          // Daemon not available — fall through to API transcription
           const errMessage = err instanceof Error ? err.message : String(err);
-          onError(
-            `Local transcription failed: ${errMessage}\n` +
-              "Check that sherpa-onnx is installed via Settings > OpenBrain."
-          );
-          recorder.clearAudio();
-          setAudioPrompt("");
-          setShowAudioPrompt(false);
+          console.warn(`[OpenBrain] Daemon STT failed (${errMessage}), trying API fallback`);
         }
-      } else if (hasAudioInput && settings.apiKey && audioSegments.length > 1) {
+      }
+
+      if (hasAudioInput && settings.apiKey && audioSegments.length > 1) {
         // --- Multi-segment API transcription (requires Anthropic key) ---
         await transcribeAudioSegments(settings, {
           onChunk: (chunk: string) => {
@@ -736,7 +727,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         });
       } else if (hasAudioInput) {
         // --- Audio with no transcription available ---
-        onError("Voice transcription requires either local STT (Settings → Local speech-to-text) or an API key from your configured provider.");
+        onError("Voice transcription requires an API key from your configured provider, or the STT daemon (Apple Silicon Mac).");
         chatState.setStreaming(false);
         return;
       } else {
@@ -960,7 +951,6 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         showCliToggle={Platform.isDesktop}
         noteContext={noteContext}
         sessionId={sessionId}
-        useLocalStt={settings.useLocalStt}
         showTooltips={settings.showTooltips}
         chatMode={chatMode}
         onboardingComplete={onboardingDone}
