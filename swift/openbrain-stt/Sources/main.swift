@@ -15,17 +15,8 @@ let socketPath: String = {
 
 // MARK: - JSON Coding
 
-let jsonEncoder: JSONEncoder = {
-    let e = JSONEncoder()
-    e.keyEncodingStrategy = .convertToSnakeCase
-    return e
-}()
-
-let jsonDecoder: JSONDecoder = {
-    let d = JSONDecoder()
-    d.keyDecodingStrategy = .convertFromSnakeCase
-    return d
-}()
+let jsonEncoder = JSONEncoder()
+let jsonDecoder = JSONDecoder()
 
 // MARK: - Server
 
