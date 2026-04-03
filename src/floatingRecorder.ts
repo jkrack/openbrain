@@ -28,9 +28,8 @@ try {
   // Electron remote not available — floating recorder will be disabled
 }
 
-function getRecordingsDir(settings: OpenBrainSettings): string {
-  const sttHome = settings.sttHomePath?.trim() || join(homedir(), ".openbrain");
-  return join(sttHome, "recordings");
+function getRecordingsDir(): string {
+  return join(homedir(), ".openbrain", "recordings");
 }
 
 export interface SkillInfo {
@@ -126,7 +125,7 @@ export class FloatingRecorder {
     }
 
     // Create session directory
-    const baseDir = getRecordingsDir(this.settings);
+    const baseDir = getRecordingsDir();
     await mkdir(baseDir, { recursive: true });
     const session = await createSession(baseDir, this.settings.floatingRecorderSegmentDuration);
     this.sessionDir = session.dir;
@@ -274,7 +273,7 @@ export class FloatingRecorder {
         }
       }
 
-      const recBaseDir = getRecordingsDir(this.settings);
+      const recBaseDir = getRecordingsDir();
       void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);
     } catch (err: unknown) {
       this.onStatusChange?.(null);
@@ -306,12 +305,10 @@ export class FloatingRecorder {
 
   private getTranscribeFn(): TranscribeFn {
     return async (wavPath: string) => {
-      if (this.settings.useLocalStt) {
-        // WAV is already 16kHz mono on disk — pass directly to sherpa-onnx
+      try {
         const { transcribeWavFile } = await import("./stt");
         return transcribeWavFile(wavPath, this.settings);
-      } else {
-        // API transcription — read WAV and send as blob
+      } catch {
         const { readFile } = await import("fs/promises");
         const wavBuffer = await readFile(wavPath);
         const blob = new Blob([wavBuffer], { type: "audio/wav" });
@@ -376,7 +373,7 @@ export class FloatingRecorder {
   }
 
   async recoverIncompleteSessions(): Promise<void> {
-    const baseDir = getRecordingsDir(this.settings);
+    const baseDir = getRecordingsDir();
     try {
       const incomplete = await findIncompleteSessions(baseDir);
       if (incomplete.length === 0) return;
