@@ -27,3 +27,6 @@ embeddingWorker.js
 
 # Worktrees
 .worktrees/
+
+# Swift build artifacts
+swift/openbrain-stt/.build/
