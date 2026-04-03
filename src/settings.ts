@@ -635,7 +635,20 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     // --- Neural Engine STT (desktop only, Apple Silicon) ---
     if (Platform.isDesktop) {
-      new Setting(voice).setName("Neural Engine speech-to-text").setHeading();
+      new Setting(voice).setName("Speech-to-text engine").setHeading();
+
+      const explainerEl = voice.createDiv({ cls: "setting-item-description", attr: { style: "margin-bottom: 12px;" } });
+      explainerEl.innerHTML =
+        "OpenBrain can transcribe your voice recordings two ways:" +
+        "<ul style='margin: 6px 0; padding-left: 20px;'>" +
+        "<li><strong>\u{1F43A} Neural Engine</strong> — Runs locally on your Mac's Apple Silicon chip. " +
+        "Private, fast (~155x realtime), free, and works offline. Uses the Parakeet TDT 0.6B model " +
+        "(25 languages). Downloads a ~1 GB model on first use.</li>" +
+        "<li><strong>\u{1F411} Anthropic API</strong> — Sends audio to Claude for transcription. " +
+        "Requires an API key and internet connection. Used automatically as a fallback when " +
+        "the Neural Engine isn't available (Intel Macs, daemon not running).</li>" +
+        "</ul>" +
+        "You'll see a \u{1F43A} or \u{1F411} in the chat when transcribing so you know which engine is active.";
 
       const statusEl = voice.createDiv({ cls: "ca-stt-status" });
       statusEl.setText("Checking daemon...");
