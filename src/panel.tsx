@@ -571,7 +571,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
           chatState.updateMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
-                ? { ...m, content: "Transcribing..." }
+                ? { ...m, content: "\u{1F43A} Transcribing..." }
                 : m
             )
           );
@@ -583,7 +583,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
                   chatState.updateMessages((prev) =>
                     prev.map((m) =>
                       m.id === assistantId
-                        ? { ...m, content: `Transcribing segment ${current}/${total}...` }
+                        ? { ...m, content: `\u{1F43A} Transcribing segment ${current}/${total}...` }
                         : m
                     )
                   );
@@ -616,7 +616,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
           chatState.updateMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
-                ? { ...m, content: `**Transcription** (${durationSec}s):\n\n${transcription}` }
+                ? { ...m, content: `\u{1F43A} **Transcription** (${durationSec}s):\n\n${transcription}` }
                 : m
             )
           );
@@ -699,11 +699,11 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
           audioPrompt: audioPrompt || undefined,
           onProgress: (current, total) => {
             if (!abortRef.current) {
-              appendAssistantChunk(assistantId, current === 1 ? `Transcribing segment ${current}/${total}...\n` : "");
+              appendAssistantChunk(assistantId, current === 1 ? `\u{1F411} Transcribing segment ${current}/${total}...\n` : "");
               chatState.updateMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
-                    ? { ...m, content: `Transcribing segment ${current}/${total}...` }
+                    ? { ...m, content: `\u{1F411} Transcribing segment ${current}/${total}...` }
                     : m
                 )
               );
