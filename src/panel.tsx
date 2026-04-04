@@ -518,7 +518,13 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
   }, [activeSkill, app, chatState]);
 
   const applyFinishingSkill = useCallback(async (skill: Skill, personArg?: string) => {
-    if (chatState.getState().isStreaming) return;
+    const msgCount = chatState.getState().messages.length;
+    console.log(`[OpenBrain] /finishing: ${skill.name}, args=${personArg}, messages=${msgCount}, streaming=${chatState.getState().isStreaming}`);
+
+    if (chatState.getState().isStreaming) {
+      new Notice("Still processing — wait for the current response to finish.");
+      return;
+    }
 
     // Resolve person if needed
     let person: { name: string; context?: string } | null = null;
@@ -553,7 +559,17 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
     chatState.setStreaming(true);
     postActionsRanRef.current = false;
 
+    // Show visible feedback that the finishing skill is running
+    const statusId = generateId();
+    chatState.addMessage({
+      id: statusId,
+      role: "assistant",
+      content: `Packaging ${allMessages.length} messages as **${skill.name}**...`,
+      timestamp: new Date(),
+    });
+
     const conversationText = allMessages
+      .filter(m => m.id !== statusId)  // Don't include the status message itself
       .map(m => `### ${m.role === "user" ? "User" : "Assistant"}\n${m.content}`)
       .join("\n\n");
 
@@ -573,13 +589,11 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
 
     const userPrompt = `Here is the full conversation to package:\n\n${conversationText}${chatLink}`;
 
-    const assistantId = generateId();
-    chatState.addMessage({
-      id: assistantId,
-      role: "assistant",
-      content: "",
-      timestamp: new Date(),
-    });
+    // Replace status message with streaming response
+    const assistantId = statusId;
+    chatState.updateMessages(prev =>
+      prev.map(m => m.id === statusId ? { ...m, content: "" } : m)
+    );
     responseRef.current = "";
 
     const apiMessages: ChatMessage[] = [
@@ -637,9 +651,10 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         }
       })(); },
       onError: (err) => {
+        console.error("[OpenBrain] finishing skill error:", err);
         chatState.setStreaming(false);
         chatState.updateMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content: `Error: ${err}` } : m)
+          prev.map(m => m.id === assistantId ? { ...m, content: `**Finishing skill failed:** ${err}\n\nCheck your API key and provider settings.` } : m)
         );
       },
     });
