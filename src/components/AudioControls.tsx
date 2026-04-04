@@ -10,6 +10,7 @@ export interface AudioControlsProps {
   audioPrompt: string;
   showAudioPrompt: boolean;
   showTooltips: boolean;
+  isMobile: boolean;
   onAudioPromptChange: (val: string) => void;
   onToggleAudioPrompt: () => void;
   onSendAudio: () => void;
@@ -24,6 +25,7 @@ export function AudioControls({
   audioPrompt,
   showAudioPrompt,
   showTooltips,
+  isMobile,
   onAudioPromptChange,
   onToggleAudioPrompt,
   onSendAudio,
@@ -35,30 +37,32 @@ export function AudioControls({
     <>
       {/* Studio Monitor recording state */}
       {isRecording && (
-        <div className="ca-recorder">
+        <div className={`ca-recorder${isMobile ? " ca-recorder--mobile" : ""}`}>
           {/* Row 1: Status — dot + timer | segment */}
           <div className="ca-recorder-status">
             <div className="ca-recorder-status-left">
               <span className="ca-rec-dot" />
-              <span className="ca-rec-time">{formatDuration(recorder.duration)}</span>
+              <span className={`ca-rec-time${isMobile ? " ca-rec-time--large" : ""}`}>{formatDuration(recorder.duration)}</span>
             </div>
             {recorder.segmentCount > 0 && (
               <span className="ca-rec-seg">SEG {recorder.segmentCount}</span>
             )}
           </div>
           {/* Row 2: Waveform */}
-          <div className="ca-recorder-wave">
-            <svg className="ca-wave-svg" viewBox="0 0 200 20" preserveAspectRatio="none">
+          <div className={`ca-recorder-wave${isMobile ? " ca-recorder-wave--large" : ""}`}>
+            <svg className="ca-wave-svg" viewBox={isMobile ? "0 0 200 60" : "0 0 200 20"} preserveAspectRatio="none">
               <polyline
                 className="ca-wave-line"
                 fill="none"
-                strokeWidth="1.5"
+                strokeWidth={isMobile ? "2.5" : "1.5"}
                 strokeLinecap="round"
                 points={recorder.waveformData
                   .map((v, i) => {
                     const x = (i / (recorder.waveformData.length - 1)) * 200;
-                    const amp = Math.min(v * 48, 9);
-                    const y = 10 - amp;
+                    const midY = isMobile ? 30 : 10;
+                    const maxAmp = isMobile ? 27 : 9;
+                    const amp = Math.min(v * 48, maxAmp);
+                    const y = midY - amp;
                     return `${x},${y}`;
                   })
                   .join(" ")}
@@ -67,7 +71,7 @@ export function AudioControls({
           </div>
           {/* Row 3: Action bar */}
           <div className="ca-recorder-actions">
-            <button className="ca-recorder-stop" onClick={() => recorder.stopRecording()}>
+            <button className={`ca-recorder-stop${isMobile ? " ca-recorder-stop--large" : ""}`} onClick={() => recorder.stopRecording()}>
               <span className="ca-recorder-stop-icon" />
               Stop
             </button>
@@ -77,7 +81,7 @@ export function AudioControls({
 
       {/* Audio ready state */}
       {hasAudio && !isRecording && (
-        <div className="ca-audio-ready">
+        <div className={`ca-audio-ready${isMobile ? " ca-audio-ready--mobile" : ""}`}>
           <span className="ca-audio-ready-label">
             Recording ready {"\u2014"} {formatDuration(recorder.duration)}
             {recorder.audioSegments.length > 1 && ` (${recorder.audioSegments.length} segments)`}

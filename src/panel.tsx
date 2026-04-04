@@ -1129,7 +1129,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
   const headerSkills = availableSkills.filter(s => !s.finishing);
 
   return (
-    <div className={`claude-agent-panel${isRecording ? " is-recording" : ""}${isStreaming ? " is-streaming" : ""}${showTaskTray ? " tray-open" : ""}`}>
+    <div className={`claude-agent-panel${isRecording ? " is-recording" : ""}${Platform.isMobile && isRecording ? " is-mobile-recording" : ""}${isStreaming ? " is-streaming" : ""}${showTaskTray ? " tray-open" : ""}`}>
       {/* Header */}
       <ChatHeader
         activeSkill={activeSkill}
@@ -1359,6 +1359,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         audioPrompt={audioPrompt}
         showAudioPrompt={showAudioPrompt}
         showTooltips={settings.showTooltips}
+        isMobile={Platform.isMobile}
         onAudioPromptChange={setAudioPrompt}
         onToggleAudioPrompt={() => setShowAudioPrompt((v) => !v)}
         onSendAudio={handleSendAudio}
