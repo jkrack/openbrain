@@ -213,7 +213,8 @@ export async function executePostActions(
   app: App,
   actions: PostAction[],
   response: string,
-  settings?: OpenBrainSettings
+  settings?: OpenBrainSettings,
+  extraVars?: Record<string, string>
 ): Promise<PostActionResult[]> {
   const results: PostActionResult[] = [];
   const title = extractTitle(response);
@@ -228,6 +229,8 @@ export async function executePostActions(
     reviews_folder: settings?.reviewsFolder || "OpenBrain/reviews",
     projects_folder: settings?.projectsFolder || "OpenBrain/projects",
     people_folder: settings?.peopleFolder || "OpenBrain/people",
+    one_on_one_folder: settings?.oneOnOneFolder || "OpenBrain/meetings/1-on-1",
+    ...extraVars,
   };
 
   for (const action of actions) {
@@ -284,6 +287,22 @@ export async function executePostActions(
           );
           await app.vault.modify(dailyFile, updated);
           results.push({ success: true, message: "Updated daily note" });
+        }
+      }
+
+      if (action.type === "open_note") {
+        if (vars.note_path) {
+          try {
+            const file = app.vault.getAbstractFileByPath(vars.note_path);
+            if (file && file instanceof TFile) {
+              const leaf = app.workspace.getLeaf("tab");
+              await leaf.openFile(file);
+              results.push({ success: true, message: `Opened ${vars.note_path}` });
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            results.push({ success: false, message: `Failed to open note: ${msg}` });
+          }
         }
       }
     } catch (err: unknown) {
