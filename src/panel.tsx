@@ -157,6 +157,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
   const abortRef = useRef<boolean>(false);
   const responseRef = useRef<string>("");   // Full display text (includes tool status)
   const contentRef = useRef<string>("");    // Clean content only (for post-actions)
+  const toolCountRef = useRef<Record<string, number>>({});  // Collapse repeated tool pills
 
   const recorder = useAudioRecorder();
 
@@ -472,6 +473,37 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
     );
   }, [chatState]);
 
+  /** Show a tool pill, collapsing repeated calls to the same tool into a counter. */
+  const showToolPill = useCallback((id: string, toolName: string) => {
+    const counts = toolCountRef.current;
+    counts[toolName] = (counts[toolName] || 0) + 1;
+    const count = counts[toolName];
+
+    if (count === 1) {
+      // First call — append the pill
+      appendAssistantChunk(id, `\n*Using ${toolName}...*\n`);
+    } else {
+      // Subsequent calls — update the existing pill to show count
+      const pill = `*Using ${toolName}...*`;
+      const updatedPill = `*Using ${toolName} (×${count})...*`;
+      chatState.updateMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== id) return m;
+          // Find the last occurrence of the pill and update it
+          const lastIdx = m.content.lastIndexOf(pill);
+          if (lastIdx === -1) return m;
+          // Also check if it's already a counted pill
+          const countedPillRegex = new RegExp(`\\*Using ${toolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\(×\\d+\\)\\.\\.\\.\\*`);
+          const countedMatch = m.content.match(countedPillRegex);
+          if (countedMatch) {
+            return { ...m, content: m.content.replace(countedPillRegex, updatedPill) };
+          }
+          return { ...m, content: m.content.slice(0, lastIdx) + updatedPill + m.content.slice(lastIdx + pill.length) };
+        })
+      );
+    }
+  }, [chatState, appendAssistantChunk]);
+
   const pendingFinishingSkillRef = useRef<Skill | null>(null);
   const postActionsRanRef = useRef(false);
 
@@ -584,6 +616,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
     );
     responseRef.current = "";
     contentRef.current = "";
+    toolCountRef.current = {};
 
     const apiMessages: ChatMessage[] = [
       { role: "user", content: userPrompt },
@@ -702,6 +735,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
       abortRef.current = false;
       responseRef.current = "";
       contentRef.current = "";
+      toolCountRef.current = {};
 
       const onError = (err: string) => {
         chatState.setStreaming(false);
@@ -771,6 +805,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
           // Show transcription
           responseRef.current = "";
           contentRef.current = "";
+          toolCountRef.current = {};
           chatState.updateMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
@@ -796,6 +831,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
             chatState.addMessage(analysisMsg);
             responseRef.current = "";
             contentRef.current = "";
+            toolCountRef.current = {};
 
             const prompt = activeSkill?.autoPrompt || audioPrompt || "Process this transcription";
             const analysisPrompt = `${prompt}\n\nTranscription:\n${transcription}`;
@@ -821,7 +857,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
                     appendAssistantChunk(analysisId, event.text);
                     break;
                   case "tool_start":
-                    appendAssistantChunk(analysisId, `\n*Using ${event.toolName}...*\n`);
+                    showToolPill(analysisId, event.toolName);
                     break;
                   case "tool_end":
                     break;
@@ -951,7 +987,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
                 appendAssistantChunk(assistantId, event.text);
                 break;
               case "tool_start":
-                appendAssistantChunk(assistantId, `\n*Using ${event.toolName}...*\n`);
+                showToolPill(assistantId, event.toolName);
                 break;
               case "tool_end":
                 break;

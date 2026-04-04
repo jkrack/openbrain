@@ -1,6 +1,7 @@
 import { App, Notice, TFile, TFolder, parseYaml, moment } from "obsidian";
 import { OpenBrainSettings } from "./settings";
 import { runChat } from "./chatEngine";
+import { createFromTemplate } from "./templates";
 
 export interface PostAction {
   type: "create_note" | "append_to_daily" | "replace_in_daily" | "open_note" | "backlink_chat";
@@ -136,7 +137,9 @@ export function cleanResponse(response: string): string {
       if (/^\*Using \w+.*\.\.\.\*$/.test(t)) return false;
       if (/^Let me /.test(t)) return false;
       if (/^Now I /.test(t)) return false;
-      if (/^I'll /.test(t) && /\bnow\b/.test(t)) return false;
+      if (/^Looking at /.test(t)) return false;
+      if (/^I'll /.test(t) && /\b(now|start|begin|gather|search|look|check|read|pull|review|compile)\b/.test(t)) return false;
+      if (/^I have /.test(t) && /\b(everything|enough|the data|the context|what I need)\b/.test(t)) return false;
       if (/^Writing /.test(t) && /daily|note|section/i.test(t)) return false;
       if (/^Today's note is /.test(t)) return false;
       if (/^Here's /.test(t) && /briefing|summary|focus/i.test(t)) return false;
@@ -301,12 +304,7 @@ export async function executePostActions(
         let dailyFile = app.vault.getAbstractFileByPath(dailyPath);
 
         if (!dailyFile) {
-          const folderPath = dailyPath.split("/").slice(0, -1).join("/");
-          if (folderPath) {
-            const folder = app.vault.getAbstractFileByPath(folderPath);
-            if (!folder) await app.vault.createFolder(folderPath);
-          }
-          await app.vault.create(dailyPath, `# ${moment().format("YYYY-MM-DD")}\n`);
+          await createFromTemplate(app, "Daily Note.md", dailyPath, {}, settings?.templatesFolder);
           dailyFile = app.vault.getAbstractFileByPath(dailyPath);
         }
 
