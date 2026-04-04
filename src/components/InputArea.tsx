@@ -15,6 +15,7 @@ export interface InputAreaProps {
   skills: Skill[];
   vaultIndex: VaultIndex | null;
   onSkillActivate: (skill: Skill) => void;
+  onFinishingSkill: (skill: Skill, args?: string) => void;
   showTooltips: boolean;
   placeholder?: string;
   onMicClick: () => void;
@@ -36,6 +37,7 @@ export function InputArea({
   skills,
   vaultIndex,
   onSkillActivate,
+  onFinishingSkill,
   showTooltips,
   placeholder,
   onMicClick,
@@ -154,10 +156,16 @@ export function InputArea({
       onInputChange(replaced + (replaced ? " " : "") + textAfter);
       setSlashQuery(null);
 
-      // Activate the skill
-      onSkillActivate(skill);
+      // Activate the skill (or finish if it's a finishing skill)
+      if (skill.finishing) {
+        // Capture any remaining text after /query as args (e.g., "/1on1 Amy" → args = "Amy")
+        const remaining = (replaced + textAfter).trim();
+        onFinishingSkill(skill, remaining || undefined);
+      } else {
+        onSkillActivate(skill);
+      }
     },
-    [input, onInputChange, onSkillActivate]
+    [input, onInputChange, onSkillActivate, onFinishingSkill]
   );
 
   // Remove an attached file
@@ -291,6 +299,7 @@ export function InputArea({
                   }}
                 >
                   {skill.name}
+                  {skill.finishing && <span className="ca-skill-badge">finish</span>}
                 </button>
               ))}
             </div>
