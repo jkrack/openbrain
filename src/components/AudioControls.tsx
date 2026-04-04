@@ -33,36 +33,44 @@ export function AudioControls({
 
   return (
     <>
-      {/* Blue Steel recording state */}
+      {/* Studio Monitor recording state */}
       {isRecording && (
-        <div className="ca-waveform">
-          <div className="ca-waveform-chrome">
-            <span className="ca-waveform-label">OpenBrain Recorder</span>
+        <div className="ca-recorder">
+          {/* Row 1: Status — dot + timer | segment */}
+          <div className="ca-recorder-status">
+            <div className="ca-recorder-status-left">
+              <span className="ca-rec-dot" />
+              <span className="ca-rec-time">{formatDuration(recorder.duration)}</span>
+            </div>
             {recorder.segmentCount > 0 && (
-              <span className="ca-waveform-seg">SEG {recorder.segmentCount}</span>
+              <span className="ca-rec-seg">SEG {recorder.segmentCount}</span>
             )}
           </div>
-          <div className="ca-waveform-body">
-            <span className="ca-rec-dot" />
-            <div className="ca-waveform-display">
-              <span className="ca-rec-time">{formatDuration(recorder.duration)}</span>
-              <svg className="ca-wave-svg" viewBox="0 0 160 16" preserveAspectRatio="none">
-                <polyline
-                  className="ca-wave-line"
-                  fill="none"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  points={recorder.waveformData
-                    .map((v, i) => {
-                      const x = (i / (recorder.waveformData.length - 1)) * 160;
-                      const amp = Math.min(v * 48, 7);
-                      const y = 8 - amp;
-                      return `${x},${y}`;
-                    })
-                    .join(" ")}
-                />
-              </svg>
-            </div>
+          {/* Row 2: Waveform */}
+          <div className="ca-recorder-wave">
+            <svg className="ca-wave-svg" viewBox="0 0 200 20" preserveAspectRatio="none">
+              <polyline
+                className="ca-wave-line"
+                fill="none"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                points={recorder.waveformData
+                  .map((v, i) => {
+                    const x = (i / (recorder.waveformData.length - 1)) * 200;
+                    const amp = Math.min(v * 48, 9);
+                    const y = 10 - amp;
+                    return `${x},${y}`;
+                  })
+                  .join(" ")}
+              />
+            </svg>
+          </div>
+          {/* Row 3: Action bar */}
+          <div className="ca-recorder-actions">
+            <button className="ca-recorder-stop" onClick={() => recorder.stopRecording()}>
+              <span className="ca-recorder-stop-icon" />
+              Stop
+            </button>
           </div>
         </div>
       )}
