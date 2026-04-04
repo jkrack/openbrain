@@ -1061,6 +1061,106 @@
 }
 
 /* ============================================================
+   MOBILE FULL-SCREEN LAYOUT
+   Obsidian adds .is-mobile to body on phone/tablet.
+   These overrides make the panel edge-to-edge and touch-friendly.
+   ============================================================ */
+
+/* Remove Obsidian's view container padding on mobile */
+.is-mobile .workspace-leaf-content[data-type="open-brain-view"] {
+  padding: 0;
+}
+.is-mobile .workspace-leaf-content[data-type="open-brain-view"] .view-content {
+  padding: 0;
+}
+
+/* Panel root: fill the entire screen */
+.is-mobile .claude-agent-panel {
+  --ca-size-body: 15px;
+  --ca-size-meta: 12px;
+  --ca-size-title: 17px;
+  --ca-size-welcome: 24px;
+  --ca-spacing-msg: 24px;
+  --ca-radius-sm: 8px;
+  --ca-radius-md: 12px;
+  --ca-radius-lg: 16px;
+  position: relative;
+}
+
+/* Header: edge-to-edge */
+.is-mobile .ca-header {
+  padding: 12px 16px;
+}
+
+/* Setup banner: full-width */
+.is-mobile .ca-setup-banner {
+  margin: 8px 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  padding: 14px 16px;
+}
+
+/* Message thread: more breathing room */
+.is-mobile .ca-thread {
+  padding: 16px 12px;
+}
+
+/* User messages: slightly larger */
+.is-mobile .ca-msg--user .ca-msg-content {
+  font-size: 14px;
+  padding: 8px 14px;
+}
+
+/* Input card: edge-to-edge, no rounded corners at bottom */
+.is-mobile .ca-input-card {
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Larger textarea for fat fingers */
+.is-mobile .ca-input {
+  font-size: 16px;
+  min-height: 44px;
+  padding: 12px 14px;
+}
+
+/* Touch-friendly toolbar buttons (44px minimum) */
+.is-mobile .ca-mic-btn {
+  width: 44px;
+  height: 44px;
+}
+.is-mobile .ca-send-btn {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 15px;
+}
+.is-mobile .ca-icon-btn {
+  width: 44px;
+  height: 44px;
+}
+
+/* Welcome screen: use full space */
+.is-mobile .ca-welcome {
+  padding: 40px 24px;
+}
+
+/* Attached files: edge-to-edge */
+.is-mobile .ca-attached-files {
+  margin: 0 12px;
+}
+
+/* Floating status banner: full-width */
+.is-mobile .ca-floating-status {
+  margin: 0;
+  border-radius: 0;
+}
+
+/* ============================================================
    MOBILE RECORDER OVERLAY
    ============================================================ */
 
