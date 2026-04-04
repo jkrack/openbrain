@@ -4,6 +4,17 @@
 <meta charset="utf-8">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    /* Theme colors injected from Obsidian via IPC; fallbacks for standalone */
+    --accent: #7b6cd9;
+    --accent-30: rgba(123, 108, 217, 0.3);
+    --text-error: #e44;
+    --text-muted: #888;
+    --bg-secondary: #1e1e1e;
+    --bg-primary: #181818;
+    --border: rgba(255,255,255,0.1);
+    --bg-hover: rgba(255,255,255,0.06);
+  }
   html, body {
     background: transparent;
     overflow: visible;
@@ -11,214 +22,166 @@
     user-select: none;
   }
 
+  /* --- Studio Monitor card --- */
   .recorder {
     display: flex;
     flex-direction: column;
     min-width: 340px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
     position: relative;
-  }
-
-  /* Title bar */
-  .titlebar {
-    background: linear-gradient(90deg, #1a3a5a, #0a1a2a, #1a3a5a);
-    border-radius: 6px 6px 0 0;
-    padding: 3px 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border: 1px solid rgba(100,180,255,0.15);
-    border-bottom: none;
     -webkit-app-region: drag;
   }
 
-  .titlebar-left {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .titlebar-icon { font-size: 11px; }
-
-  .titlebar-label {
-    font-size: 9px;
-    color: rgba(100,180,255,0.7);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
-
-  .titlebar-buttons {
-    display: flex;
-    gap: 3px;
-    -webkit-app-region: no-drag;
-  }
-
-  .titlebar-btn {
-    width: 10px;
-    height: 10px;
-    border-radius: 2px;
-    background: rgba(100,180,255,0.2);
-    border: 1px solid rgba(100,180,255,0.3);
-    cursor: pointer;
-  }
-
-  .titlebar-btn:hover { background: rgba(100,180,255,0.4); }
-  .titlebar-btn.close:hover { background: rgba(255,80,80,0.5); }
-
-  /* Recording body */
-  .body {
+  /* Row 1: Status — dot + timer | segment */
+  .status-row {
     background: linear-gradient(180deg, #0e1a28, #0a1420);
-    border: 1px solid rgba(100,180,255,0.12);
-    border-top: none;
-    padding: 8px 12px;
+    padding: 10px 12px 4px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: space-between;
+  }
+  .status-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .rec-dot {
-    width: 12px;
-    height: 12px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background: #e44;
-    box-shadow: 0 0 8px rgba(230,60,60,0.5);
+    background: var(--text-error);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--text-error) 50%, transparent);
     animation: pulse 1.5s ease-in-out infinite;
     flex-shrink: 0;
   }
-
   @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.3; }
   }
 
-  .display { flex: 1; }
-
-  .display-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 4px;
-  }
-
   .timer {
     font-size: 16px;
-    color: #6be;
-    text-shadow: 0 0 6px rgba(100,180,255,0.3);
+    color: var(--accent);
+    text-shadow: 0 0 6px var(--accent-30);
     font-variant-numeric: tabular-nums;
     letter-spacing: 2px;
   }
 
   .meta {
-    font-size: 8px;
-    color: rgba(100,180,255,0.5);
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
   }
 
-  .waveform { width: 100%; height: 14px; }
-
+  /* Row 2: Waveform */
+  .wave-row {
+    background: linear-gradient(180deg, #0a1420, #080e16);
+    padding: 4px 12px 10px;
+  }
+  .waveform {
+    width: 100%;
+    height: 20px;
+    display: block;
+  }
   .wave-line {
     fill: none;
-    stroke: #6be;
+    stroke: var(--accent);
     stroke-width: 1.5;
     stroke-linecap: round;
     opacity: 0.7;
   }
 
-  .stop-btn {
-    width: 26px;
-    height: 26px;
-    border-radius: 4px;
-    background: linear-gradient(180deg, #2a3a4a, #1a2a38);
-    border: 1px solid rgba(100,180,255,0.15);
+  /* Row 3: Action bar */
+  .action-bar {
+    background: var(--bg-secondary);
+    padding: 6px 10px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    flex-shrink: 0;
+    justify-content: space-between;
+    border-top: 1px solid var(--border);
     -webkit-app-region: no-drag;
   }
 
-  .stop-btn:hover { background: linear-gradient(180deg, #3a4a5a, #2a3a48); }
-
+  .stop-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-primary);
+    color: var(--text-muted);
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .stop-btn:hover {
+    background: var(--bg-hover);
+    color: #ccc;
+  }
   .stop-icon {
     width: 8px;
     height: 8px;
     border-radius: 1px;
-    background: #e44;
+    background: var(--text-error);
   }
 
-  /* Destination bar */
-  .dest-bar {
-    background: #080e16;
-    border: 1px solid rgba(100,180,255,0.12);
-    border-top: none;
-    border-radius: 0 0 6px 6px;
-    padding: 4px 8px;
-    position: relative;
-  }
-
+  /* Destination picker */
   .dest-trigger {
     display: flex;
     align-items: center;
     gap: 8px;
     cursor: pointer;
-    padding: 2px 4px;
-    border-radius: 3px;
+    padding: 4px 8px;
+    border-radius: 6px;
     transition: background 0.15s;
   }
-
   .dest-trigger:hover {
-    background: rgba(100,180,255,0.06);
+    background: var(--bg-hover);
   }
-
   .dest-icon {
     font-size: 12px;
     flex-shrink: 0;
     width: 16px;
     text-align: center;
   }
-
   .dest-label {
-    flex: 1;
     font-size: 10px;
-    color: #6be;
+    color: var(--accent);
     letter-spacing: 0.5px;
   }
-
   .dest-chevron {
     font-size: 8px;
-    color: rgba(100,180,255,0.4);
+    color: var(--text-muted);
     flex-shrink: 0;
     transition: transform 0.2s;
-  }
-
-  .dest-chevron {
     transform: rotate(180deg);
   }
-
   .dest-trigger.open .dest-chevron {
     transform: rotate(0deg);
   }
 
-  /* Dropdown menu — opens downward so items stay within window bounds */
+  /* Dropdown */
   .dest-menu {
     display: none;
     position: absolute;
-    left: 4px;
-    right: 4px;
-    top: 100%;
-    margin-top: 2px;
+    left: 8px;
+    right: 8px;
+    bottom: 42px;
     background: #0c1520;
-    border: 1px solid rgba(100,180,255,0.2);
-    border-radius: 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
     padding: 4px 0;
     box-shadow: 0 4px 16px rgba(0,0,0,0.5);
     z-index: 100;
     max-height: 200px;
     overflow-y: auto;
   }
-
-  .dest-menu.visible {
-    display: block;
-  }
+  .dest-menu.visible { display: block; }
 
   .dest-item {
     display: flex;
@@ -228,112 +191,56 @@
     cursor: pointer;
     transition: background 0.1s;
   }
-
-  .dest-item:hover {
-    background: rgba(100,180,255,0.08);
-  }
-
-  .dest-item-icon {
-    font-size: 11px;
-    width: 16px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-
-  .dest-item-label {
-    flex: 1;
-    font-size: 10px;
-    color: rgba(100,180,255,0.7);
-    letter-spacing: 0.3px;
-  }
-
-  .dest-item-check {
-    font-size: 10px;
-    color: #6be;
-    flex-shrink: 0;
-    visibility: hidden;
-  }
-
-  .dest-item.selected .dest-item-check {
-    visibility: visible;
-  }
-
-  .dest-item.selected .dest-item-label {
-    color: #6be;
-  }
-
-  .dest-divider {
-    height: 1px;
-    background: rgba(100,180,255,0.1);
-    margin: 3px 8px;
-  }
-
+  .dest-item:hover { background: var(--bg-hover); }
+  .dest-item-icon { font-size: 11px; width: 16px; text-align: center; flex-shrink: 0; }
+  .dest-item-label { flex: 1; font-size: 10px; color: var(--text-muted); letter-spacing: 0.3px; }
+  .dest-item-check { font-size: 10px; color: var(--accent); flex-shrink: 0; visibility: hidden; }
+  .dest-item.selected .dest-item-check { visibility: visible; }
+  .dest-item.selected .dest-item-label { color: var(--accent); }
+  .dest-divider { height: 1px; background: var(--border); margin: 3px 8px; }
   .dest-section-label {
     font-size: 8px;
-    color: rgba(100,180,255,0.3);
+    color: var(--text-muted);
     letter-spacing: 1px;
     text-transform: uppercase;
     padding: 4px 10px 2px;
   }
 
   /* States */
-  .state-stopping .rec-dot {
-    animation: none;
-    opacity: 0.3;
-  }
-
-  .state-stopping .timer {
-    color: rgba(100,180,255,0.5);
-  }
-
-  .state-stopping .wave-line {
-    opacity: 0.2;
-  }
-
-  .state-stopping .stop-btn {
-    pointer-events: none;
-    opacity: 0.3;
-  }
-
-  .state-stopping .dest-bar {
-    pointer-events: none;
-    opacity: 0.5;
-  }
+  .state-stopping .rec-dot { animation: none; opacity: 0.3; }
+  .state-stopping .timer { opacity: 0.5; }
+  .state-stopping .wave-line { opacity: 0.2; }
+  .state-stopping .action-bar { pointer-events: none; opacity: 0.5; }
 </style>
 </head>
 <body>
 <div class="recorder" id="recorder">
-  <div class="titlebar">
-    <div class="titlebar-left">
-      <span class="titlebar-icon">&#129504;</span>
-      <span class="titlebar-label">OpenBrain Recorder</span>
+  <!-- Row 1: Status — dot + timer | segment -->
+  <div class="status-row">
+    <div class="status-left">
+      <div class="rec-dot" id="recDot"></div>
+      <span class="timer" id="timer">0:00</span>
     </div>
-    <div class="titlebar-buttons">
-      <div class="titlebar-btn close" id="closeBtn" title="Stop & Close"></div>
-    </div>
+    <span class="meta" id="meta"></span>
   </div>
-  <div class="body">
-    <div class="rec-dot" id="recDot"></div>
-    <div class="display">
-      <div class="display-top">
-        <span class="timer" id="timer">0:00</span>
-        <span class="meta" id="meta"></span>
-      </div>
-      <svg class="waveform" viewBox="0 0 160 16" preserveAspectRatio="none">
-        <polyline class="wave-line" id="waveLine" points="0,8 160,8"/>
-      </svg>
-    </div>
-    <div class="stop-btn" id="stopBtn" title="Stop">
-      <div class="stop-icon"></div>
-    </div>
+  <!-- Row 2: Waveform -->
+  <div class="wave-row">
+    <svg class="waveform" viewBox="0 0 200 20" preserveAspectRatio="none">
+      <polyline class="wave-line" id="waveLine" points="0,10 200,10"/>
+    </svg>
   </div>
-  <div class="dest-bar">
-    <div class="dest-menu" id="destMenu"></div>
+  <!-- Row 3: Action bar — stop + destination -->
+  <div class="action-bar">
+    <button class="stop-btn" id="stopBtn" title="Stop">
+      <span class="stop-icon"></span>
+      Stop
+    </button>
     <div class="dest-trigger" id="destTrigger">
       <span class="dest-icon" id="destIcon">&#128203;</span>
       <span class="dest-label" id="destLabel">Clipboard</span>
       <span class="dest-chevron">&#9650;</span>
     </div>
+    <div class="dest-menu" id="destMenu"></div>
   </div>
 </div>
 
@@ -469,12 +376,28 @@
     return filename;
   }
 
+  // --- Theme injection ---
+  function applyTheme(theme) {
+    if (!theme) return;
+    const root = document.documentElement;
+    if (theme.accent) {
+      root.style.setProperty('--accent', theme.accent);
+      root.style.setProperty('--accent-30', theme.accent + '4d'); // ~30% alpha
+    }
+    if (theme.textError) root.style.setProperty('--text-error', theme.textError);
+    if (theme.textMuted) root.style.setProperty('--text-muted', theme.textMuted);
+    if (theme.bgSecondary) root.style.setProperty('--bg-secondary', theme.bgSecondary);
+    if (theme.bgPrimary) root.style.setProperty('--bg-primary', theme.bgPrimary);
+    if (theme.border) root.style.setProperty('--border', theme.border);
+  }
+
   // --- Init ---
   ipcRenderer.on('recorder:config', (_e, config) => {
     segmentDuration = config.segmentDuration || 300;
     deviceId = config.deviceId || '';
     sessionDir = config.sessionDir || '';
 
+    applyTheme(config.theme);
     buildMenu(config.skills || []);
 
     // Restore last mode
@@ -655,10 +578,10 @@
     let polyline = '';
 
     for (let i = 0; i < points; i++) {
-      const x = (i / (points - 1)) * 160;
+      const x = (i / (points - 1)) * 200;
       const val = data[i * step] / 128 - 1;
-      const amp = Math.min(Math.abs(val) * 48, 7);
-      const y = 8 - amp;
+      const amp = Math.min(Math.abs(val) * 48, 9);
+      const y = 10 - amp;
       polyline += `${x},${y} `;
     }
 
@@ -707,7 +630,6 @@
   });
 
   document.getElementById('stopBtn').addEventListener('click', stopRecording);
-  document.getElementById('closeBtn').addEventListener('click', stopRecording);
 </script>
 </body>
 </html>

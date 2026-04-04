@@ -182,6 +182,7 @@ export class FloatingRecorder {
         sessionDir: this.sessionDir,
         skills: this.getSkills?.() || [],
         defaultMode: this.settings.floatingRecorderDefaultMode || "clipboard",
+        theme: this.readObsidianTheme(),
       });
     });
 
@@ -362,6 +363,24 @@ export class FloatingRecorder {
     await this.app.vault.create(path, content);
     new Notice(`Recording saved: ${filename}`);
     return path;
+  }
+
+  /** Read the active Obsidian theme's CSS variables to pass to the floating window. */
+  private readObsidianTheme(): Record<string, string> {
+    try {
+      const body = document.body;
+      const cs = getComputedStyle(body);
+      return {
+        accent: cs.getPropertyValue("--interactive-accent").trim(),
+        textError: cs.getPropertyValue("--text-error").trim() || "#e44",
+        textMuted: cs.getPropertyValue("--text-muted").trim(),
+        bgSecondary: cs.getPropertyValue("--background-secondary").trim(),
+        bgPrimary: cs.getPropertyValue("--background-primary").trim(),
+        border: cs.getPropertyValue("--background-modifier-border").trim(),
+      };
+    } catch {
+      return {};
+    }
   }
 
   private cleanup(): void {
