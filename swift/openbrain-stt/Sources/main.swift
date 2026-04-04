@@ -271,12 +271,22 @@ func sendResponse<T: Encodable>(_ response: T, to fd: Int32) {
     do {
         var data = try jsonEncoder.encode(response)
         data.append(0x0A)  // newline delimiter
+
+        // Temporarily set blocking mode for writes to handle large responses
+        let flags = fcntl(fd, F_GETFL)
+        _ = fcntl(fd, F_SETFL, flags & ~O_NONBLOCK)
+        defer { _ = fcntl(fd, F_SETFL, flags) }
+
         data.withUnsafeBytes { rawBuf in
             guard let baseAddr = rawBuf.baseAddress else { return }
             var totalWritten = 0
             while totalWritten < data.count {
                 let written = write(fd, baseAddr.advanced(by: totalWritten), data.count - totalWritten)
-                if written <= 0 { break }
+                if written < 0 {
+                    if errno == EINTR { continue }  // interrupted — retry
+                    break  // real error
+                }
+                if written == 0 { break }
                 totalWritten += written
             }
         }

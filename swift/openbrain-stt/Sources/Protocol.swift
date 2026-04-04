@@ -9,9 +9,22 @@ enum RequestType: String, Codable {
 }
 
 struct TranscribeOptions: Codable {
-    var timestamps: Bool = true
-    var diarize: Bool = false
-    var language: String = "auto"
+    var timestamps: Bool
+    var diarize: Bool
+    var language: String
+
+    init(timestamps: Bool = true, diarize: Bool = false, language: String = "auto") {
+        self.timestamps = timestamps
+        self.diarize = diarize
+        self.language = language
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        timestamps = try container.decodeIfPresent(Bool.self, forKey: .timestamps) ?? true
+        diarize = try container.decodeIfPresent(Bool.self, forKey: .diarize) ?? false
+        language = try container.decodeIfPresent(String.self, forKey: .language) ?? "auto"
+    }
 }
 
 struct Request: Codable {
