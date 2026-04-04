@@ -305,6 +305,14 @@ export async function executePostActions(
           }
         }
       }
+
+      if (action.type === "backlink_chat") {
+        if (vars.note_path) {
+          results.push({ success: true, message: `backlink:${vars.note_path}` });
+        } else {
+          results.push({ success: false, message: "backlink_chat: no note created yet (run create_note first)" });
+        }
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       results.push({ success: false, message: `Post-action failed: ${message}` });

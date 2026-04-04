@@ -19,6 +19,7 @@ export interface ChatMeta {
   hasAudio: boolean;
   title: string;
   tags: string[];
+  meetingNote?: string;
 }
 
 export interface ChatFile {
@@ -94,6 +95,7 @@ export function serializeChat(messages: Message[], meta: ChatMeta): string {
     `has_audio: ${meta.hasAudio}`,
     `title: "${meta.title.replace(/"/g, '\\"')}"`,
     `tags: [${meta.tags.map((t) => `"${t}"`).join(", ")}]`,
+    ...(meta.meetingNote ? [`meeting_note: "${meta.meetingNote.replace(/"/g, '\\"')}"`] : []),
     "---",
   ];
 
@@ -144,6 +146,8 @@ export function parseChat(content: string, path: string): ChatFile | { error: st
     tags.push(tagMatch[1]);
   }
 
+  const meetingNote = fmBlock.match(/^meeting_note:\s*"?(.+?)"?\s*$/m)?.[1] || undefined;
+
   const meta: ChatMeta = {
     type: unquote(get("type")) as "openbrain-chat",
     formatVersion: formatVersion || 1,
@@ -155,6 +159,7 @@ export function parseChat(content: string, path: string): ChatFile | { error: st
     hasAudio: get("has_audio") === "true",
     title: unquote(get("title")),
     tags,
+    meetingNote: meetingNote || undefined,
   };
 
   // Parse messages from body
