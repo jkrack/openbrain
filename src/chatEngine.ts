@@ -9,6 +9,16 @@ import { executeTool } from "./toolEngine";
 import { startTimer } from "./perf";
 import { AttachmentManager } from "./attachmentManager";
 
+// AG-UI–inspired typed event system.
+// Consumers receive a single onEvent callback with discriminated events,
+// making it impossible to accidentally mix content with status metadata.
+export type ChatEvent =
+  | { type: "content"; text: string }        // Model-generated content (for responses & post-actions)
+  | { type: "tool_start"; toolName: string }  // Tool execution beginning (display-only status)
+  | { type: "tool_end"; toolName: string; result: string }  // Tool execution complete
+  | { type: "done" }                          // Chat loop finished
+  | { type: "error"; message: string };       // Error occurred
+
 export interface ChatEngineOptions {
   messages: ChatMessage[];
   systemPrompt: string;
@@ -16,11 +26,7 @@ export interface ChatEngineOptions {
   images?: ImageAttachment[];
   attachmentManager?: AttachmentManager;
   useTools: boolean;
-  onText: (text: string) => void;
-  onToolStart: (name: string) => void;
-  onToolEnd: (name: string, result: string) => void;
-  onDone: () => void;
-  onError: (error: string) => void;
+  onEvent: (event: ChatEvent) => void;
 }
 
 export async function runChat(
@@ -67,10 +73,10 @@ export async function runChat(
                 firstTokenTimer();
                 receivedFirstToken = true;
               }
-              if (event.text) opts.onText(event.text);
+              if (event.text) opts.onEvent({ type: "content", text: event.text });
               break;
             case "tool_use_start":
-              if (event.toolUse) opts.onToolStart(event.toolUse.name);
+              if (event.toolUse) opts.onEvent({ type: "tool_start", toolName: event.toolUse.name });
               break;
             case "tool_use_end":
               if (event.toolUse) {
@@ -79,7 +85,7 @@ export async function runChat(
               }
               break;
             case "error":
-              opts.onError(event.error || "Unknown error");
+              opts.onEvent({ type: "error", message: event.error || "Unknown error" });
               break;
             case "done":
               break;
@@ -87,7 +93,7 @@ export async function runChat(
         }
       });
     } catch (err: unknown) {
-      opts.onError(`Chat error: ${err instanceof Error ? err.message : String(err)}`);
+      opts.onEvent({ type: "error", message: `Chat error: ${err instanceof Error ? err.message : String(err)}` });
       doneTimer();
       return;
     }
@@ -98,7 +104,7 @@ export async function runChat(
     const results: ToolResultData[] = [];
     for (const tc of pendingToolCalls) {
       const result = await executeTool(app, settings, tc.name, tc.id, tc.input);
-      opts.onToolEnd(tc.name, result.is_error ? `Error: ${result.content}` : result.content.slice(0, 100));
+      opts.onEvent({ type: "tool_end", toolName: tc.name, result: result.is_error ? `Error: ${result.content}` : result.content.slice(0, 100) });
       results.push(result);
     }
 
@@ -111,7 +117,7 @@ export async function runChat(
   }
 
   doneTimer();
-  opts.onDone();
+  opts.onEvent({ type: "done" });
 }
 
 /**

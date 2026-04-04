@@ -124,6 +124,30 @@ function substituteVars(template: string, vars: Record<string, string>): string 
 }
 
 /**
+ * Strip tool-narration lines from a response before using it in post-actions.
+ * Removes lines like "*Using vault_read...*", "Let me look at...", "Now I have..." etc.
+ */
+export function cleanResponse(response: string): string {
+  return response
+    .split("\n")
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return true; // preserve blank lines
+      if (/^\*Using \w+.*\.\.\.\*$/.test(t)) return false;
+      if (/^Let me /.test(t)) return false;
+      if (/^Now I /.test(t)) return false;
+      if (/^I'll /.test(t) && /\bnow\b/.test(t)) return false;
+      if (/^Writing /.test(t) && /daily|note|section/i.test(t)) return false;
+      if (/^Today's note is /.test(t)) return false;
+      if (/^Here's /.test(t) && /briefing|summary|focus/i.test(t)) return false;
+      return true;
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n") // collapse excessive blank lines
+    .trim();
+}
+
+/**
  * Extract a title from Claude's response.
  * Looks for first markdown heading, falls back to first non-empty line.
  */
@@ -221,11 +245,12 @@ export interface PostActionResult {
 export async function executePostActions(
   app: App,
   actions: PostAction[],
-  response: string,
+  rawResponse: string,
   settings?: OpenBrainSettings,
   extraVars?: Record<string, string>
 ): Promise<PostActionResult[]> {
   const results: PostActionResult[] = [];
+  const response = cleanResponse(rawResponse);
   const title = extractTitle(response);
   const date = moment().format("YYYY-MM-DD");
 
@@ -375,13 +400,16 @@ export async function runSkillInBackground(
     systemPrompt,
     allowWrite: skill.tools.write ?? false,
     useTools: true,
-    onText: (text) => { response += text; },
-    onToolStart: () => { /* background — no UI */ },
-    onToolEnd: () => { /* background — no UI */ },
-    onError: (err) => {
-      new Notice(`OpenBrain: ${skill.name} failed — ${err}`, 8000);
+    onEvent: (event) => {
+      switch (event.type) {
+        case "content":
+          response += event.text;
+          break;
+        case "error":
+          new Notice(`OpenBrain: ${skill.name} failed — ${event.message}`, 8000);
+          break;
+      }
     },
-    onDone: () => { /* handled below */ },
   });
 
   if (response.trim() && skill.postActions.length > 0) {

@@ -155,7 +155,8 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
 
   const threadRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<boolean>(false);
-  const responseRef = useRef<string>("");
+  const responseRef = useRef<string>("");   // Full display text (includes tool status)
+  const contentRef = useRef<string>("");    // Clean content only (for post-actions)
 
   const recorder = useAudioRecorder();
 
@@ -483,7 +484,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
     if (!activeSkill || activeSkill.postActions.length === 0) return;
     if (postActionsRanRef.current) return; // Only fire once per skill session
 
-    const response = responseRef.current;
+    const response = contentRef.current;
     if (!response.trim()) return;
 
     postActionsRanRef.current = true;
@@ -582,6 +583,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
       prev.map(m => m.id === statusId ? { ...m, content: "" } : m)
     );
     responseRef.current = "";
+    contentRef.current = "";
 
     const apiMessages: ChatMessage[] = [
       { role: "user", content: userPrompt },
@@ -593,56 +595,65 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
       allowWrite: skill.tools?.write || false,
       attachmentManager,
       useTools: false,
-      onText: (text) => {
-        if (!abortRef.current) appendAssistantChunk(assistantId, text);
-      },
-      onToolStart: () => {},
-      onToolEnd: () => {},
-      onDone: () => { void (async () => {
-        chatState.setStreaming(false);
+      onEvent: (event) => {
+        if (abortRef.current) return;
+        switch (event.type) {
+          case "content":
+            contentRef.current += event.text;
+            appendAssistantChunk(assistantId, event.text);
+            break;
+          case "tool_start":
+          case "tool_end":
+            break;
+          case "done":
+            void (async () => {
+              chatState.setStreaming(false);
 
-        const response = responseRef.current;
-        if (skill.postActions.length > 0 && response.trim()) {
-          const extraVars: Record<string, string> = {};
-          if (personName) extraVars.person = personName;
+              const response = contentRef.current;
+              if (skill.postActions.length > 0 && response.trim()) {
+                const extraVars: Record<string, string> = {};
+                if (personName) extraVars.person = personName;
 
-          const results = await executePostActions(app, skill.postActions, response, settings, extraVars);
+                const results = await executePostActions(app, skill.postActions, response, settings, extraVars);
 
-          // Handle backlink
-          const backlinkResult = results.find(r => r.message.startsWith("backlink:"));
-          if (backlinkResult) {
-            const notePath = backlinkResult.message.replace("backlink:", "");
-            if (notePath) {
-              const meta = buildMeta();
-              meta.meetingNote = notePath;
-              const cp = chatState.getState().chatFilePath;
-              if (cp) {
-                const msgs = chatState.getState().messages;
-                await saveChat(app, cp, msgs, meta);
+                // Handle backlink
+                const backlinkResult = results.find(r => r.message.startsWith("backlink:"));
+                if (backlinkResult) {
+                  const notePath = backlinkResult.message.replace("backlink:", "");
+                  if (notePath) {
+                    const meta = buildMeta();
+                    meta.meetingNote = notePath;
+                    const cp = chatState.getState().chatFilePath;
+                    if (cp) {
+                      const msgs = chatState.getState().messages;
+                      await saveChat(app, cp, msgs, meta);
+                    }
+                  }
+                }
+
+                const feedback = results
+                  .filter(r => !r.message.startsWith("backlink:"))
+                  .map(r => r.success ? r.message : `Failed: ${r.message}`)
+                  .join("\n");
+                if (feedback) {
+                  chatState.addMessage({
+                    id: generateId(),
+                    role: "assistant",
+                    content: `---\n${feedback}`,
+                    timestamp: new Date(),
+                  });
+                }
               }
-            }
-          }
-
-          const feedback = results
-            .filter(r => !r.message.startsWith("backlink:"))
-            .map(r => r.success ? r.message : `Failed: ${r.message}`)
-            .join("\n");
-          if (feedback) {
-            chatState.addMessage({
-              id: generateId(),
-              role: "assistant",
-              content: `---\n${feedback}`,
-              timestamp: new Date(),
-            });
-          }
+            })();
+            break;
+          case "error":
+            console.error("[OpenBrain] finishing skill error:", event.message);
+            chatState.setStreaming(false);
+            chatState.updateMessages(prev =>
+              prev.map(m => m.id === assistantId ? { ...m, content: `**Finishing skill failed:** ${event.message}\n\nCheck your API key and provider settings.` } : m)
+            );
+            break;
         }
-      })(); },
-      onError: (err) => {
-        console.error("[OpenBrain] finishing skill error:", err);
-        chatState.setStreaming(false);
-        chatState.updateMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content: `**Finishing skill failed:** ${err}\n\nCheck your API key and provider settings.` } : m)
-        );
       },
     });
   }, [app, settings, chatState, attachmentManager, appendAssistantChunk]);
@@ -690,6 +701,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
       chatState.setStreaming(true);
       abortRef.current = false;
       responseRef.current = "";
+      contentRef.current = "";
 
       const onError = (err: string) => {
         chatState.setStreaming(false);
@@ -758,6 +770,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
 
           // Show transcription
           responseRef.current = "";
+          contentRef.current = "";
           chatState.updateMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
@@ -782,6 +795,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
             };
             chatState.addMessage(analysisMsg);
             responseRef.current = "";
+            contentRef.current = "";
 
             const prompt = activeSkill?.autoPrompt || audioPrompt || "Process this transcription";
             const analysisPrompt = `${prompt}\n\nTranscription:\n${transcription}`;
@@ -799,21 +813,32 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
               allowWrite: effectiveWrite,
               attachmentManager,
               useTools: chatState.getState().chatMode === "agent",
-              onText: (text) => {
-                if (!abortRef.current) appendAssistantChunk(analysisId, text);
+              onEvent: (event) => {
+                if (abortRef.current) return;
+                switch (event.type) {
+                  case "content":
+                    contentRef.current += event.text;
+                    appendAssistantChunk(analysisId, event.text);
+                    break;
+                  case "tool_start":
+                    appendAssistantChunk(analysisId, `\n*Using ${event.toolName}...*\n`);
+                    break;
+                  case "tool_end":
+                    break;
+                  case "done":
+                    void (async () => {
+                      chatState.setStreaming(false);
+                      recorder.clearAudio();
+                      setAudioPrompt("");
+                      setShowAudioPrompt(false);
+                      await runPostActions();
+                    })();
+                    break;
+                  case "error":
+                    onError(event.message);
+                    break;
+                }
               },
-              onToolStart: (name) => {
-                if (!abortRef.current) appendAssistantChunk(analysisId, `\n*Using ${name}...*\n`);
-              },
-              onToolEnd: () => { /* Tool completed */ },
-              onDone: () => { void (async () => {
-                chatState.setStreaming(false);
-                recorder.clearAudio();
-                setAudioPrompt("");
-                setShowAudioPrompt(false);
-                await runPostActions();
-              })(); },
-              onError,
             });
           } else {
             // Transcription only — run postActions with raw transcription
@@ -918,21 +943,32 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
           images: allImages.length > 0 ? allImages : undefined,
           attachmentManager,
           useTools: chatState.getState().chatMode === "agent",
-          onText: (text) => {
-            if (!abortRef.current) appendAssistantChunk(assistantId, text);
+          onEvent: (event) => {
+            if (abortRef.current) return;
+            switch (event.type) {
+              case "content":
+                contentRef.current += event.text;
+                appendAssistantChunk(assistantId, event.text);
+                break;
+              case "tool_start":
+                appendAssistantChunk(assistantId, `\n*Using ${event.toolName}...*\n`);
+                break;
+              case "tool_end":
+                break;
+              case "done":
+                void (async () => {
+                  chatState.setStreaming(false);
+                  recorder.clearAudio();
+                  setAudioPrompt("");
+                  setShowAudioPrompt(false);
+                  await runPostActions();
+                })();
+                break;
+              case "error":
+                onError(event.message);
+                break;
+            }
           },
-          onToolStart: (name) => {
-            if (!abortRef.current) appendAssistantChunk(assistantId, `\n*Using ${name}...*\n`);
-          },
-          onToolEnd: () => { /* Tool completed — model will continue with the result */ },
-          onDone: () => { void (async () => {
-            chatState.setStreaming(false);
-            recorder.clearAudio();
-            setAudioPrompt("");
-            setShowAudioPrompt(false);
-            await runPostActions();
-          })(); },
-          onError,
         });
         if (pendingAttachments.length > 0) setPendingAttachments([]);
       }

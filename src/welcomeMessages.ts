@@ -212,11 +212,9 @@ Respond with ONLY a JSON array of objects. No markdown, no explanation.`;
     systemPrompt: "You generate JSON. Respond with only valid JSON, no markdown fences, no extra text.",
     allowWrite: false,
     useTools: false,
-    onText: (text) => { response += text; },
-    onToolStart: () => {},
-    onToolEnd: () => {},
-    onDone: () => {},
-    onError: () => {},
+    onEvent: (event) => {
+      if (event.type === "content") response += event.text;
+    },
   });
 
   // Parse — handle possible markdown fences from the model
