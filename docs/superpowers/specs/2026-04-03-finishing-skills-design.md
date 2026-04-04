@@ -57,7 +57,14 @@ The chat input box already handles text input. Add a check: if the message start
 - `/anything-else` → look up skill by slash command name
 - If no matching skill found, send as normal message
 
-**Implementation:** In `panel.tsx`, in the `sendMessage` function, before the normal message flow, check for `/` prefix. If matched, call `applyFinishingSkill(skillId, args)` instead.
+**Implementation:** `InputArea.tsx` already has a slash command system that shows a dropdown when the user types `/`. Finishing skills integrate into this existing system:
+
+1. **Extend `InputArea.tsx`**: When building the slash dropdown list, include finishing skills alongside standalone skills. Add a visual indicator (e.g., suffix label) so users can distinguish them.
+2. **Selection behavior differs by skill type**: When the user selects a skill from the dropdown:
+   - **Standalone skill** (existing): calls `onSkillActivate(skill)` as today — clears input, activates skill upfront.
+   - **Finishing skill** (`skill.finishing === true`): calls a new `onFinishingSkill(skill)` callback. This does NOT clear the input or activate upfront — instead it triggers `applyFinishingSkill()` in `panel.tsx`.
+3. **Person args for `/1on1`**: When the user selects the 1:1 finishing skill, any text remaining in the input after the `/` query is captured as the person arg (e.g., user types `/1on1 Amy`, dropdown matches "1:1", remaining text `Amy` becomes the person arg). If no text remains, the `PersonPicker` component is shown to let the user select.
+4. **Direct typing** (power user path): If user types a full `/meeting` and presses Enter without selecting from dropdown, `sendMessage()` in `panel.tsx` checks for `/` prefix before the normal flow. Looks up finishing skill by `slash_command` field. If found, calls `applyFinishingSkill()` with parsed args.
 
 ### Finishing Skill Execution
 
@@ -185,7 +192,8 @@ Two new post-action types added to `executePostActions()`:
 
 **`backlink_chat`** — adds a frontmatter link from the chat file to the created note
 - No parameters needed (uses `note_path` from prior `create_note` action)
-- Updates the chat file's YAML frontmatter with `meeting_note:` field
+- Implementation: add `meeting_note?: string` field to `ChatMeta` interface in `chatHistory.ts`. Set it to the wikilink path of the created note. Then call `saveChat()` (the existing write path) which re-serializes the full chat including the updated frontmatter. Do NOT use regex/string-replace on YAML — always go through `serializeChat()`.
+- `parseChat()` must also be updated to read the `meeting_note` field back from frontmatter
 
 ## Files Changed
 
@@ -200,9 +208,10 @@ Two new post-action types added to `executePostActions()`:
 
 | File | Change |
 |------|--------|
-| `src/panel.tsx` | Add slash command parsing in `sendMessage()`, add `applyFinishingSkill()` function |
-| `src/skills.ts` | Add `finishing` and `slash_command` fields to `SkillConfig` type, add `open_note` and `backlink_chat` post-action handlers in `executePostActions()` |
-| `src/chatHistory.ts` | Add `updateChatFrontmatter()` function to modify chat file's YAML (for backlink) |
+| `src/panel.tsx` | Add `/` prefix check in `sendMessage()`, add `applyFinishingSkill()` function |
+| `src/components/InputArea.tsx` | Extend slash dropdown to include finishing skills, add `onFinishingSkill` callback, capture trailing args for person resolution |
+| `src/skills.ts` | Add `finishing` and `slash_command` fields to `SkillConfig` type, add `open_note` and `backlink_chat` post-action handlers in `executePostActions()`, add `one_on_one_folder` to template vars |
+| `src/chatHistory.ts` | Add `meeting_note?: string` to `ChatMeta`, update `serializeChat()` and `parseChat()` to handle the field |
 
 ### Unchanged
 
@@ -221,7 +230,8 @@ The 1:1 skill works the same as meeting notes but with person context:
 **Additional behavior:**
 - Fuzzy-match person name against `OpenBrain/people/` folder
 - Load person's profile note as additional context for the LLM
-- Note saved to: `{{oneOnOneFolder}}/Amy Williams/{{date}} {{title}}.md`
+- Note saved to: `{{one_on_one_folder}}/Amy Williams/{{date}} {{title}}.md`
+- Requires `one_on_one_folder` template variable in `executePostActions()` vars (currently missing, must add: `one_on_one_folder: settings.oneOnOneFolder || "OpenBrain/meetings/1-on-1"`)
 - Person's profile note could be updated with "last met" date (future enhancement)
 
 **Note format:** Same as meeting notes but with person-specific frontmatter:
