@@ -3,7 +3,7 @@ import { OpenBrainSettings } from "./settings";
 import { runChat } from "./chatEngine";
 
 export interface PostAction {
-  type: "create_note" | "append_to_daily" | "replace_in_daily";
+  type: "create_note" | "append_to_daily" | "replace_in_daily" | "open_note" | "backlink_chat";
   path?: string;
   section?: string;
   content?: string;
@@ -24,6 +24,8 @@ export interface Skill {
   systemPrompt: string;
   filePath: string;
   dayMode?: "work" | "weekend";
+  finishing?: boolean;
+  slashCommand?: string;
 }
 
 /**
@@ -81,6 +83,8 @@ export function parseSkillFile(content: string, filePath: string): Skill | null 
     systemPrompt: body,
     filePath,
     dayMode: frontmatter.day_mode || undefined,
+    finishing: frontmatter.finishing === true || frontmatter.finishing === "true",
+    slashCommand: typeof frontmatter.slash_command === "string" ? frontmatter.slash_command : undefined,
   };
 }
 
