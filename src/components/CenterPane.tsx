@@ -100,6 +100,7 @@ export function CenterPane({
                 skills={skills}
                 vaultIndex={vaultIndex}
                 onSkillActivate={(skill) => { chatState.setActiveSkillId(skill.id); }}
+                onFinishingSkill={() => {}}
                 showTooltips={settings.showTooltips}
                 placeholder="Ask anything... (@ to reference a file)"
                 onMicClick={() => {}}

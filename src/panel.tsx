@@ -484,6 +484,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
     );
   }, [chatState]);
 
+  const pendingFinishingSkillRef = useRef<Skill | null>(null);
   const postActionsRanRef = useRef(false);
 
   // Reset post_actions flag when skill or conversation changes
@@ -516,8 +517,150 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
     }
   }, [activeSkill, app, chatState]);
 
+  const applyFinishingSkill = useCallback(async (skill: Skill, personArg?: string) => {
+    if (chatState.getState().isStreaming) return;
+
+    // Resolve person if needed
+    let person: { name: string; context?: string } | null = null;
+    if (skill.requiresPerson) {
+      if (personArg) {
+        const loaded = await loadPeople(app, settings.peopleFolder);
+        person = loaded.find(p =>
+          p.name.toLowerCase().includes(personArg.toLowerCase())
+        ) || null;
+        if (!person) {
+          setPeople(loaded);
+          setShowPersonPicker(true);
+          pendingFinishingSkillRef.current = skill;
+          return;
+        }
+      } else {
+        const loaded = await loadPeople(app, settings.peopleFolder);
+        setPeople(loaded);
+        setShowPersonPicker(true);
+        pendingFinishingSkillRef.current = skill;
+        return;
+      }
+    }
+
+    const allMessages = chatState.getState().messages;
+    if (allMessages.length === 0) {
+      new Notice("Record or type a conversation first, then use the slash command to package it.");
+      return;
+    }
+
+    chatState.setActiveSkillId(skill.id);
+    chatState.setStreaming(true);
+    postActionsRanRef.current = false;
+
+    const conversationText = allMessages
+      .map(m => `### ${m.role === "user" ? "User" : "Assistant"}\n${m.content}`)
+      .join("\n\n");
+
+    const personName = person?.name || "";
+    let systemPrompt = skill.systemPrompt;
+    if (personName) {
+      systemPrompt = systemPrompt.replace(/\{\{person\}\}/g, personName);
+    }
+    if (person?.context) {
+      systemPrompt += `\n\nPerson context:\n${person.context}`;
+    }
+
+    const chatPath = chatState.getState().chatFilePath || "";
+    const chatLink = chatPath
+      ? `\n\nInclude this in the note's YAML frontmatter as \`chat: "[[${chatPath.replace(/\.md$/, "")}]]"\``
+      : "";
+
+    const userPrompt = `Here is the full conversation to package:\n\n${conversationText}${chatLink}`;
+
+    const assistantId = generateId();
+    chatState.addMessage({
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      timestamp: new Date(),
+    });
+    responseRef.current = "";
+
+    const apiMessages: ChatMessage[] = [
+      { role: "user", content: userPrompt },
+    ];
+
+    await runChat(app, settings, {
+      messages: apiMessages,
+      systemPrompt,
+      allowWrite: skill.tools?.write || false,
+      attachmentManager,
+      useTools: false,
+      onText: (text) => {
+        if (!abortRef.current) appendAssistantChunk(assistantId, text);
+      },
+      onToolStart: () => {},
+      onToolEnd: () => {},
+      onDone: () => { void (async () => {
+        chatState.setStreaming(false);
+
+        const response = responseRef.current;
+        if (skill.postActions.length > 0 && response.trim()) {
+          const extraVars: Record<string, string> = {};
+          if (personName) extraVars.person = personName;
+
+          const results = await executePostActions(app, skill.postActions, response, settings, extraVars);
+
+          // Handle backlink
+          const backlinkResult = results.find(r => r.message.startsWith("backlink:"));
+          if (backlinkResult) {
+            const notePath = backlinkResult.message.replace("backlink:", "");
+            if (notePath) {
+              const meta = buildMeta();
+              meta.meetingNote = notePath;
+              const cp = chatState.getState().chatFilePath;
+              if (cp) {
+                const msgs = chatState.getState().messages;
+                await saveChat(app, cp, msgs, meta);
+              }
+            }
+          }
+
+          const feedback = results
+            .filter(r => !r.message.startsWith("backlink:"))
+            .map(r => r.success ? r.message : `Failed: ${r.message}`)
+            .join("\n");
+          if (feedback) {
+            chatState.addMessage({
+              id: generateId(),
+              role: "assistant",
+              content: `---\n${feedback}`,
+              timestamp: new Date(),
+            });
+          }
+        }
+      })(); },
+      onError: (err) => {
+        chatState.setStreaming(false);
+        chatState.updateMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content: `Error: ${err}` } : m)
+        );
+      },
+    });
+  }, [app, settings, chatState, attachmentManager, appendAssistantChunk]);
+
   const sendMessage = useCallback(
     async (userText: string, audioSegments?: Blob[]) => {
+      // Check for finishing skill slash command
+      if (userText.startsWith("/")) {
+        const parts = userText.slice(1).split(/\s+/);
+        const command = parts[0].toLowerCase();
+        const args = parts.slice(1).join(" ") || undefined;
+        const finishingSkill = availableSkills.find(
+          s => s.finishing && s.slashCommand === command
+        );
+        if (finishingSkill) {
+          void applyFinishingSkill(finishingSkill, args);
+          return;
+        }
+      }
+
       if (chatState.getState().isStreaming) return;
       if (!userText.trim() && !audioSegments?.length) return;
 
@@ -792,7 +935,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         if (pendingAttachments.length > 0) setPendingAttachments([]);
       }
     },
-    [chatState, settings, noteContext, audioPrompt, appendAssistantChunk, recorder, effectiveWrite, effectiveSystemPrompt, runPostActions, pendingAttachments, attachedFiles, activeSkill, app, attachmentManager]
+    [chatState, settings, noteContext, audioPrompt, appendAssistantChunk, recorder, effectiveWrite, effectiveSystemPrompt, runPostActions, pendingAttachments, attachedFiles, activeSkill, app, attachmentManager, availableSkills, applyFinishingSkill]
   );
 
   const handleSend = useCallback(() => {
@@ -815,6 +958,14 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
 
   // Handle person selection — create 1:1 note, load context, send opening message
   const selectPerson = async (person: PersonProfile) => {
+    if (pendingFinishingSkillRef.current) {
+      const skill = pendingFinishingSkillRef.current;
+      pendingFinishingSkillRef.current = null;
+      setShowPersonPicker(false);
+      void applyFinishingSkill(skill, person.name);
+      return;
+    }
+
     setSelectedPerson(person);
     setShowPersonPicker(false);
 
@@ -937,6 +1088,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
 
   const isRecording = recorder.state === "recording";
   const hasAudio = recorder.audioSegments.length > 0 && recorder.state === "idle";
+  const headerSkills = availableSkills.filter(s => !s.finishing);
 
   return (
     <div className={`claude-agent-panel${isRecording ? " is-recording" : ""}${isStreaming ? " is-streaming" : ""}${showTaskTray ? " tray-open" : ""}`}>
@@ -944,7 +1096,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
       <ChatHeader
         activeSkill={activeSkill}
         activeSkillId={activeSkillId}
-        skills={availableSkills}
+        skills={headerSkills}
         showSkillMenu={showSkillMenu}
         effectiveWrite={effectiveWrite}
         effectiveCli={effectiveCli}
@@ -1206,6 +1358,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         skills={availableSkills}
         vaultIndex={vaultIndex ?? null}
         onSkillActivate={(skill) => void handleSkillActivate(skill)}
+        onFinishingSkill={(skill, args) => void applyFinishingSkill(skill, args)}
         showTooltips={settings.showTooltips}
         placeholder={isRecording ? "Recording..." : activeSkill?.autoPrompt ? "Press enter to run..." : "Ask anything... (@ to reference a file)"}
         onMicClick={() => void handleMicClick()}

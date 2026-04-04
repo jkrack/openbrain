@@ -62,6 +62,10 @@ export function parseSkillFile(content: string, filePath: string): Skill | null 
           section: action.replace_in_daily.section,
           content: action.replace_in_daily.content,
         });
+      } else if (action === "open_note" || action.open_note !== undefined) {
+        postActions.push({ type: "open_note" });
+      } else if (action === "backlink_chat" || action.backlink_chat !== undefined) {
+        postActions.push({ type: "backlink_chat" });
       }
     }
   }
