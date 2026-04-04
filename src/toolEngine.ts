@@ -1,6 +1,5 @@
 import { App, TFile } from "obsidian";
 import { OpenBrainSettings } from "./settings";
-import * as cli from "./obsidianCli";
 import { appendToDailySection } from "./chatHistory";
 import { getDailyNotePath } from "./skills";
 import { startTimer } from "./perf";
@@ -60,11 +59,6 @@ async function executeToolInner(
     // --- Read tools ---
     case "vault_search": {
       if (!input.query) throw new Error("query required");
-      if (cli.isAvailable()) {
-        const result = cli.search(input.query);
-        return result || "No results found";
-      }
-      // Fallback: VaultIndex metadata search + content scan
       const query = input.query.toLowerCase();
       const matches: string[] = [];
       if (vaultIndexInstance) {
@@ -88,11 +82,6 @@ async function executeToolInner(
     }
     case "vault_search_context": {
       if (!input.query) throw new Error("query required");
-      if (cli.isAvailable()) {
-        const result = cli.search(input.query);
-        return result || "No results found";
-      }
-      // Same fallback as vault_search
       const query = input.query.toLowerCase();
       const matches: string[] = [];
       const allFiles = app.vault.getMarkdownFiles();
@@ -132,11 +121,6 @@ async function executeToolInner(
     }
     case "vault_backlinks": {
       if (!input.path) throw new Error("path required");
-      if (cli.isAvailable()) {
-        const result = cli.backlinks(input.path);
-        return result || "No backlinks found";
-      }
-      // Fallback: scan metadataCache
       const target = input.path.replace(/\.md$/, "");
       const backlinks: string[] = [];
       for (const file of app.vault.getMarkdownFiles()) {
@@ -192,11 +176,6 @@ async function executeToolInner(
     case "vault_tasks": {
       const filter = (input.filter === "todo" || input.filter === "done") ? input.filter : undefined;
       if (input.file) {
-        if (cli.isAvailable()) {
-          const result = cli.tasks(input.file, filter);
-          return result || "No tasks found";
-        }
-        // Fallback: read file and find task patterns
         const file = app.vault.getAbstractFileByPath(input.file);
         if (!(file instanceof TFile)) throw new Error(`File not found: ${input.file}`);
         const content = await app.vault.read(file);
@@ -206,11 +185,6 @@ async function executeToolInner(
           : tasks;
         return filtered.join("\n") || "No tasks found";
       }
-      if (cli.isAvailable()) {
-        const result = cli.dailyTasks(filter);
-        return result || "No tasks found";
-      }
-      // Fallback: read daily note and extract tasks
       const dailyPath = getDailyNotePath(app, settings);
       const dailyFile = app.vault.getAbstractFileByPath(dailyPath);
       if (dailyFile instanceof TFile) {
@@ -224,11 +198,6 @@ async function executeToolInner(
       return "No daily note found";
     }
     case "daily_read": {
-      if (cli.isAvailable()) {
-        const result = cli.dailyRead();
-        return result || "No daily note found";
-      }
-      // Fallback: read daily note via vault API
       const dailyPath = getDailyNotePath(app, settings);
       const dailyFile = app.vault.getAbstractFileByPath(dailyPath);
       if (dailyFile instanceof TFile) {
@@ -477,11 +446,6 @@ async function executeToolInner(
     }
     case "vault_property_set": {
       if (!input.path || !input.name || !input.value) throw new Error("path, name, and value required");
-      if (cli.isAvailable()) {
-        cli.propertySet(input.path, input.name, input.value, input.type);
-        return `Set ${input.name} = ${input.value} on ${input.path}`;
-      }
-      // Fallback: manual frontmatter edit
       const file = app.vault.getAbstractFileByPath(input.path);
       if (!(file instanceof TFile)) throw new Error(`File not found: ${input.path}`);
       const content = await app.vault.read(file);

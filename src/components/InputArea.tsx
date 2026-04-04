@@ -148,6 +148,7 @@ export function InputArea({
   // Insert slash command — activate the selected skill
   const insertSlashCommand = useCallback(
     (skill: Skill) => {
+      console.log(`[OpenBrain] insertSlashCommand: "${skill.name}", finishing=${skill.finishing}, slashCommand=${skill.slashCommand}`);
       // Remove /query from input
       const pos = inputRef.current?.selectionStart ?? input.length;
       const textBefore = input.slice(0, pos);
@@ -160,6 +161,7 @@ export function InputArea({
       if (skill.finishing) {
         // Capture any remaining text after /query as args (e.g., "/1on1 Amy" → args = "Amy")
         const remaining = (replaced + textAfter).trim();
+        console.log(`[OpenBrain] calling onFinishingSkill, remaining="${remaining}"`);
         onFinishingSkill(skill, remaining || undefined);
       } else {
         onSkillActivate(skill);

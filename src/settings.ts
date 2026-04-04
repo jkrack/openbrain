@@ -13,7 +13,6 @@ const EMBEDDING_MODELS = [
 
 export interface OpenBrainSettings {
   apiKey: string;
-  claudePath: string;
   model: string;
   maxTokens: number;
   systemPrompt: string;
@@ -31,7 +30,6 @@ export interface OpenBrainSettings {
   showTooltips: boolean;
   dailyNoteFolder: string;
   dailyNoteFormat: string;
-  obsidianCliPath: string;
   onboardingComplete: boolean;
   openclawEnabled: boolean;
   openclawGatewayUrl: string;
@@ -72,7 +70,6 @@ export interface OpenBrainSettings {
 
 export const DEFAULT_SETTINGS: OpenBrainSettings = {
   apiKey: "",
-  claudePath: "claude",
   model: "claude-sonnet-4-20250514",
   maxTokens: 4096,
   systemPrompt: `You are OpenBrain, an AI assistant embedded in Obsidian. You have direct access to the user's vault through tools. Be concise and direct. Use [[wikilinks]] when referencing notes. Use vault-relative paths only. Search the vault before answering questions about it. Read files before editing them.`,
@@ -90,7 +87,6 @@ export const DEFAULT_SETTINGS: OpenBrainSettings = {
   showTooltips: true, // Default ON for new users
   dailyNoteFolder: "OpenBrain/daily/{{YYYY}}/{{MM}}",
   dailyNoteFormat: "YYYY-MM-DD",
-  obsidianCliPath: "obsidian",
   onboardingComplete: false,
   openclawEnabled: false,
   openclawGatewayUrl: "ws://127.0.0.1:18789",
@@ -186,24 +182,6 @@ export class OpenBrainSettingTab extends PluginSettingTab {
 
     // ── Setup ──
     new Setting(general).setName("Setup").setHeading();
-
-    if (Platform.isDesktop) {
-      new Setting(general)
-        .setName("Obsidian CLI path")
-        .setDesc(
-          "Path to the Obsidian CLI. Enable it in Obsidian Settings → General → Command line interface. " +
-          "Used for vault search, task queries, and daily note management."
-        )
-        .addText((text) =>
-          text
-            .setPlaceholder("obsidian")
-            .setValue(this.plugin.settings.obsidianCliPath)
-            .onChange((value) => { void (async () => {
-              this.plugin.settings.obsidianCliPath = value || "obsidian";
-              await this.plugin.saveSettings();
-            })(); })
-        );
-    }
 
     new Setting(general)
       .setName("Anthropic API key")
@@ -1183,8 +1161,32 @@ export class OpenBrainSettingTab extends PluginSettingTab {
           cls: "ca-stt-missing",
         });
         el.createEl("br");
+
+        const downloadBtn = el.createEl("button", {
+          text: "Download Neural Engine STT",
+          cls: "mod-cta",
+          attr: { style: "margin-top: 8px;" },
+        });
+        downloadBtn.addEventListener("click", () => { void (async () => {
+          downloadBtn.disabled = true;
+          downloadBtn.setText("Downloading...");
+          try {
+            const { installStt } = await import("./stt");
+            await installStt(this.plugin.settings, (msg) => {
+              downloadBtn.setText(msg);
+            });
+            this.display();
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            downloadBtn.setText("Download failed");
+            downloadBtn.disabled = false;
+            el.createDiv({ text: message, cls: "ca-stt-missing" });
+          }
+        })(); });
+
+        el.createEl("br");
         el.createSpan({
-          text: "Voice transcription will use the Anthropic API as fallback.",
+          text: "Or voice transcription will use the Anthropic API as fallback.",
           cls: "setting-item-description",
         });
       }

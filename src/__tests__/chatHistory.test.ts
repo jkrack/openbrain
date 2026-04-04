@@ -13,12 +13,6 @@ vi.mock("../templates", () => ({
   createFromTemplate: vi.fn(),
 }));
 
-vi.mock("../obsidianCli", () => ({
-  isAvailable: () => false,
-  dailyPath: () => null,
-  dailyRead: () => null,
-  dailyAppend: () => false,
-}));
 
 import {
   serializeChat,

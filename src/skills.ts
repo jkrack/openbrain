@@ -87,8 +87,8 @@ export function parseSkillFile(content: string, filePath: string): Skill | null 
     systemPrompt: body,
     filePath,
     dayMode: frontmatter.day_mode || undefined,
-    finishing: frontmatter.finishing === true || frontmatter.finishing === "true",
-    slashCommand: typeof frontmatter.slash_command === "string" ? frontmatter.slash_command : undefined,
+    finishing: !!frontmatter.finishing,
+    slashCommand: frontmatter.slash_command ? String(frontmatter.slash_command) : undefined,
   };
 }
 
@@ -106,6 +106,11 @@ export async function loadSkills(app: App, folderPath: string): Promise<Skill[]>
       const skill = parseSkillFile(content, child.path);
       if (skill) skills.push(skill);
     }
+  }
+
+  const finishing = skills.filter(s => s.finishing);
+  if (finishing.length > 0) {
+    console.log(`[OpenBrain] Loaded ${finishing.length} finishing skill(s):`, finishing.map(s => `${s.name} (/${s.slashCommand})`).join(", "));
   }
 
   return skills;

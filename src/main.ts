@@ -19,7 +19,6 @@ import { ChatStateManager } from "./chatStateManager";
 import { getDayMode } from "./dayMode";
 
 // Desktop-only modules — imported dynamically to avoid crashing on mobile
-// import { configure as configureObsidianCli } from "./obsidianCli";
 // import { FloatingRecorder } from "./floatingRecorder";
 // import { createEmbeddingEngine } from "./embeddingEngine";
 // import { createEmbeddingIndex } from "./embeddingIndex";
@@ -75,10 +74,6 @@ export default class OpenBrainPlugin extends Plugin {
       delete (this.settings as any).useLocalStt;
       delete (this.settings as any).sttHomePath;
       await this.saveSettings();
-    }
-    if (Platform.isDesktop) {
-      const { configure } = await import("./obsidianCli");
-      configure(this.settings.obsidianCliPath);
     }
     this.skills = await loadSkills(this.app, this.settings.skillsFolder);
 

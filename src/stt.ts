@@ -3,7 +3,7 @@
 // Connects to the openbrain-stt daemon over a Unix socket.
 // Falls back to Anthropic API transcription if daemon is unavailable.
 
-import { join } from "path";
+import { join, dirname } from "path";
 import { homedir } from "os";
 import {
   sendRequest,
@@ -13,6 +13,8 @@ import {
   SttTranscribeResult,
 } from "./sttClient";
 import { OpenBrainSettings } from "./settings";
+
+const GITHUB_REPO = "jkrack/OpenBrain";
 
 // --- Types (preserved for backward compatibility) ---
 
@@ -211,19 +213,18 @@ export async function installStt(
   settings: OpenBrainSettings,
   onProgress: InstallProgress
 ): Promise<void> {
-  // The daemon handles its own model download.
-  // "Install" means: ensure binary is available and start daemon.
   const binaryPath = getBinaryPath((settings as any).pluginDir);
 
+  // Check if binary already exists
+  let binaryExists = false;
   try {
     const { access } = await import("fs/promises");
     await access(binaryPath);
-  } catch {
-    onProgress("Binary not found. Download from GitHub releases or build from source.");
-    throw new Error(
-      "openbrain-stt binary not found at " + binaryPath +
-      ". See docs for installation instructions."
-    );
+    binaryExists = true;
+  } catch { /* needs download */ }
+
+  if (!binaryExists) {
+    await downloadSttBinary(binaryPath, onProgress);
   }
 
   onProgress("Starting daemon...");
@@ -233,6 +234,87 @@ export async function installStt(
   }
 
   onProgress("Daemon running. Model will download on first transcription request.");
+}
+
+/**
+ * Download the STT daemon binary from the GitHub Release matching the current plugin version.
+ */
+async function downloadSttBinary(
+  binaryPath: string,
+  onProgress: InstallProgress
+): Promise<void> {
+  const { mkdir, writeFile, chmod, readFile } = await import("fs/promises");
+  const { execFile } = await import("child_process");
+  const { promisify } = await import("util");
+  const execFileAsync = promisify(execFile);
+
+  // Read plugin version from manifest.json in the plugin directory
+  let version: string;
+  try {
+    const pluginDir = dirname(dirname(binaryPath));
+    const manifest = JSON.parse(await readFile(join(pluginDir, "manifest.json"), "utf8"));
+    version = manifest.version;
+  } catch {
+    version = "latest";
+  }
+
+  const tag = version === "latest" ? "latest" : `v${version}`;
+  const assetName = "openbrain-stt-macos-arm64.zip";
+  const downloadUrl = version === "latest"
+    ? `https://github.com/${GITHUB_REPO}/releases/latest/download/${assetName}`
+    : `https://github.com/${GITHUB_REPO}/releases/download/${tag}/${assetName}`;
+
+  onProgress(`Downloading STT daemon (${tag})...`);
+
+  // Download the zip using Node https with redirect following
+  const https = await import("https");
+  const http = await import("http");
+
+  const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
+    const follow = (url: string, redirects = 0) => {
+      if (redirects > 5) return reject(new Error("Too many redirects"));
+      const mod = url.startsWith("https") ? https : http;
+      mod.get(url, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          return follow(res.headers.location, redirects + 1);
+        }
+        if (res.statusCode !== 200) {
+          return reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+        }
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+        res.on("error", reject);
+      }).on("error", reject);
+    };
+    follow(downloadUrl);
+  });
+
+  onProgress("Extracting binary...");
+
+  // Write zip to temp file, extract with system unzip (always available on macOS)
+  const tmpDir = join(homedir(), ".openbrain", "tmp");
+  const zipPath = join(tmpDir, assetName);
+  await mkdir(tmpDir, { recursive: true });
+  await writeFile(zipPath, zipBuffer);
+
+  await mkdir(dirname(binaryPath), { recursive: true });
+  await execFileAsync("unzip", ["-o", zipPath, "-d", dirname(binaryPath)]);
+
+  // The zip contains openbrain-stt-macos-arm64 — rename to openbrain-stt
+  const extractedName = join(dirname(binaryPath), "openbrain-stt-macos-arm64");
+  const { rename, unlink } = await import("fs/promises");
+  try {
+    await rename(extractedName, binaryPath);
+  } catch {
+    // Already named correctly or same path
+  }
+  await chmod(binaryPath, 0o755);
+
+  // Clean up temp files
+  try { await unlink(zipPath); } catch { /* ignore */ }
+
+  onProgress("STT daemon installed.");
 }
 
 // --- Helpers ---

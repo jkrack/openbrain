@@ -61,7 +61,6 @@ interface ObsidianSettingsApi {
 
 interface SetupStatus {
   hasProvider: boolean;
-  obsidianCli: boolean;
 }
 
 function AttachmentPreview({ attachment, attachmentManager, onRemove }: {
@@ -188,19 +187,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
       if (settings.chatProvider === "openrouter" && settings.openrouterApiKey) hasProvider = true;
       if (settings.chatProvider === "ollama") hasProvider = true; // Ollama just needs to be running
 
-      let obsidianCli = false;
-      if (Platform.isDesktop) {
-        try {
-          const { execSync } = require("child_process") as typeof import("child_process");
-          const home = process.env.HOME || "";
-          const extraPaths = ["/usr/local/bin", "/opt/homebrew/bin", `${home}/.local/bin`, "/Applications/Obsidian.app/Contents/MacOS"];
-          const env = { ...process.env, PATH: [...extraPaths, process.env.PATH].filter(Boolean).join(":") };
-          execSync("obsidian version", { timeout: 5000, encoding: "utf-8", env });
-          obsidianCli = true;
-        } catch { /* expected — CLI may not be installed */ }
-      }
-
-      setSetupStatus({ hasProvider, obsidianCli });
+      setSetupStatus({ hasProvider });
     };
     check();
   }, [settings.chatProvider, settings.apiKey, settings.openrouterApiKey]);
@@ -1213,10 +1200,6 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
                   <div className={`ca-welcome-check ${setupStatus.hasProvider ? "ready" : "missing"}`}>
                     <span className="ca-welcome-check-icon">{setupStatus.hasProvider ? "\u2713" : "\u2715"}</span>
                     <span>API provider {setupStatus.hasProvider ? `(${settings.chatProvider})` : "(configure in settings)"}</span>
-                  </div>
-                  <div className={`ca-welcome-check ${setupStatus.obsidianCli ? "ready" : "optional"}`}>
-                    <span className="ca-welcome-check-icon">{setupStatus.obsidianCli ? "\u2713" : "\u25CB"}</span>
-                    <span>Obsidian CLI {setupStatus.obsidianCli ? "" : "(optional, for vault search)"}</span>
                   </div>
                 </div>
                 <button

@@ -1,6 +1,6 @@
 {
   "name": "obsidian-open-brain",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI agent in the Obsidian right rail with voice recording and transcription",
   "main": "main.js",
   "scripts": {

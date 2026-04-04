@@ -3,7 +3,6 @@ import { Message } from "./providers/types";
 import type { ImageAttachment } from "./providers/types";
 import { OpenBrainSettings } from "./settings";
 import { createFromTemplate } from "./templates";
-import * as cli from "./obsidianCli";
 import { startTimer } from "./perf";
 
 // ── Interfaces ──────────────────────────────────────────────────────────
@@ -458,10 +457,6 @@ function getDailyPath(app: App, settings?: OpenBrainSettings): string {
     const filename = now.format(format);
     return `${folder}/${filename}.md`;
   }
-
-  // Try Obsidian CLI
-  const cliPath = cli.dailyPath();
-  if (cliPath) return cliPath;
 
   // Check periodic-notes plugin (internal API — not publicly typed)
   const appRecord = app as unknown as Record<string, unknown>;

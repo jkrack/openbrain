@@ -12,14 +12,6 @@ vi.mock("obsidian", () => ({
   requestUrl: vi.fn(),
 }));
 vi.mock("../templates", () => ({ createFromTemplate: vi.fn() }));
-vi.mock("../obsidianCli", () => ({
-  isAvailable: () => false,
-  dailyPath: () => null,
-  dailyRead: () => null,
-  dailyAppend: () => false,
-  search: () => null,
-  configure: vi.fn(),
-}));
 
 import {
   serializeChat,

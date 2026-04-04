@@ -1,7 +1,6 @@
-import { App, TFile } from "obsidian";
+import { App, TFile, moment } from "obsidian";
 import { OpenBrainSettings } from "./settings";
-import { appendToDailySection } from "./chatHistory";
-import * as cli from "./obsidianCli";
+import { appendToDailySection, getDailyPath } from "./chatHistory";
 import { loadPeople } from "./people";
 
 /**
@@ -106,7 +105,6 @@ export class OpenClawNode {
             permissions: {
               "vault.read": true,
               "vault.write": this.settings.allowVaultWrite,
-              "vault.cli": this.settings.allowCliExec,
             },
           },
         });
@@ -190,8 +188,16 @@ export class OpenClawNode {
     switch (command) {
       case "vault.search": {
         if (!params.query) throw new Error("query required");
-        const results = cli.search(params.query);
-        return { results: results || "No results" };
+        const q = params.query.toLowerCase();
+        const searchMatches: string[] = [];
+        for (const f of this.app.vault.getMarkdownFiles()) {
+          const content = await this.app.vault.cachedRead(f);
+          if (content.toLowerCase().includes(q)) {
+            searchMatches.push(f.path);
+            if (searchMatches.length >= 20) break;
+          }
+        }
+        return { results: searchMatches.length > 0 ? searchMatches.join("\n") : "No results" };
       }
 
       case "vault.read": {
@@ -205,16 +211,30 @@ export class OpenClawNode {
       case "vault.create": {
         if (!this.settings.allowVaultWrite) throw new Error("Write permission disabled");
         if (!params.name) throw new Error("name required");
-        const success = cli.createNote(params.name, {
-          content: params.content,
-          template: params.template,
-        });
-        return { ok: success, path: params.name };
+        const notePath = params.name.endsWith(".md") ? params.name : `${params.name}.md`;
+        const folderPath = notePath.substring(0, notePath.lastIndexOf("/"));
+        if (folderPath && !this.app.vault.getAbstractFileByPath(folderPath)) {
+          const parts = folderPath.split("/");
+          let current = "";
+          for (const part of parts) {
+            current = current ? `${current}/${part}` : part;
+            if (!this.app.vault.getAbstractFileByPath(current)) {
+              try { await this.app.vault.createFolder(current); } catch { /* exists */ }
+            }
+          }
+        }
+        await this.app.vault.create(notePath, params.content || "");
+        return { ok: true, path: notePath };
       }
 
       case "vault.daily.read": {
-        const content = cli.dailyRead();
-        return { content: content || "No daily note found" };
+        const dailyPath = getDailyPath(this.app, this.settings);
+        const dailyFile = this.app.vault.getAbstractFileByPath(dailyPath);
+        if (dailyFile instanceof TFile) {
+          const content = await this.app.vault.read(dailyFile);
+          return { content };
+        }
+        return { content: "No daily note found" };
       }
 
       case "vault.daily.append": {
@@ -234,12 +254,20 @@ export class OpenClawNode {
 
       case "vault.tasks": {
         const taskFilter = (params.filter === "todo" || params.filter === "done") ? params.filter : undefined;
+        let taskFilePath: string;
         if (params.file) {
-          const result = cli.tasks(params.file, taskFilter);
-          return { tasks: result || "No tasks found" };
+          taskFilePath = params.file;
+        } else {
+          taskFilePath = getDailyPath(this.app, this.settings);
         }
-        const result = cli.dailyTasks(taskFilter);
-        return { tasks: result || "No tasks found" };
+        const taskFile = this.app.vault.getAbstractFileByPath(taskFilePath);
+        if (!(taskFile instanceof TFile)) return { tasks: "No tasks found" };
+        const taskContent = await this.app.vault.read(taskFile);
+        const allTasks = taskContent.match(/- \[[ x]\] .+/g) || [];
+        const filteredTasks = taskFilter === "todo" ? allTasks.filter(t => t.startsWith("- [ ]"))
+          : taskFilter === "done" ? allTasks.filter(t => t.startsWith("- [x]"))
+          : allTasks;
+        return { tasks: filteredTasks.join("\n") || "No tasks found" };
       }
 
       case "vault.skills.list": {
