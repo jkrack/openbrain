@@ -35,95 +35,107 @@ export function AudioControls({
 
   return (
     <>
-      {/* Studio Monitor recording state */}
+      {/* ── Recording: VU strip ── */}
       {isRecording && (
-        <div className={`ca-recorder${isMobile ? " ca-recorder--mobile" : ""}`}>
-          {/* Row 1: Status — dot + timer | segment */}
-          <div className="ca-recorder-status">
-            <div className="ca-recorder-status-left">
-              <span className="ca-rec-dot" />
-              <span className={`ca-rec-time${isMobile ? " ca-rec-time--large" : ""}`}>{formatDuration(recorder.duration)}</span>
-            </div>
+        <div className={`ca-vu${isMobile ? " ca-vu--mobile" : ""}`}>
+          <div className="ca-vu-track">
+            <span className="ca-vu-beacon" />
+            <span className="ca-vu-time">{formatDuration(recorder.duration)}</span>
             {recorder.segmentCount > 0 && (
-              <span className="ca-rec-seg">SEG {recorder.segmentCount}</span>
+              <span className="ca-vu-seg">{recorder.segmentCount}</span>
             )}
-          </div>
-          {/* Row 2: Waveform */}
-          <div className={`ca-recorder-wave${isMobile ? " ca-recorder-wave--large" : ""}`}>
-            <svg className="ca-wave-svg" viewBox={isMobile ? "0 0 200 60" : "0 0 200 20"} preserveAspectRatio="none">
-              <polyline
-                className="ca-wave-line"
-                fill="none"
-                strokeWidth={isMobile ? "2.5" : "1.5"}
-                strokeLinecap="round"
-                points={recorder.waveformData
-                  .map((v, i) => {
-                    const x = (i / (recorder.waveformData.length - 1)) * 200;
-                    const midY = isMobile ? 30 : 10;
-                    const maxAmp = isMobile ? 27 : 9;
-                    const amp = Math.min(v * 48, maxAmp);
-                    const y = midY - amp;
-                    return `${x},${y}`;
-                  })
-                  .join(" ")}
-              />
-            </svg>
-          </div>
-          {/* Row 3: Action bar */}
-          <div className="ca-recorder-actions">
-            <button className={`ca-recorder-stop${isMobile ? " ca-recorder-stop--large" : ""}`} onClick={() => recorder.stopRecording()}>
-              <span className="ca-recorder-stop-icon" />
-              Stop
+            <div className="ca-vu-meter">
+              <svg className="ca-vu-svg" viewBox="0 0 120 16" preserveAspectRatio="none">
+                {recorder.waveformData.map((v, i) => {
+                  const x = (i / recorder.waveformData.length) * 120;
+                  const barW = 120 / recorder.waveformData.length - 0.5;
+                  const h = Math.max(1.5, Math.min(v * 40, 14));
+                  return (
+                    <rect
+                      key={i}
+                      x={x}
+                      y={8 - h / 2}
+                      width={Math.max(barW, 1)}
+                      height={h}
+                      rx="0.5"
+                      className="ca-vu-bar"
+                    />
+                  );
+                })}
+              </svg>
+            </div>
+            <button
+              className="ca-vu-stop"
+              onClick={() => recorder.stopRecording()}
+              aria-label={tip("Stop recording")}
+            >
+              <span className="ca-vu-stop-square" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Audio ready state */}
+      {/* ── Audio ready: review strip ── */}
       {hasAudio && !isRecording && (
-        <div className={`ca-audio-ready${isMobile ? " ca-audio-ready--mobile" : ""}`}>
-          <span className="ca-audio-ready-label">
-            Recording ready {"\u2014"} {formatDuration(recorder.duration)}
-            {recorder.audioSegments.length > 1 && ` (${recorder.audioSegments.length} segments)`}
-          </span>
-          <div className="ca-audio-actions">
+        <div className={`ca-vu ca-vu--ready${isMobile ? " ca-vu--mobile" : ""}`}>
+          <div className="ca-vu-track">
+            <span className="ca-vu-ready-icon">
+              <ObsidianIcon name="mic" />
+            </span>
+            <span className="ca-vu-time ca-vu-time--ready">
+              {formatDuration(recorder.duration)}
+              {recorder.audioSegments.length > 1 && (
+                <span className="ca-vu-seg-inline"> / {recorder.audioSegments.length} seg</span>
+              )}
+            </span>
+            <div className="ca-vu-spacer" />
             {showAudioPrompt && (
               <input
-                className="ca-audio-prompt-input"
-                placeholder="Instructions (optional)"
+                className="ca-vu-prompt"
+                placeholder="Instructions..."
                 value={audioPrompt}
                 onChange={(e) => onAudioPromptChange(e.target.value)}
                 autoFocus
               />
             )}
             <button
-              className="ca-icon-btn"
+              className="ca-vu-action"
               onClick={onToggleAudioPrompt}
               aria-label={tip("Add instructions")}
             >
               <ObsidianIcon name="pencil" />
             </button>
-            <button className="ca-icon-btn" onClick={recorder.clearAudio} aria-label={tip("Discard")}>
+            <button
+              className="ca-vu-action"
+              onClick={recorder.clearAudio}
+              aria-label={tip("Discard")}
+            >
               <ObsidianIcon name="x" />
             </button>
-            <button className="ca-send-btn" onClick={onSendAudio} disabled={isStreaming}>
-              Send
+            <button
+              className="ca-vu-send"
+              onClick={onSendAudio}
+              disabled={isStreaming}
+            >
+              <ObsidianIcon name="arrow-up" />
             </button>
           </div>
         </div>
       )}
 
-      {/* Mic error banner */}
+      {/* ── Mic error ── */}
       {recorder.error && (
-        <div className="ca-mic-error">
-          <span className="ca-mic-error-text">{recorder.error}</span>
-          <button
-            className="ca-icon-btn"
-            onClick={() => recorder.clearError()}
-            aria-label={tip("Dismiss")}
-          >
-            <ObsidianIcon name="x" />
-          </button>
+        <div className="ca-vu ca-vu--error">
+          <div className="ca-vu-track">
+            <span className="ca-vu-error-text">{recorder.error}</span>
+            <button
+              className="ca-vu-action"
+              onClick={() => recorder.clearError()}
+              aria-label={tip("Dismiss")}
+            >
+              <ObsidianIcon name="x" />
+            </button>
+          </div>
         </div>
       )}
     </>

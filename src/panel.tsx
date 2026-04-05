@@ -756,6 +756,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         await runPostActions();
       };
 
+      let daemonError = "";
       if (hasAudioInput && Platform.isDesktop) {
         // --- Audio path: daemon STT (desktop, auto-detected) ---
         try {
@@ -889,10 +890,13 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
           // Daemon not available — fall through to API transcription
           const errMessage = err instanceof Error ? err.message : String(err);
           console.warn(`[OpenBrain] Daemon STT failed (${errMessage}), trying API fallback`);
+          // Surface the daemon error so user can diagnose
+          daemonError = errMessage;
         }
       }
 
-      if (hasAudioInput && settings.apiKey && audioSegments.length > 1) {
+      const hasApiTranscription = settings.apiKey && settings.chatProvider === "anthropic";
+      if (hasAudioInput && hasApiTranscription && audioSegments.length > 1) {
         // --- Multi-segment API transcription (requires Anthropic key) ---
         await transcribeAudioSegments(settings, {
           onChunk: (chunk: string) => {
@@ -917,7 +921,7 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
           },
           onDone: () => void audioDone(),
         });
-      } else if (hasAudioInput && settings.apiKey) {
+      } else if (hasAudioInput && hasApiTranscription) {
         // --- Single-segment API transcription (requires Anthropic key) ---
         await transcribeAudioSegments(settings, {
           onChunk: (chunk: string) => {
@@ -933,7 +937,13 @@ export function OpenBrainPanel({ settings, app, chatState, initialPrompt, initia
         });
       } else if (hasAudioInput) {
         // --- Audio with no transcription available ---
-        onError("Voice transcription requires an API key from your configured provider, or the STT daemon (Apple Silicon Mac).");
+        const daemonInfo = daemonError ? ` Daemon error: ${daemonError}` : "";
+        const reason = settings.chatProvider !== "anthropic"
+          ? `STT daemon failed.${daemonInfo} Your provider (${settings.chatProvider}) doesn't support audio transcription as fallback.`
+          : !settings.apiKey
+            ? `STT daemon failed.${daemonInfo} Add an Anthropic API key for API fallback.`
+            : `Voice transcription failed.${daemonInfo}`;
+        onError(reason);
         chatState.setStreaming(false);
         return;
       } else {

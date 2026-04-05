@@ -669,7 +669,8 @@
   background: transparent;
   color: var(--text-normal);
   line-height: var(--ca-lh-ui);
-  max-height: 120px;
+  min-height: 56px;
+  max-height: 200px;
   overflow-y: auto;
 }
 .ca-input:focus {
@@ -844,220 +845,292 @@
 }
 
 /* ============================================================
-   RECORDING UI — "Studio Monitor" Layout, Hybrid Color System
-   Dark stage + theme-derived accents for both in-panel & floating.
+   RECORDING UI — "Signal" VU Strip
+   Compact single-row meter. Amber recording, cool-neutral ready.
    ============================================================ */
-.ca-recorder {
-  display: flex;
-  flex-direction: column;
+/* --- VU Strip: shared base --- */
+.ca-vu {
   flex-shrink: 0;
-  border-radius: var(--ca-radius-md);
-  overflow: hidden;
-  border: 1px solid var(--background-modifier-border);
-  margin: 8px;
+  margin: 6px 8px;
 }
-
-/* Row 1: Status line — dot + timer left, segment right */
-.ca-recorder-status {
-  background: linear-gradient(180deg, #0e1a28, #0a1420);
-  padding: 10px 12px 4px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.ca-recorder-status-left {
+.ca-vu-track {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--ca-radius-md);
+  background: linear-gradient(135deg, #0d1520 0%, #111b28 100%);
+  border: 1px solid rgba(255, 180, 60, 0.12);
+  position: relative;
+  overflow: hidden;
 }
-.ca-rec-dot {
-  width: 10px;
-  height: 10px;
+/* Subtle amber glow behind the track during recording */
+.ca-vu .ca-vu-track::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 20% 50%, rgba(255, 170, 40, 0.06), transparent 70%);
+  pointer-events: none;
+}
+
+/* Beacon — pulsing amber dot */
+.ca-vu-beacon {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--text-error, #e44);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--text-error, #e44) 50%, transparent);
+  background: #e8a030;
+  box-shadow: 0 0 8px rgba(232, 160, 48, 0.5);
   flex-shrink: 0;
-  animation: ca-pulse-glow 1.5s ease-in-out infinite;
+  animation: ca-beacon 1.8s ease-in-out infinite;
 }
-@keyframes ca-pulse-glow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+@keyframes ca-beacon {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(232, 160, 48, 0.5); }
+  50% { opacity: 0.4; box-shadow: 0 0 4px rgba(232, 160, 48, 0.2); }
 }
-.ca-rec-time {
-  font-size: 16px;
+
+/* Timer */
+.ca-vu-time {
   font-family: var(--ca-font-mono);
-  color: var(--interactive-accent);
-  text-shadow: 0 0 6px color-mix(in srgb, var(--interactive-accent) 30%, transparent);
+  font-size: 13px;
+  color: #e8a030;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
+  flex-shrink: 0;
+  min-width: 36px;
 }
-.ca-rec-seg {
+
+/* Segment badge */
+.ca-vu-seg {
   font-family: var(--ca-font-mono);
   font-size: 9px;
-  color: var(--text-muted);
-  letter-spacing: 1px;
+  color: rgba(232, 160, 48, 0.5);
+  background: rgba(232, 160, 48, 0.08);
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  letter-spacing: 0.5px;
 }
 
-/* Row 2: Full-width waveform */
-.ca-recorder-wave {
-  background: linear-gradient(180deg, #0a1420, #080e16);
-  padding: 4px 12px 10px;
+/* VU Meter — bar visualization */
+.ca-vu-meter {
+  flex: 1;
+  min-width: 0;
+  height: 16px;
 }
-.ca-wave-svg {
+.ca-vu-svg {
   width: 100%;
-  height: 20px;
+  height: 16px;
   display: block;
 }
-.ca-wave-line {
-  stroke: var(--interactive-accent);
-  opacity: 0.7;
-  stroke-linecap: round;
+.ca-vu-bar {
+  fill: #e8a030;
+  opacity: 0.6;
+  transition: height 0.08s ease-out;
 }
 
-/* Row 3: Action bar */
-.ca-recorder-actions {
-  background: var(--background-secondary);
-  padding: 6px 10px;
+/* Stop button — compact square icon */
+.ca-vu-stop {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  border-top: 1px solid var(--background-modifier-border);
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--ca-radius-sm);
+  border: 1px solid rgba(255, 180, 60, 0.15);
+  background: rgba(255, 180, 60, 0.06);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
-.ca-recorder-stop {
+.ca-vu-stop:hover {
+  background: rgba(255, 180, 60, 0.12);
+  border-color: rgba(255, 180, 60, 0.3);
+}
+.ca-vu-stop-square {
+  width: 8px;
+  height: 8px;
+  border-radius: 1.5px;
+  background: #e8a030;
+}
+
+/* --- Ready state: cool neutral --- */
+.ca-vu--ready .ca-vu-track {
+  background: var(--background-secondary);
+  border-color: var(--background-modifier-border);
+}
+.ca-vu--ready .ca-vu-track::before {
+  display: none;
+}
+.ca-vu-ready-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+}
+.ca-vu-ready-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.ca-vu-time--ready {
+  color: var(--text-normal);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.ca-vu-seg-inline {
+  color: var(--text-muted);
+  font-size: 10px;
+  margin-left: 2px;
+}
+.ca-vu-spacer {
+  flex: 1;
+}
+
+/* Inline prompt input */
+.ca-vu-prompt {
+  flex: 1;
+  min-width: 100px;
+  max-width: 200px;
+  padding: 3px 8px;
   border-radius: var(--ca-radius-sm);
   border: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
-  color: var(--text-muted);
+  color: var(--text-normal);
   font-family: var(--ca-font-mono);
   font-size: 11px;
-  cursor: pointer;
-  transition: all var(--ca-transition);
 }
-.ca-recorder-stop:hover {
+.ca-vu-prompt::placeholder {
+  color: var(--text-faint);
+}
+
+/* Action buttons (pencil, x) */
+.ca-vu-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--ca-radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+}
+.ca-vu-action:hover {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
 }
-.ca-recorder-stop-icon {
-  width: 8px;
-  height: 8px;
-  border-radius: 1px;
-  background: var(--text-error, #e44);
+.ca-vu-action svg {
+  width: 14px;
+  height: 14px;
 }
 
-/* States */
-.ca-recorder.state-stopping .ca-rec-dot {
-  animation: none;
-  opacity: 0.3;
+/* Send button — accent pill */
+.ca-vu-send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent, #fff);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 }
-.ca-recorder.state-stopping .ca-rec-time {
-  opacity: 0.5;
+.ca-vu-send:hover:not(:disabled) {
+  filter: brightness(1.15);
+  transform: scale(1.05);
 }
-.ca-recorder.state-stopping .ca-wave-line {
-  opacity: 0.2;
+.ca-vu-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
-.ca-recorder.state-stopping .ca-recorder-actions {
-  pointer-events: none;
-  opacity: 0.5;
+.ca-vu-send svg {
+  width: 14px;
+  height: 14px;
 }
 
-/* Legacy class alias — keep existing panel markup working during migration */
-.ca-waveform { display: contents; }
+/* --- Error state --- */
+.ca-vu--error .ca-vu-track {
+  background: var(--background-secondary);
+  border-color: color-mix(in srgb, var(--text-error, #e44) 30%, transparent);
+}
+.ca-vu-error-text {
+  font-size: 11px;
+  color: var(--text-error, #e44);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* --- Floating recorder status banner (in-panel) --- */
 .ca-floating-status {
   flex-shrink: 0;
-  border-radius: var(--ca-radius-md);
-  overflow: hidden;
-  border: 1px solid var(--background-modifier-border);
-  margin: 8px;
+  margin: 6px 8px;
 }
 .ca-floating-status-chrome {
-  background: var(--background-secondary);
-  padding: 3px 10px;
-  border-bottom: 1px solid var(--background-modifier-border);
-}
-.ca-floating-status-label {
-  font-family: var(--ca-font-mono);
-  font-size: 9px;
-  color: var(--text-muted);
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  display: none; /* chrome label removed — status is self-evident */
 }
 .ca-floating-status-body {
-  background: linear-gradient(180deg, #0e1a28, #0a1420);
-  padding: 8px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--ca-radius-md);
+  background: linear-gradient(135deg, #0d1520 0%, #111b28 100%);
+  border: 1px solid rgba(255, 180, 60, 0.12);
 }
 .ca-floating-status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--interactive-accent);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--interactive-accent) 40%, transparent);
+  background: #e8a030;
+  box-shadow: 0 0 6px rgba(232, 160, 48, 0.4);
   flex-shrink: 0;
-  animation: ca-pulse-glow 2s ease-in-out infinite;
+  animation: ca-beacon 2s ease-in-out infinite;
 }
 .ca-floating-status-text {
   font-family: var(--ca-font-mono);
   font-size: 12px;
-  color: var(--interactive-accent);
-  text-shadow: 0 0 4px color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+  color: #e8a030;
   letter-spacing: 0.5px;
 }
 
-/* --- Audio ready state --- */
-.ca-audio-ready {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: var(--background-secondary);
-  border-top: 1px solid var(--background-modifier-border);
-  gap: 8px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
+/* --- Mobile overrides --- */
+.ca-vu--mobile .ca-vu-track {
+  padding: 10px 12px;
+  gap: 10px;
 }
-.ca-audio-ready-label {
-  font-size: var(--ca-size-meta);
-  color: var(--text-muted);
+.ca-vu--mobile .ca-vu-time {
+  font-size: 18px;
 }
-.ca-audio-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.ca-vu--mobile .ca-vu-meter {
+  height: 24px;
 }
-.ca-audio-prompt-input {
-  font-size: 12px;
-  padding: 5px 10px;
-  border-radius: var(--ca-radius-sm);
-  border: 1px solid var(--background-modifier-border);
-  background: var(--background-primary);
-  color: var(--text-normal);
-  width: 180px;
-  font-family: var(--ca-font-body);
+.ca-vu--mobile .ca-vu-svg {
+  height: 24px;
 }
-
-/* --- Mic error --- */
-.ca-mic-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  background: rgba(229, 68, 68, 0.08);
-  border-top: 1px solid rgba(229, 68, 68, 0.2);
-  flex-shrink: 0;
-  gap: 8px;
+.ca-vu--mobile .ca-vu-stop {
+  width: 36px;
+  height: 36px;
 }
-.ca-mic-error-text {
-  font-size: 12px;
-  color: var(--text-error, #e54);
-  line-height: var(--ca-lh-ui);
+.ca-vu--mobile .ca-vu-stop-square {
+  width: 10px;
+  height: 10px;
+}
+.ca-vu--mobile .ca-vu-send {
+  width: 36px;
+  height: 36px;
+}
+.ca-vu--mobile .ca-vu-action {
+  width: 36px;
+  height: 36px;
 }
 
 /* ============================================================

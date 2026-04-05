@@ -180,8 +180,6 @@ export class FloatingRecorder {
         segmentDuration: this.settings.floatingRecorderSegmentDuration,
         deviceId: this.settings.audioDeviceId,
         sessionDir: this.sessionDir,
-        skills: this.getSkills?.() || [],
-        defaultMode: this.settings.floatingRecorderDefaultMode || "clipboard",
         theme: this.readObsidianTheme(),
       });
     });
@@ -238,11 +236,6 @@ export class FloatingRecorder {
       const session = await readSession(dir) as any;
       if (session.segments.length === 0) return;
 
-      const mode: string = session.mode || "clipboard";
-
-      // Remember the user's choice for next time
-      this.settings.floatingRecorderDefaultMode = mode;
-
       const segCount = session.segments.length;
       this.onStatusChange?.(`Transcribing ${segCount} segment${segCount > 1 ? "s" : ""}...`);
 
@@ -251,28 +244,13 @@ export class FloatingRecorder {
 
       const text = await assembleTranscription(dir);
 
-      if (mode === "clipboard") {
-        // Clipboard mode — copy text, no note, no OpenBrain
-        const { clipboard } = require("electron");
-        clipboard.writeText(text);
-        await markCompleted(dir);
-        this.onStatusChange?.(null);
-        new Notice("Recording transcribed — copied to clipboard");
-        this.onClipboardCopy?.();
-      } else {
-        // Skill mode — create note and hand off to OpenBrain
-        this.onStatusChange?.("Saving note...");
-
-        const totalDuration = session.segments.reduce((sum: number, s: any) => sum + s.duration, 0);
-        const notePath = await this.createVaultNote(dir, totalDuration);
-        await markCompleted(dir);
-
-        this.onStatusChange?.(null);
-
-        if (notePath && this.onRecordingComplete) {
-          this.onRecordingComplete(notePath, mode);
-        }
-      }
+      // Always copy to clipboard — skill processing happens in the chat window
+      const { clipboard } = require("electron");
+      clipboard.writeText(text);
+      await markCompleted(dir);
+      this.onStatusChange?.(null);
+      new Notice("Recording transcribed — copied to clipboard");
+      this.onClipboardCopy?.();
 
       const recBaseDir = getRecordingsDir();
       void cleanupOldSegments(recBaseDir, this.settings.floatingRecorderRetentionDays);

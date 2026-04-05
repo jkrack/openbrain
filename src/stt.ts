@@ -109,13 +109,20 @@ export async function transcribeBlob(
   const daemonReady = await ensureDaemonIfNeeded(settings);
   if (daemonReady) {
     try {
-      const arrayBuffer = await blob.arrayBuffer();
+      // Convert non-WAV audio to WAV — the daemon uses CoreAudio which doesn't support WebM/Opus
+      let audioBlob = blob;
+      if (!blob.type.includes("wav")) {
+        const { blobToWav } = await import("./audioConverter");
+        audioBlob = await blobToWav(blob);
+      }
+
+      const arrayBuffer = await audioBlob.arrayBuffer();
       const base64 = Buffer.from(arrayBuffer).toString("base64");
 
       const response = await sendRequest({
         type: "transcribe",
         audio: base64,
-        audioFormat: detectFormat(blob.type),
+        audioFormat: "wav",
         options: { timestamps: true, diarize: false, language: "auto" },
       });
 
